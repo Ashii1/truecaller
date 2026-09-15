@@ -12,6 +12,7 @@ import androidx.core.app.Person
 
 object CallNotificationHelper {
     private const val CHANNEL_ID = "calls"
+    private const val SECURITY_CHANNEL_ID = "security"
     private const val MISSED_ID = 4101
 
     fun ensureChannel(context: Context) {
@@ -23,6 +24,15 @@ object CallNotificationHelper {
                 enableVibration(false)
                 setSound(null, null)
                 lightColor = Color.BLUE
+            }
+            manager.createNotificationChannel(channel)
+        }
+        if (manager.getNotificationChannel(SECURITY_CHANNEL_ID) == null) {
+            val channel = NotificationChannel(SECURITY_CHANNEL_ID, "Call security", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Local caller safety warnings"
+                enableVibration(false)
+                setSound(null, null)
+                lightColor = Color.RED
             }
             manager.createNotificationChannel(channel)
         }
@@ -55,6 +65,29 @@ object CallNotificationHelper {
         if (Build.VERSION.SDK_INT >= 31) builder.setStyle(NotificationCompat.CallStyle.forIncomingCall(person, decline, answer))
         else builder.setContentTitle(if (name.isBlank()) number else name).setContentText("Incoming call").addAction(0, "Decline", decline).addAction(0, "Answer", answer)
         context.getSystemService(NotificationManager::class.java).notify(callId.hashCode(), builder.build())
+    }
+
+    fun showSecurityWarning(context: Context, name: String, risk: String, spoofRisk: String, explanation: String) {
+        ensureChannel(context)
+        val title = when (risk) {
+            "HIGH_RISK" -> "High-risk call pattern detected"
+            "SUSPICIOUS" -> "Suspicious call pattern"
+            else -> "Caller safety warning"
+        }
+        val identity = if (name.isBlank()) "Unknown caller" else name
+        val text = "$identity · Spoof risk: $spoofRisk"
+        val openIntent = PendingIntent.getActivity(context, (name + risk).hashCode(), Intent(context, MainActivity::class.java).putExtra("open_tab", "recents"), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val notification = NotificationCompat.Builder(context, SECURITY_CHANNEL_ID)
+            .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$explanation Caller ID is not proof of identity. Never share OTPs, PINs or passwords."))
+            .setCategory(NotificationCompat.CATEGORY_WARNING)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(openIntent)
+            .build()
+        context.getSystemService(NotificationManager::class.java).notify((name + risk + spoofRisk).hashCode(), notification)
     }
 
     fun clearCall(context: Context, callId: String) { context.getSystemService(NotificationManager::class.java).cancel(callId.hashCode()) }
