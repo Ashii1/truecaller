@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Car, CheckCircle2, LifeBuoy, MessageSquareWarning, Plus, ShieldAlert, Trash2 } from 'lucide-react';
+import { Car, CheckCircle2, LifeBuoy, MessageSquareWarning, Plus, ShieldAlert, Trash2, BellRing } from 'lucide-react';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 
 const PREF_KEY = 'vigilshield_phase3_safety_v1';
@@ -9,9 +9,10 @@ type SafetyPrefs = {
   emergencyContacts: string[];
   emergencyMode: boolean;
   drivingMode: boolean;
+  repeatedCallAttention: boolean;
 };
 
-const DEFAULTS: SafetyPrefs = { emergencyContacts: [], emergencyMode: false, drivingMode: false };
+const DEFAULTS: SafetyPrefs = { emergencyContacts: [], emergencyMode: false, drivingMode: false, repeatedCallAttention: true };
 
 function normalize(value: string) {
   return value.trim().replace(/[^\d+]/g, '');
@@ -37,6 +38,7 @@ export default function Phase3SafetyCenter() {
         emergencyContacts: Array.from(new Set(contacts)),
         emergencyMode: saved.emergencyMode === true,
         drivingMode: saved.drivingMode === true,
+        repeatedCallAttention: saved.repeatedCallAttention !== false,
       });
     } catch {
       setPrefs(DEFAULTS);
@@ -50,6 +52,7 @@ export default function Phase3SafetyCenter() {
     prefs.emergencyContacts.forEach(number => telecomBridge.setSecuritySetting(nativeContactKey(number), true));
     telecomBridge.setSecuritySetting('phase3_emergency_mode_enabled', prefs.emergencyMode);
     telecomBridge.setSecuritySetting('phase3_driving_mode_enabled', prefs.drivingMode);
+    telecomBridge.setSecuritySetting('phase3_repeated_call_attention_enabled', prefs.repeatedCallAttention);
   }, [prefs, loaded]);
 
   const emergencyCount = prefs.emergencyContacts.length;
@@ -89,6 +92,11 @@ export default function Phase3SafetyCenter() {
     setNotice(prefs.drivingMode ? 'Driving Mode disabled.' : 'Driving Mode enabled: unknown calls are silenced, not rejected.');
   };
 
+  const toggleRepeatedCallAttention = () => {
+    setPrefs(prev => ({ ...prev, repeatedCallAttention: !prev.repeatedCallAttention }));
+    setNotice(prefs.repeatedCallAttention ? 'Repeated-call attention disabled.' : 'Repeated-call attention enabled.');
+  };
+
   const sendSafetyMessage = () => {
     if (emergencyCount === 0) {
       setNotice('Add at least one emergency contact first.');
@@ -113,9 +121,10 @@ export default function Phase3SafetyCenter() {
         <div className="mt-3 space-y-2">{prefs.emergencyContacts.length === 0 ? <div className="text-xs text-slate-500">No emergency contacts configured.</div> : prefs.emergencyContacts.map(number => <div key={number} className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900 p-3"><CheckCircle2 className="h-4 w-4 text-emerald-400" /><span className="min-w-0 flex-1 text-xs font-semibold text-white">{number}</span><button type="button" onClick={() => removeContact(number)} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-800 hover:text-rose-300" aria-label={`Remove ${number}`}><Trash2 className="h-4 w-4" /></button></div>)}</div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <SafetyToggle icon={<ShieldAlert className="h-4 w-4" />} title="Emergency Mode" description="Allow incoming calls through automated blocking and quieting." enabled={prefs.emergencyMode} onClick={toggleEmergencyMode} />
         <SafetyToggle icon={<Car className="h-4 w-4" />} title="Driving Mode" description="Silence unknown calls temporarily without rejecting them." enabled={prefs.drivingMode} onClick={toggleDrivingMode} />
+        <SafetyToggle icon={<BellRing className="h-4 w-4" />} title="Repeated-call attention" description="Highlight a non-trusted caller who calls again within 10 minutes." enabled={prefs.repeatedCallAttention} onClick={toggleRepeatedCallAttention} />
       </div>
 
       <button type="button" onClick={sendSafetyMessage} className="flex w-full items-center gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-left hover:bg-amber-500/15"><MessageSquareWarning className="h-5 w-5 shrink-0 text-amber-300" /><span className="min-w-0 flex-1"><span className="block text-sm font-extrabold text-white">I'm Not Safe</span><span className="mt-0.5 block text-[11px] leading-5 text-slate-400">Opens your SMS app with a pre-filled safety message to your Emergency Circle. You remain in control of sending it.</span></span><span className="rounded-xl bg-amber-500 px-3 py-2 text-[11px] font-black text-slate-950">Message</span></button>
