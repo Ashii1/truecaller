@@ -1,27 +1,5 @@
-import { useState, useEffect } from 'react';
-import { 
-  X, 
-  ShieldAlert, 
-  ShieldCheck, 
-  ShieldBan, 
-  PhoneCall, 
-  Sparkles, 
-  Building2, 
-  Globe, 
-  MapPin, 
-  Radio, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Edit2, 
-  Check, 
-  Flag, 
-  UserPlus, 
-  Scale, 
-  Info,
-  Clock,
-  ArrowRight,
-  Shield
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AlertTriangle, Ban, CheckCircle2, ChevronDown, Edit2, Phone, ShieldCheck, UserPlus, X } from 'lucide-react';
 import { CallLogItem, CallClassification, TruecallerDirectoryProfile } from '../types';
 
 interface CallerDetailModalProps {
@@ -38,361 +16,99 @@ interface CallerDetailModalProps {
   onInitiateCall?: (number: string, name?: string) => void;
 }
 
-export default function CallerDetailModal({
-  call,
-  profile,
-  isOpen,
-  onClose,
-  onBlockNumber,
-  onMarkSafe,
-  onOpenReportModal,
-  onOpenDisputeModal,
-  onUpdateCallerName,
-  onOpenSmartBlock,
-  onInitiateCall,
-}: CallerDetailModalProps) {
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [nameInput, setNameInput] = useState('');
-  const [aiSummary, setAiSummary] = useState<string | null>(call?.aiSummary || null);
-  const [riskSignals, setRiskSignals] = useState<string[]>(call?.riskSignals || []);
-  const [loadingAi, setLoadingAi] = useState(false);
-  const [aiSource, setAiSource] = useState<string>('on_device');
-  const [notSpamSuccess, setNotSpamSuccess] = useState(false);
-
-  const targetNumber = call?.number || profile?.number || '';
-  const initialName = call?.callerName || profile?.name || 'Unknown Caller';
-  const classification: CallClassification = call?.classification || (profile?.isVerified ? 'VERIFIED' : profile?.isSpam ? 'SPAM' : 'UNKNOWN');
-  const riskScore = call?.riskScore ?? profile?.spamScore ?? 30;
-  const isVerified = call?.isVerifiedBusiness || profile?.isVerified || classification === 'VERIFIED';
+export default function CallerDetailModal({ call, profile, isOpen, onClose, onBlockNumber, onMarkSafe, onOpenReportModal, onOpenDisputeModal, onUpdateCallerName, onOpenSmartBlock, onInitiateCall }: CallerDetailModalProps) {
+  const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState('');
 
   useEffect(() => {
-    setNameInput(initialName);
-    setIsEditingName(false);
-    setNotSpamSuccess(false);
-    if (call?.aiSummary) {
-      setAiSummary(call.aiSummary);
-      setRiskSignals(call.riskSignals || []);
-    } else {
-      setAiSummary(null);
-      setRiskSignals([]);
-    }
-  }, [call, profile, initialName]);
+    if (!isOpen) return;
+    setExpanded(false);
+    setEditing(false);
+    setName(call?.callerName || profile?.name || '');
+    document.body.classList.remove('modal-open');
+    return () => document.body.classList.remove('modal-open');
+  }, [isOpen, call, profile]);
 
   if (!isOpen || (!call && !profile)) return null;
 
-  // Generate AI Summary & Risk Signals via API or on-device synthesis
-  const handleGenerateAiSummary = async () => {
-    setLoadingAi(true);
-    try {
-      const res = await fetch('/api/call-summary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          number: targetNumber,
-          callerName: initialName,
-          classification,
-          durationSeconds: call?.durationSeconds || 0,
-          repeatCount: call?.repeatCount || 1,
-          reportsCount: call?.reportsCount || profile?.spamReportsCount || 0,
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setAiSummary(data.summary);
-        setRiskSignals(data.riskSignals || []);
-        setAiSource(data.source || 'gemini_security_ai');
-      }
-    } catch {
-      setAiSummary(
-        classification === 'SPAM' || classification === 'SCAM'
-          ? 'High-likelihood unsolicited telemarketing dialer targeting cellular ranges.'
-          : 'Standard domestic voice connection without negative community flags.'
-      );
-      setRiskSignals([
-        'Analyzed by on-device firewall heuristics',
-        'Direct carrier trunk routing identified',
-        'Zero malicious payload detected in local cache',
-      ]);
-      setAiSource('on_device_fallback');
-    } finally {
-      setLoadingAi(false);
-    }
-  };
+  const number = call?.number || profile?.number || '';
+  const callerName = call?.callerName || profile?.name || 'Unknown caller';
+  const classification: CallClassification = call?.classification || (profile?.isVerified ? 'VERIFIED' : profile?.isSpam ? 'SPAM' : 'UNKNOWN');
+  const risk = call?.riskScore ?? profile?.spamScore ?? 0;
+  const isSpam = classification === 'SPAM' || classification === 'SCAM' || !!profile?.isSpam;
+  const isVerified = classification === 'VERIFIED' || !!call?.isVerifiedBusiness || !!profile?.isVerified;
+  const label = classification === 'SCAM' ? 'High scam risk' : classification === 'SPAM' ? 'Spam' : isVerified ? 'Verified caller' : 'Unknown caller';
 
-  const handleSaveName = () => {
-    if (nameInput.trim() && onUpdateCallerName) {
-      onUpdateCallerName(targetNumber, nameInput.trim());
-      setIsEditingName(false);
-    }
+  const saveName = () => {
+    const next = name.trim();
+    if (next && onUpdateCallerName) onUpdateCallerName(number, next);
+    setEditing(false);
   };
-
-  // Section 24: False-Positive Protection Flow
-  const handleFalsePositiveNotSpam = () => {
-    onMarkSafe(targetNumber, initialName);
-    setNotSpamSuccess(true);
-    setTimeout(() => {
-      setNotSpamSuccess(false);
-    }, 2000);
-  };
-
-  // 6-State visual presentation
-  const getBadge = () => {
-    switch (classification) {
-      case 'SAFE':
-        return { bg: 'bg-emerald-950/70 border-emerald-800 text-emerald-300', label: 'Safe Caller', icon: ShieldCheck };
-      case 'VERIFIED':
-        return { bg: 'bg-sky-950/70 border-sky-800 text-sky-300', label: 'Verified Business', icon: Building2 };
-      case 'SUSPICIOUS':
-        return { bg: 'bg-amber-950/70 border-amber-800 text-amber-300', label: 'Suspicious Caller', icon: AlertTriangle };
-      case 'SPAM':
-        return { bg: 'bg-orange-950/70 border-orange-800 text-orange-300', label: 'Spam Detected', icon: AlertTriangle };
-      case 'SCAM':
-        return { bg: 'bg-rose-950/70 border-rose-800 text-rose-300', label: 'High Scam Risk', icon: ShieldAlert };
-      default:
-        return { bg: 'bg-slate-800 border-slate-700 text-slate-300', label: 'Unknown Caller', icon: Info };
-    }
-  };
-
-  const badge = getBadge();
-  const BadgeIcon = badge.icon;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
-        {/* Modal Header */}
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`p-3 rounded-2xl border ${badge.bg}`}>
-              <BadgeIcon className="w-6 h-6" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4" role="dialog" aria-modal="true" aria-label="Caller details">
+      <section className="w-full max-w-lg overflow-hidden rounded-[26px] border border-slate-700 bg-[#11161d] shadow-2xl">
+        <header className="flex items-start justify-between border-b border-slate-800 px-5 py-4">
+          <div className="min-w-0">
+            <div className="mb-1 flex items-center gap-2">
+              <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${isSpam ? 'bg-rose-500/10 text-rose-300' : isVerified ? 'bg-emerald-500/10 text-emerald-300' : 'bg-slate-800 text-slate-300'}`}>{label}</span>
+              {risk > 0 && <span className="text-[11px] text-slate-500">{risk}% risk</span>}
             </div>
-            <div>
+            {editing ? (
               <div className="flex items-center gap-2">
-                <span className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${badge.bg}`}>
-                  {badge.label}
-                </span>
-                {call?.confidence && (
-                  <span className="text-[11px] font-mono text-slate-400">
-                    {call.confidence}% confidence
-                  </span>
-                )}
+                <input value={name} onChange={event => setName(event.target.value)} className="min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-base font-semibold text-white outline-none" autoFocus />
+                <button onClick={saveName} className="rounded-xl bg-blue-600 p-2 text-white"><CheckCircle2 className="h-4 w-4" /></button>
               </div>
-
-              {isEditingName ? (
-                <div className="flex items-center gap-2 mt-1">
-                  <input
-                    type="text"
-                    value={nameInput}
-                    onChange={(e) => setNameInput(e.target.value)}
-                    className="px-2 py-1 rounded bg-slate-950 border border-slate-700 text-sm font-semibold text-white focus:outline-none focus:border-indigo-500"
-                    placeholder="Enter caller name"
-                  />
-                  <button
-                    onClick={handleSaveName}
-                    className="p-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 mt-1">
-                  <h2 className="text-lg font-bold text-slate-100">{initialName}</h2>
-                  {onUpdateCallerName && (
-                    <button
-                      onClick={() => setIsEditingName(true)}
-                      className="p-1 rounded text-slate-500 hover:text-slate-300"
-                      title="Edit caller label"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              )}
-
-              <div className="text-xs font-mono text-slate-400">{targetNumber}</div>
-            </div>
-          </div>
-
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Section 12: "Who Called Me?" Smart Insights */}
-        <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-              <Info className="w-3.5 h-3.5 text-indigo-400" /> Who called me?
-            </span>
-            <span className="text-[10px] font-mono text-slate-500">
-              Source: {call?.identificationSource || 'Authorized Directory'}
-            </span>
-          </div>
-          <p className="text-xs text-slate-300 leading-relaxed italic">
-            "{call?.explainReason || (
-              classification === 'VERIFIED'
-                ? 'This number is an authorized corporate line registered with official commercial registries.'
-                : classification === 'SPAM'
-                ? 'This number appears to be associated with commercial/telemarketing solicitation based on available authorized directories and user reports.'
-                : classification === 'SCAM'
-                ? 'This number is associated with aggressive fraud, spoofing, or toll-rate traps.'
-                : 'We could not confidently identify this caller yet based on current public telephony registries.'
-            )}"
-          </p>
-        </div>
-
-        {/* Section 13: Verified Business Card (if verified) */}
-        {isVerified && (
-          <div className="p-4 rounded-xl bg-gradient-to-r from-sky-950/40 to-slate-900 border border-sky-800/40 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-sky-400" />
-                <span className="text-xs font-bold text-sky-300 uppercase tracking-wide">
-                  Verified Business Profile
-                </span>
-              </div>
-              <span className="text-[11px] font-medium text-slate-400">
-                {profile?.carrier || call?.carrier || 'Carrier Authenticated'}
-              </span>
-            </div>
-            <div className="text-xs text-slate-300">
-              Official customer support line. Call originates from authorized telephony trunks with STIR/SHAKEN Level-A digital certification.
-            </div>
-            {profile?.location && (
-              <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                <MapPin className="w-3.5 h-3.5 text-slate-500" />
-                <span>{profile.location}</span>
+            ) : (
+              <div className="flex items-center gap-1">
+                <h2 className="truncate text-xl font-bold text-white">{callerName}</h2>
+                {onUpdateCallerName && <button onClick={() => setEditing(true)} className="rounded-lg p-1 text-slate-500 hover:text-white" aria-label="Edit caller name"><Edit2 className="h-4 w-4" /></button>}
               </div>
             )}
+            <p className="mt-1 font-mono text-sm text-slate-400">{number}</p>
           </div>
-        )}
+          <button onClick={onClose} className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close"><X className="h-5 w-5" /></button>
+        </header>
 
-        {/* Section 4: AI Call Summary & Risk Signals */}
-        <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-purple-400" />
-              <span className="text-xs font-bold text-purple-300">AI Call Summary</span>
-            </div>
-            <span className="text-[10px] text-slate-500 font-mono">
-              {aiSource === 'gemini_security_ai' ? 'Sent securely for caller identification' : 'Processed on your device'}
-            </span>
+        <div className="space-y-3 p-5">
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => onInitiateCall?.(number, callerName)} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 font-semibold text-white hover:bg-emerald-500"><Phone className="h-4 w-4" /> Call</button>
+            <button onClick={() => onBlockNumber(number, callerName)} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 font-semibold text-slate-200 hover:bg-slate-800"><Ban className="h-4 w-4" /> Block</button>
           </div>
 
-          {aiSummary ? (
-            <div className="space-y-2">
-              <p className="text-xs text-slate-200 bg-slate-900/80 p-3 rounded-lg border border-slate-800">
-                {aiSummary}
-              </p>
-              {riskSignals.length > 0 && (
-                <div className="space-y-1 pt-1">
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                    Risk Signals
-                  </span>
-                  <ul className="space-y-1">
-                    {riskSignals.map((sig, i) => (
-                      <li key={i} className="text-xs text-slate-300 flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
-                        <span>{sig}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          ) : (
+          <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
             <div className="flex items-center justify-between">
-              <p className="text-xs text-slate-400">
-                Generate an on-demand security briefing with risk signals.
-              </p>
-              <button
-                onClick={handleGenerateAiSummary}
-                disabled={loadingAi}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 transition flex items-center gap-1 shrink-0"
-              >
-                <Sparkles className="w-3 h-3" />
-                {loadingAi ? 'Analyzing...' : 'Generate AI Summary'}
-              </button>
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-200"><ShieldCheck className="h-4 w-4 text-blue-400" /> Caller insight</div>
+              <span className="text-[10px] text-slate-500">Device + local protection</span>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              {isSpam ? (call?.explainReason || 'This number is marked as unwanted by VigilShield protection rules or available caller signals.') : isVerified ? 'This caller is marked as verified by the information available to VigilShield.' : 'No verified identity is available yet. Save the number if you know the caller.'}
+            </p>
+          </div>
+
+          <button onClick={() => setExpanded(value => !value)} className="flex w-full items-center justify-between rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3 text-left text-sm font-semibold text-slate-200">
+            <span>{expanded ? 'Hide details' : 'More details'}</span><ChevronDown className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </button>
+
+          {expanded && (
+            <div className="space-y-2 rounded-2xl border border-slate-800 bg-slate-950 p-4 text-xs text-slate-400">
+              <div className="flex justify-between"><span>Last call</span><span className="text-slate-200">{call ? new Date(call.timestamp).toLocaleString() : '—'}</span></div>
+              <div className="flex justify-between"><span>Duration</span><span className="text-slate-200">{call?.durationSeconds || 0}s</span></div>
+              <div className="flex justify-between"><span>Reports</span><span className="text-slate-200">{call?.reportsCount || profile?.spamReportsCount || 0}</span></div>
+              {profile?.carrier && <div className="flex justify-between"><span>Carrier</span><span className="text-slate-200">{profile.carrier}</span></div>}
             </div>
           )}
-        </div>
 
-        {/* Section 24: False-Positive Protection Flow */}
-        {(classification === 'SPAM' || classification === 'SCAM' || classification === 'SUSPICIOUS') && (
-          <div className="p-3.5 rounded-xl bg-slate-950/40 border border-slate-800 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-300">
-                Incorrectly marked as spam?
-              </span>
-              {notSpamSuccess && (
-                <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Added to Safe List
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-slate-400">
-              If this is a legitimate contact or delivery line, mark it safe. The app will never block this caller again.
-            </p>
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                onClick={handleFalsePositiveNotSpam}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-900/60 transition flex items-center gap-1.5"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" /> Not Spam (Mark Safe)
-              </button>
-              <button
-                onClick={() => onOpenDisputeModal(targetNumber, initialName)}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 transition flex items-center gap-1.5"
-              >
-                <Scale className="w-3.5 h-3.5" /> Submit Dispute
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Contextual Action Bar */}
-        <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => onOpenReportModal(targetNumber)}
-              className="px-3 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition flex items-center gap-1.5"
-            >
-              <Flag className="w-3.5 h-3.5 text-amber-400" /> Report
-            </button>
-            <button
-              onClick={() => onMarkSafe(targetNumber, initialName)}
-              className="px-3 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition flex items-center gap-1.5"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Add to Trusted
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {onInitiateCall && (
-              <button
-                onClick={() => {
-                  onClose();
-                  onInitiateCall(targetNumber, initialName);
-                }}
-                className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow transition flex items-center gap-1.5"
-                title="Call this telephone number"
-              >
-                <PhoneCall className="w-3.5 h-3.5" /> Call
-              </button>
-            )}
-            {onOpenSmartBlock && (
-              <button
-                onClick={() => onOpenSmartBlock(targetNumber, targetNumber.replace(/\D/g, '').slice(0, 6))}
-                className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white shadow transition flex items-center gap-1.5"
-              >
-                <ShieldBan className="w-3.5 h-3.5" /> Smart Block
-              </button>
-            )}
+          <div className="flex flex-wrap gap-2 pt-1">
+            {isSpam && <button onClick={() => onMarkSafe(number, callerName)} className="rounded-xl border border-emerald-900 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">Not spam</button>}
+            <button onClick={() => onOpenReportModal(number)} className="rounded-xl border border-slate-800 px-3 py-2 text-xs font-semibold text-slate-300">Report</button>
+            <button onClick={() => onOpenDisputeModal(number, callerName)} className="rounded-xl border border-slate-800 px-3 py-2 text-xs font-semibold text-slate-300">Dispute</button>
+            {onOpenSmartBlock && <button onClick={() => onOpenSmartBlock(number, number.slice(0, 5))} className="rounded-xl border border-slate-800 px-3 py-2 text-xs font-semibold text-slate-300">Smart block</button>}
+            {onInitiateCall && <button onClick={() => onInitiateCall(number, callerName)} className="inline-flex items-center gap-1 rounded-xl border border-slate-800 px-3 py-2 text-xs font-semibold text-slate-300"><UserPlus className="h-3.5 w-3.5" /> Save / contact</button>}
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
