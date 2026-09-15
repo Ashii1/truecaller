@@ -2,62 +2,138 @@
 
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #eef2ff;
-  background: #07111f;
+  color: #f5f5f7;
+  background: #08090b;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
 
 * { box-sizing: border-box; }
-html { background: #07111f; }
+html { background: #08090b; }
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 12% -8%, rgba(56, 189, 248, .16), transparent 34%),
-    radial-gradient(circle at 92% 8%, rgba(99, 102, 241, .18), transparent 30%),
-    linear-gradient(180deg, #07111f 0%, #091525 48%, #07111f 100%);
+  background: #08090b;
 }
 button, input, select, textarea { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
-
 #root { min-height: 100vh; }
 
-/* Modern surfaces used across the existing component library */
-.bg-slate-900 { background-color: rgba(7, 17, 31, .88) !important; }
-.bg-slate-900\/90 { background-color: rgba(7, 17, 31, .78) !important; }
-.bg-slate-900\/95 { background-color: rgba(7, 17, 31, .86) !important; }
-.bg-slate-800 { background-color: rgba(18, 32, 52, .72) !important; }
-.bg-slate-800\/60 { background-color: rgba(18, 32, 52, .55) !important; }
-.border-slate-800, .border-slate-700 { border-color: rgba(148, 163, 184, .12) !important; }
+/* One UI-inspired foundation: calm surfaces, generous radii, restrained elevation. */
+.bg-slate-900 { background-color: #101114 !important; }
+.bg-slate-900\/90 { background-color: rgba(16,17,20,.94) !important; }
+.bg-slate-900\/95 { background-color: rgba(16,17,20,.97) !important; }
+.bg-slate-800 { background-color: #18191d !important; }
+.bg-slate-800\/60 { background-color: #15161a !important; }
+.bg-slate-800\/50 { background-color: #141519 !important; }
+.border-slate-800, .border-slate-700 { border-color: rgba(255,255,255,.08) !important; }
+[class*="rounded-2xl"], [class*="rounded-3xl"] { border-color: rgba(255,255,255,.075); }
 
-/* Glass cards */
-[class*="rounded-2xl"], [class*="rounded-3xl"] {
-  border-color: rgba(148, 163, 184, .13);
-}
-
-::selection { background: rgba(34, 211, 238, .28); color: white; }
-
+::selection { background: rgba(20, 105, 255, .28); color: white; }
 input:focus, select:focus, textarea:focus {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(34, 211, 238, .14) !important;
-  border-color: rgba(34, 211, 238, .55) !important;
+  box-shadow: 0 0 0 3px rgba(47, 109, 255, .16) !important;
+  border-color: rgba(72, 125, 255, .65) !important;
 }
 
-/* Soft entrance for app surfaces */
 @keyframes vs-rise { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
-main > * { animation: vs-rise .28s ease-out both; }
-
+main > * { animation: vs-rise .24s ease-out both; }
 .safe-bottom { padding-bottom: max(.5rem, env(safe-area-inset-bottom)); }
 
-/* Give primary indigo controls a more premium cyan/indigo treatment */
-.bg-indigo-600 { background-color: #4f46e5 !important; }
-.hover\:bg-indigo-500:hover { background-color: #6366f1 !important; }
-.text-indigo-400 { color: #67e8f9 !important; }
-.text-indigo-300 { color: #a5b4fc !important; }
+/* Samsung-style blue accent instead of the previous neon/cyber palette. */
+.bg-indigo-600 { background-color: #2f6df6 !important; }
+.hover\\:bg-indigo-500:hover { background-color: #4b82ff !important; }
+.text-indigo-400 { color: #6f9cff !important; }
+.text-indigo-300 { color: #9dbaff !important; }
 
-@media (max-width: 640px) {
-  body { background: linear-gradient(180deg, #07111f 0%, #0b1728 100%); }
-  main { padding-bottom: 84px; }
+/* Dialer: large Samsung-like keypad, uncluttered number presentation. */
+main:has(#dialer-search-input) { background: #08090b; }
+main:has(#dialer-search-input) #dialer-search-input {
+  min-height: 50px;
+  border-radius: 18px !important;
+  background: #18191d !important;
+  border-color: transparent !important;
+  font-size: 15px;
 }
+main:has(#dialer-search-input) #dialer-search-input::placeholder { color: #777a82; }
+main:has(#dialer-search-input) [id^="keypad-button-"] {
+  width: 76px !important;
+  height: 76px !important;
+  border: 0 !important;
+  background: #17181c !important;
+  box-shadow: none !important;
+}
+main:has(#dialer-search-input) [id^="keypad-button-"]:active {
+  background: #25272d !important;
+  transform: scale(.94);
+}
+main:has(#dialer-search-input) [id^="keypad-button-"] span:first-child {
+  font-size: 29px !important;
+  font-weight: 500 !important;
+  letter-spacing: -.02em;
+}
+main:has(#dialer-search-input) [id^="keypad-button-"] span:last-child {
+  font-size: 9px !important;
+  letter-spacing: .18em;
+  color: #8b8e96 !important;
+}
+main:has(#dialer-search-input) #dialer-main-call-btn {
+  width: 72px !important;
+  height: 72px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  background: #2f6df6 !important;
+  box-shadow: 0 8px 22px rgba(47,109,246,.28) !important;
+  font-size: 0 !important;
+}
+main:has(#dialer-search-input) #dialer-main-call-btn > div {
+  width: 30px !important;
+  height: 30px !important;
+  background: transparent !important;
+}
+main:has(#dialer-search-input) #dialer-main-call-btn svg { width: 22px !important; height: 22px !important; }
+main:has(#dialer-search-input) #dialer-backspace { right: 6px; }
+
+/* Contacts: compact Samsung-style address book rows and large search field. */
+main:has(#btn-add-contact) { background: #08090b; }
+main:has(#btn-add-contact) input[type="text"] {
+  min-height: 50px;
+  border-radius: 18px !important;
+  background: #18191d !important;
+  border-color: transparent !important;
+}
+main:has(#btn-add-contact) .space-y-2 > div[class*="bg-slate-800/50"] {
+  min-height: 68px;
+  padding: 10px 8px 10px 12px !important;
+  border: 0 !important;
+  border-radius: 20px !important;
+  background: #111216 !important;
+  box-shadow: none !important;
+}
+main:has(#btn-add-contact) .space-y-2 > div[class*="bg-slate-800/50"]:active { background: #191a1f !important; }
+main:has(#btn-add-contact) .space-y-2 > div[class*="bg-slate-800/50"] > div:first-child > div:first-child {
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 50% !important;
+  background: #272a31 !important;
+  box-shadow: none !important;
+}
+main:has(#btn-add-contact) .space-y-2 > div[class*="bg-slate-800/50"] span.text-sm { font-size: 15px !important; font-weight: 650 !important; }
+main:has(#btn-add-contact) .space-y-2 > div[class*="bg-slate-800/50"] .text-xs { font-size: 12px !important; color: #9699a2 !important; }
+main:has(#btn-add-contact) #btn-add-contact {
+  border-radius: 18px !important;
+  background: #2f6df6 !important;
+  box-shadow: none !important;
+}
+
+/* Bottom navigation closer to Samsung One UI: floating but not glassy/neon. */
+@media (max-width: 640px) {
+  body { background: #08090b; }
+  main { padding-bottom: 88px; }
+  main:has(#dialer-search-input) [id^="keypad-button-"] { width: 70px !important; height: 70px !important; }
+  main:has(#dialer-search-input) .grid.grid-cols-3 { gap: 7px 14px !important; }
+}
+
+/* Remove distracting glass treatment from navigation while preserving all actions. */
+nav.bg-slate-900, nav[class*="bg-slate-900"] { background: #111216 !important; backdrop-filter: none !important; }
