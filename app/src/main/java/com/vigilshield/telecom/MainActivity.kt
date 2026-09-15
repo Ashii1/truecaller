@@ -8,6 +8,8 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.webkit.ConsoleMessage
@@ -33,11 +35,17 @@ class MainActivity : AppCompatActivity() {
     private lateinit var errorView: View
     private lateinit var errorText: TextView
     private lateinit var assetLoader: WebViewAssetLoader
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var pageFinished = false
+    private var uiReportedReady = false
+    private var lastConsoleError: String? = null
 
     companion object {
         private const val PERMISSION_REQ = 7002
         private const val DIALER_ROLE_REQ = 7001
-        private const val APP_ASSET_URL = "https://appassets.androidplatform.net/assets/index.html"
+        // The Vite production bundle is copied to app/src/main/assets.
+        // Loading index.html from the asset root makes relative ./assets/* URLs resolve correctly.
+        private const val APP_ASSET_URL = "https://appassets.androidplatform.net/index.html"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,7 +65,9 @@ class MainActivity : AppCompatActivity() {
 
         bridge = AndroidTelephonyBridge(this, webView)
         assetLoader = WebViewAssetLoader.Builder()
-            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            // Root handler is intentional: Vite base './' emits ./assets/<hash> files.
+            // Loading index.html at the asset root avoids the old /assets/assets/... path.
+            .addPathHandler("/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
 
         webView.settings.javaScriptEnabled = true
@@ -77,14 +87,20 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                pageFinished = false
+                uiReportedReady = false
+                lastConsoleError = null
                 showLoading()
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
-                hideLoading()
-                hideError()
+                pageFinished = true
                 bridge.dispatchWebEvent("ROLE_STATUS_CHANGED", bridge.roleStatus())
                 handleDialIntent(intent)
+
+                // Do not hide the loader just because HTML loaded. A broken JS bundle used to
+                // leave the user with a completely white WebView. Verify that React mounted first.
+                view?.postDelayed({ verifyReactMounted(view) }, 700)
             }
 
             override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: android.webkit.WebResourceError?) {
@@ -101,7 +117,9 @@ class MainActivity : AppCompatActivity() {
         webView.webChromeClient = object : WebChromeClient() {
             override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
                 if (consoleMessage.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
-                    showError("VigilShield UI error.\n\n${consoleMessage.message()}\nLine ${consoleMessage.lineNumber()}")
+                    lastConsoleError = "${consoleMessage.message()} (line ${consoleMessage.lineNumber()})"
+                    // Keep the diagnostic visible instead of allowing onPageFinished to turn it white.
+                    if (pageFinished) showError("VigilShield UI error.\n\n$lastConsoleError")
                 }
                 return true
             }
@@ -109,6 +127,23 @@ class MainActivity : AppCompatActivity() {
 
         webView.loadUrl(APP_ASSET_URL)
         requestDefaultDialerIfAvailable()
+    }
+
+    private fun verifyReactMounted(view: WebView) {
+        if (uiReportedReady || isFinishing || isDestroyed) return
+        view.evaluateJavascript(
+            "(function(){var r=document.getElementById('root'); return r && r.children.length > 0 ? 'READY' : 'EMPTY';})()"
+        ) { result ->
+            val ready = result?.contains("READY") == true
+            if (ready) {
+                uiReportedReady = true
+                hideLoading()
+                hideError()
+            } else {
+                val detail = lastConsoleError ?: "The React interface did not mount inside WebView."
+                showError("VigilShield UI failed to start.\n\n$detail")
+            }
+        }
     }
 
     private fun createLoadingView(): View {
@@ -152,8 +187,12 @@ class MainActivity : AppCompatActivity() {
         box.addView(Button(this).apply {
             text = "Retry"
             setOnClickListener {
+                pageFinished = false
+                uiReportedReady = false
+                lastConsoleError = null
                 hideError()
-                webView.loadUrl(APP_ASSET_URL)
+                showLoading()
+                webView.reload()
             }
         }, LinearLayout.LayoutParams(-2, -2))
         return box
