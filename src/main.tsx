@@ -13,13 +13,24 @@ try {
   console.error('[VigilShield Test Suite] Execution error:', e);
 }
 
-// Register service worker for offline capabilities and WebAPK install
-registerSW({
-  immediate: true,
-  onOfflineReady() {
-    console.log('SpamShield is ready for offline and WebAPK install');
-  },
-});
+// The Android wrapper loads the bundle from file:///android_asset/.
+// Service-worker registration is a browser/PWA concern and can fail on the
+// Android WebView file origin. Never let that failure interfere with React.
+const isAndroidWrapper = typeof window !== 'undefined' &&
+  typeof (window as Window & { AndroidTelephony?: unknown }).AndroidTelephony !== 'undefined';
+
+if (!isAndroidWrapper && 'serviceWorker' in navigator) {
+  try {
+    registerSW({
+      immediate: true,
+      onOfflineReady() {
+        console.log('VigilShield is ready for offline and WebAPK install');
+      },
+    });
+  } catch (e) {
+    console.warn('[VigilShield PWA] Service worker unavailable:', e);
+  }
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
