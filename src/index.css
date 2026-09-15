@@ -1,6 +1,10 @@
 @import "tailwindcss";
 
 :root {
+  --vs-accent: #3b82f6;
+  --vs-accent-soft: rgba(59, 130, 246, .14);
+  --vs-accent-border: rgba(59, 130, 246, .42);
+  --vs-font-scale: 1;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #f8fafc;
   background: #0b0f14;
@@ -9,12 +13,14 @@
 }
 
 * { box-sizing: border-box; }
-html { background: #0b0f14; }
+html { background: #0b0f14; font-size: calc(100% * var(--vs-font-scale)); }
 body { margin: 0; min-width: 320px; min-height: 100vh; background: #0b0f14; }
 button, input, select, textarea { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
 #root { min-height: 100vh; }
 
+/* Stable semantic surface tokens. Existing Tailwind utility classes remain
+   intact while these variables let the appearance centre recolour the whole UI. */
 .bg-slate-900 { background-color: #11161d !important; }
 .bg-slate-900\/90 { background-color: rgba(17, 22, 29, .96) !important; }
 .bg-slate-900\/95 { background-color: rgba(17, 22, 29, .98) !important; }
@@ -22,13 +28,64 @@ button { -webkit-tap-highlight-color: transparent; }
 .bg-slate-800\/60 { background-color: rgba(23, 29, 37, .86) !important; }
 .border-slate-800, .border-slate-700 { border-color: rgba(148, 163, 184, .14) !important; }
 [class*="rounded-2xl"], [class*="rounded-3xl"] { border-color: rgba(148, 163, 184, .13); }
-::selection { background: rgba(59, 130, 246, .28); color: white; }
+::selection { background: var(--vs-accent-soft); color: white; }
+
+/* Accent bridge for existing blue/indigo controls. */
+.bg-blue-600, .bg-indigo-600 { background-color: var(--vs-accent) !important; }
+.hover\\:bg-blue-500:hover, .hover\\:bg-indigo-500:hover { filter: brightness(1.1); }
+.text-blue-400, .text-indigo-400 { color: var(--vs-accent) !important; }
+.text-blue-300, .text-indigo-300 { color: var(--vs-accent) !important; filter: brightness(1.18); }
+.border-blue-500\/50, .border-blue-500\/30, .border-blue-500\/20 { border-color: var(--vs-accent-border) !important; }
+.bg-blue-500\/10, .bg-indigo-500\/10 { background-color: var(--vs-accent-soft) !important; }
 
 input:focus, select:focus, textarea:focus {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, .22) !important;
-  border-color: rgba(59, 130, 246, .65) !important;
+  box-shadow: 0 0 0 2px var(--vs-accent-soft) !important;
+  border-color: var(--vs-accent-border) !important;
 }
+
+/* Appearance backgrounds. */
+html[data-vs-background="GRADIENT"] body,
+html[data-vs-background="GRADIENT"] { background: radial-gradient(circle at 20% 0%, var(--vs-accent-soft), transparent 34%), #0b0f14; }
+html[data-vs-background="MIDNIGHT"] body,
+html[data-vs-background="MIDNIGHT"] { background: linear-gradient(145deg, #05070b 0%, #0b1020 52%, #080b12 100%); }
+html[data-vs-background="AURORA"] body,
+html[data-vs-background="AURORA"] { background: radial-gradient(circle at 15% 15%, rgba(20, 184, 166, .12), transparent 30%), radial-gradient(circle at 85% 10%, var(--vs-accent-soft), transparent 32%), #090d13; }
+
+/* Light mode preserves the same hierarchy but uses readable light surfaces. */
+html.vs-theme-light { color: #0f172a; background: #f5f7fb; }
+html.vs-theme-light body { background: #f5f7fb; color: #0f172a; }
+html.vs-theme-light .bg-slate-950 { background-color: #ffffff !important; }
+html.vs-theme-light .bg-slate-900 { background-color: #f8fafc !important; }
+html.vs-theme-light .bg-slate-800 { background-color: #eef2f7 !important; }
+html.vs-theme-light .bg-slate-900\/70, html.vs-theme-light .bg-slate-900\/90, html.vs-theme-light .bg-slate-900\/95 { background-color: rgba(248, 250, 252, .96) !important; }
+html.vs-theme-light [class*="text-white"] { color: #0f172a !important; }
+html.vs-theme-light [class*="text-slate-200"] { color: #334155 !important; }
+html.vs-theme-light [class*="text-slate-300"] { color: #475569 !important; }
+html.vs-theme-light [class*="text-slate-400"] { color: #64748b !important; }
+html.vs-theme-light [class*="text-slate-500"] { color: #64748b !important; }
+html.vs-theme-light [class*="border-slate-700"], html.vs-theme-light [class*="border-slate-800"] { border-color: rgba(15, 23, 42, .12) !important; }
+html.vs-theme-light .bg-black\/70, html.vs-theme-light .bg-black\/60 { background-color: rgba(15, 23, 42, .45) !important; }
+html.vs-theme-light[data-vs-background="GRADIENT"] body { background: radial-gradient(circle at 20% 0%, var(--vs-accent-soft), transparent 34%), #f5f7fb; }
+html.vs-theme-light[data-vs-background="MIDNIGHT"] body { background: linear-gradient(145deg, #eef2ff 0%, #f8fafc 55%, #e2e8f0 100%); }
+html.vs-theme-light[data-vs-background="AURORA"] body { background: radial-gradient(circle at 15% 15%, rgba(20, 184, 166, .10), transparent 30%), radial-gradient(circle at 85% 10%, var(--vs-accent-soft), transparent 32%), #f5f7fb; }
+
+/* Density and corner controls apply progressively without breaking component geometry. */
+html.vs-density-compact [class*="p-4"] { padding: .75rem !important; }
+html.vs-density-compact [class*="p-5"] { padding: 1rem !important; }
+html.vs-density-spacious [class*="p-3"] { padding: 1rem !important; }
+html.vs-density-spacious [class*="p-4"] { padding: 1.25rem !important; }
+html.vs-density-spacious [class*="p-5"] { padding: 1.5rem !important; }
+html.vs-corners-sharp [class*="rounded-3xl"] { border-radius: 1rem !important; }
+html.vs-corners-sharp [class*="rounded-2xl"] { border-radius: .75rem !important; }
+html.vs-corners-sharp [class*="rounded-xl"] { border-radius: .5rem !important; }
+html.vs-corners-round [class*="rounded-3xl"] { border-radius: 2rem !important; }
+html.vs-corners-round [class*="rounded-2xl"] { border-radius: 1.5rem !important; }
+html.vs-corners-round [class*="rounded-xl"] { border-radius: 1rem !important; }
+
+html.vs-high-contrast .text-slate-400, html.vs-high-contrast .text-slate-500 { color: #cbd5e1 !important; }
+html.vs-high-contrast .border-slate-800, html.vs-high-contrast .border-slate-700 { border-color: rgba(226, 232, 240, .28) !important; }
+html.vs-reduce-motion *, html.vs-reduce-motion *::before, html.vs-reduce-motion *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .001ms !important; }
 
 /* Avoid persistent compositor blur after modal/route transitions. */
 .backdrop-blur, .backdrop-blur-sm, .backdrop-blur-md, .backdrop-blur-lg, .backdrop-blur-xl, .backdrop-blur-2xl {
@@ -39,12 +96,7 @@ input:focus, select:focus, textarea:focus {
 @keyframes vs-rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 main > * { animation: vs-rise .18s ease-out both; }
 .safe-bottom { padding-bottom: max(.5rem, env(safe-area-inset-bottom)); }
-.bg-indigo-600 { background-color: #2563eb !important; }
-.hover\\:bg-indigo-500:hover { background-color: #3b82f6 !important; }
-.text-indigo-400 { color: #60a5fa !important; }
-.text-indigo-300 { color: #93c5fd !important; }
 
 @media (max-width: 640px) {
   main { padding-bottom: 78px; }
-  body { background: #0b0f14; }
 }
