@@ -1,0 +1,155 @@
+package com.vigilshield.telecom
+
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.util.Log
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+
+/**
+ * Main Activity hosting the VigilShield Telecom Interface.
+ * 
+ * Provides:
+ * - Native WebView integration with AndroidTelephonyBridge
+ * - Runtime permission requests for CALL_PHONE, READ_CALL_LOG, READ_CONTACTS, READ_PHONE_STATE
+ * - RoleManager result handling for ROLE_DIALER
+ * - Intent handling for ACTION_DIAL and ACTION_CALL
+ */
+class MainActivity : AppCompatActivity() {
+
+    companion object {
+        private const val TAG = "VigilMainActivity"
+        private const val PERMISSION_REQ_CODE = 1001
+    }
+
+    private lateinit var webView: WebView
+    private lateinit var telecomManager: TelecomCallManager
+    private lateinit var callLogRepository: CallLogRepository
+    private lateinit var bridge: AndroidTelephonyBridge
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        telecomManager = TelecomCallManager(this)
+        callLogRepository = CallLogRepository(this)
+
+        webView = WebView(this)
+        setContentView(webView)
+
+        setupWebView()
+        requestTelephonyPermissions()
+        handleIncomingIntent(intent)
+    }
+
+    private fun setupWebView() {
+        webView.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            databaseEnabled = true
+            cacheMode = WebSettings.LOAD_DEFAULT
+            allowFileAccess = true
+            mediaPlaybackRequiresUserGesture = false
+            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        }
+
+        bridge = AndroidTelephonyBridge(this, webView, telecomManager, callLogRepository)
+        webView.addJavascriptInterface(bridge, AndroidTelephonyBridge.INTERFACE_NAME)
+
+        webView.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                Log.i(TAG, "WebView page loaded: $url")
+                // Notify frontend of current default dialer status immediately
+                val status = telecomManager.isDefaultDialer()
+                val script = "if (window.__onAndroidTelecomEvent) { window.__onAndroidTelecomEvent('ROLE_STATUS_CHANGED', {'isDefaultDialer': $status}); }"
+                webView.evaluateJavascript(script, null)
+            }
+        }
+
+        webView.webChromeClient = WebChromeClient()
+
+        // Load local asset or dev server
+        webView.loadUrl("http://localhost:3000")
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncomingIntent(intent)
+    }
+
+    private fun handleIncomingIntent(intent: Intent?) {
+        if (intent == null) return
+        val action = intent.action
+        val data: Uri? = intent.data
+        Log.d(TAG, "Received intent action: $action, data: $data")
+
+        if ((Intent.ACTION_DIAL == action || Intent.ACTION_CALL == action || Intent.ACTION_VIEW == action) && data != null) {
+            val scheme = data.scheme
+            if ("tel" == scheme) {
+                val number = data.schemeSpecificPart
+                if (!number.isNullOrBlank()) {
+                    Log.i(TAG, "Dial intent with number: $number. Passing to UI.")
+                    val script = "if (window.__onAndroidDialIntent) { window.__onAndroidDialIntent('$number'); }"
+                    webView.evaluateJavascript(script, null)
+                }
+            }
+        }
+    }
+
+    private fun requestTelephonyPermissions() {
+        val permissions = mutableListOf(
+            Manifest.permission.CALL_PHONE,
+            Manifest.permission.READ_PHONE_STATE,
+            Manifest.permission.READ_CALL_LOG,
+            Manifest.permission.WRITE_CALL_LOG,
+            Manifest.permission.READ_CONTACTS
+        )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        val needed = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (needed.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, needed.toTypedArray(), PERMISSION_REQ_CODE)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == PERMISSION_REQ_CODE) {
+            val allGranted = grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+            Log.i(TAG, "Permissions result: allGranted=$allGranted")
+            val script = "if (window.__onAndroidTelecomEvent) { window.__onAndroidTelecomEvent('PERMISSIONS_CHANGED', {'granted': $allGranted}); }"
+            webView.evaluateJavascript(script, null)
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == TelecomCallManager.REQUEST_CODE_SET_DEFAULT_DIALER) {
+            val isNowDefault = telecomManager.isDefaultDialer()
+            Log.i(TAG, "Default dialer role request completed. isDefaultDialer: $isNowDefault")
+            val script = "if (window.__onAndroidTelecomEvent) { window.__onAndroidTelecomEvent('ROLE_STATUS_CHANGED', {'isDefaultDialer': $isNowDefault}); }"
+            webView.evaluateJavascript(script, null)
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        callLogRepository.unregisterObserver()
+    }
+}
