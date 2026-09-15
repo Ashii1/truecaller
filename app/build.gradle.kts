@@ -19,11 +19,13 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            // Use the local debug keystore so the generated APK is signed and installable.
+            // Replace with a protected release keystore before Play Store production release.
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 
-    // Keep Java and Kotlin bytecode targets aligned for AGP/Kotlin validation.
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
