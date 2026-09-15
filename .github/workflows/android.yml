@@ -16,7 +16,10 @@ jobs:
         with:
           node-version: 20
       - run: npm install --no-audit --no-fund
-      - run: npm run build
+      - name: TypeScript validation
+        run: npm run lint
+      - name: Build web assets
+        run: npm run build
       - run: rm -rf app/src/main/assets && mkdir -p app/src/main/assets && cp -R dist/. app/src/main/assets/
       - uses: actions/setup-java@v4
         with:
