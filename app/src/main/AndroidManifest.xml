@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Keep the default-phone role request free of hard-restricted Call Log permissions.
-         READ_CALL_LOG/WRITE_CALL_LOG are hard restricted on modern Android and a
-         sideloaded APK cannot be installer-allowlisted for them. Call history is
-         therefore collected from Telecom events instead of blocking ROLE_DIALER. -->
+    <!-- READ_CALL_LOG/WRITE_CALL_LOG intentionally remain absent: Android treats
+         them as hard-restricted permissions and sideloaded APKs cannot be
+         installer-allowlisted. VigilShield keeps its own Telecom history and
+         reads device contacts directly. -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -12,16 +12,36 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <application android:allowBackup="false" android:label="VigilShield" android:supportsRtl="true" android:theme="@style/Theme.VigilShield">
-        <service android:name=".NativeInCallService" android:permission="android.permission.BIND_INCALL_SERVICE" android:exported="true">
+
+    <application
+        android:allowBackup="false"
+        android:label="VigilShield"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.VigilShield">
+        <service
+            android:name=".NativeInCallService"
+            android:permission="android.permission.BIND_INCALL_SERVICE"
+            android:exported="true">
             <meta-data android:name="android.telecom.IN_CALL_SERVICE_UI" android:value="true" />
             <meta-data android:name="android.telecom.IN_CALL_SERVICE_RINGING" android:value="true" />
-            <intent-filter><action android:name="android.telecom.InCallService" /></intent-filter>
+            <intent-filter>
+                <action android:name="android.telecom.InCallService" />
+            </intent-filter>
         </service>
-        <service android:name=".CallScreeningService" android:permission="android.permission.BIND_SCREENING_SERVICE" android:exported="true">
-            <intent-filter><action android:name="android.telecom.CallScreeningService" /></intent-filter>
+
+        <service
+            android:name=".ProductionCallScreeningService"
+            android:permission="android.permission.BIND_SCREENING_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.telecom.CallScreeningService" />
+            </intent-filter>
         </service>
-        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
