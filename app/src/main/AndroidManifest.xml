@@ -1,8 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Call-log access is requested only after VigilShield is the default Phone app.
-         Android treats READ_CALL_LOG as a restricted permission, so the user may need
-         to allow the restricted setting on sideloaded builds. -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -15,6 +12,7 @@
 
     <application
         android:allowBackup="false"
+        android:icon="@drawable/ic_vigilshield"
         android:label="VigilShield"
         android:supportsRtl="true"
         android:theme="@style/Theme.VigilShield">
@@ -24,20 +22,14 @@
             android:exported="true">
             <meta-data android:name="android.telecom.IN_CALL_SERVICE_UI" android:value="true" />
             <meta-data android:name="android.telecom.IN_CALL_SERVICE_RINGING" android:value="true" />
-            <intent-filter>
-                <action android:name="android.telecom.InCallService" />
-            </intent-filter>
+            <intent-filter><action android:name="android.telecom.InCallService" /></intent-filter>
         </service>
-
         <service
             android:name=".ProductionCallScreeningService"
             android:permission="android.permission.BIND_SCREENING_SERVICE"
             android:exported="true">
-            <intent-filter>
-                <action android:name="android.telecom.CallScreeningService" />
-            </intent-filter>
+            <intent-filter><action android:name="android.telecom.CallScreeningService" /></intent-filter>
         </service>
-
         <activity
             android:name=".MainActivity"
             android:exported="true"
