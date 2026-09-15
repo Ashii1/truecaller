@@ -12,81 +12,55 @@ import android.provider.CallLog
 import android.provider.ContactsContract
 import android.util.Log
 import androidx.core.content.ContextCompat
-import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Real Android System Call Log Repository.
- * 
- * Interacts directly with android.provider.CallLog.Calls to fetch, observe,
- * and synchronize authentic device call history.
- * 
- * Never fabricates or injects fake call entries in production mode.
- */
+/** Real Android system call-log/contacts reader. */
 class CallLogRepository(private val context: Context) {
+    companion object { private const val TAG = "CallLogRepository" }
 
-    companion object {
-        private const val TAG = "CallLogRepository"
-    }
-
-    interface CallLogChangeListener {
-        fun onCallLogChanged()
-    }
-
+    interface CallLogChangeListener { fun onCallLogChanged() }
     private var contentObserver: ContentObserver? = null
 
-    fun hasCallLogPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            context, Manifest.permission.READ_CALL_LOG
-        ) == PackageManager.PERMISSION_GRANTED
-    }
+    fun hasCallLogPermission(): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED
 
-    fun hasContactsPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            context, Manifest.permission.READ_CONTACTS
-        ) == PackageManager.PERMISSION_GRANTED
-    }
+    fun hasContactsPermission(): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
 
     fun registerObserver(listener: CallLogChangeListener) {
         if (!hasCallLogPermission()) return
-        try {
-            contentObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
-                override fun onChange(selfChange: Boolean, uri: Uri?) {
-                    super.onChange(selfChange, uri)
-                    Log.d(TAG, "Device call log changed. Emitting update.")
-                    listener.onCallLogChanged()
-                }
+        unregisterObserver()
+        contentObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean, uri: Uri?) {
+                super.onChange(selfChange, uri)
+                listener.onCallLogChanged()
             }
-            context.contentResolver.registerContentObserver(
-                CallLog.Calls.CONTENT_URI,
-                true,
-                contentObserver!!
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to register CallLog ContentObserver", e)
         }
+        runCatching {
+            context.contentResolver.registerContentObserver(CallLog.Calls.CONTENT_URI, true, contentObserver!!)
+        }.onFailure { Log.e(TAG, "Failed to observe CallLog", it) }
     }
 
     fun unregisterObserver() {
-        contentObserver?.let {
-            try {
-                context.contentResolver.unregisterContentObserver(it)
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to unregister ContentObserver", e)
-            }
-        }
+        contentObserver?.let { runCatching { context.contentResolver.unregisterContentObserver(it) } }
         contentObserver = null
     }
 
     /**
-     * Reads authentic device call records from CallLog.Calls
+     * Reads the real device call log.
+     * Android's CallLog provider does NOT accept `LIMIT` in sortOrder;
+     * the limit must be supplied with CallLog.Calls.LIMIT_PARAM_KEY.
      */
     fun fetchDeviceCallHistory(limit: Int = 100): List<DeviceCallRecord> {
-        val records = mutableListOf<DeviceCallRecord>()
         if (!hasCallLogPermission()) {
-            Log.w(TAG, "Cannot fetch call history: READ_CALL_LOG permission not granted")
-            return records
+            Log.w(TAG, "READ_CALL_LOG is not granted")
+            return emptyList()
         }
+
+        val safeLimit = limit.coerceIn(1, 500)
+        val uri = CallLog.Calls.CONTENT_URI.buildUpon()
+            .appendQueryParameter(CallLog.Calls.LIMIT_PARAM_KEY, safeLimit.toString())
+            .build()
 
         val projection = arrayOf(
             CallLog.Calls._ID,
@@ -96,22 +70,19 @@ class CallLogRepository(private val context: Context) {
             CallLog.Calls.DATE,
             CallLog.Calls.DURATION,
             CallLog.Calls.PHONE_ACCOUNT_ID,
-            CallLog.Calls.GEOCODED_LOCATION
+            CallLog.Calls.GEOCODED_LOCATION,
+            CallLog.Calls.PHONE_ACCOUNT_COMPONENT_NAME
         )
 
-        val sortOrder = "${CallLog.Calls.DATE} DESC LIMIT $limit"
-
-        var cursor: Cursor? = null
+        val records = mutableListOf<DeviceCallRecord>()
         try {
-            cursor = context.contentResolver.query(
-                CallLog.Calls.CONTENT_URI,
+            context.contentResolver.query(
+                uri,
                 projection,
                 null,
                 null,
-                sortOrder
-            )
-
-            if (cursor != null && cursor.moveToFirst()) {
+                "${CallLog.Calls.DATE} DESC"
+            )?.use { cursor ->
                 val idCol = cursor.getColumnIndex(CallLog.Calls._ID)
                 val numberCol = cursor.getColumnIndex(CallLog.Calls.NUMBER)
                 val nameCol = cursor.getColumnIndex(CallLog.Calls.CACHED_NAME)
@@ -121,63 +92,57 @@ class CallLogRepository(private val context: Context) {
                 val accountCol = cursor.getColumnIndex(CallLog.Calls.PHONE_ACCOUNT_ID)
                 val locationCol = cursor.getColumnIndex(CallLog.Calls.GEOCODED_LOCATION)
 
-                do {
-                    val id = if (idCol >= 0) cursor.getString(idCol) else "call_${System.currentTimeMillis()}"
-                    val number = if (numberCol >= 0) cursor.getString(numberCol) ?: "" else ""
-                    var name = if (nameCol >= 0) cursor.getString(nameCol) else null
-                    val typeInt = if (typeCol >= 0) cursor.getInt(typeCol) else CallLog.Calls.INCOMING_TYPE
-                    val date = if (dateCol >= 0) cursor.getLong(dateCol) else System.currentTimeMillis()
-                    val duration = if (durationCol >= 0) cursor.getLong(durationCol) else 0L
-                    val accountId = if (accountCol >= 0) cursor.getString(accountCol) else null
-                    val location = if (locationCol >= 0) cursor.getString(locationCol) else null
+                while (cursor.moveToNext()) {
+                    val id = cursor.stringOrEmpty(idCol).ifBlank { "call_${System.currentTimeMillis()}_${records.size}" }
+                    val number = cursor.stringOrEmpty(numberCol)
+                    var name = cursor.stringOrNull(nameCol)
 
-                    // If contact name missing, lookup in ContactsContract if permission available
-                    if (name.isNullOrBlank() && hasContactsPermission() && number.isNotBlank()) {
-                        name = resolveContactName(number)
+                    // CACHED_NAME can be empty for calls that were made before the
+                    // contact was saved, or when the dialer did not cache a name.
+                    // Always do a live PhoneLookup when possible.
+                    if (hasContactsPermission() && number.isNotBlank()) {
+                        name = resolveContactName(number) ?: name
                     }
 
-                    val direction = when (typeInt) {
+                    val type = cursor.intOrDefault(typeCol, CallLog.Calls.INCOMING_TYPE)
+                    val direction = when (type) {
                         CallLog.Calls.INCOMING_TYPE -> "INCOMING"
                         CallLog.Calls.OUTGOING_TYPE -> "OUTGOING"
                         CallLog.Calls.MISSED_TYPE -> "MISSED"
                         CallLog.Calls.REJECTED_TYPE -> "REJECTED"
-                        CallLog.Calls.BLOCKED_TYPE -> "BLOCKED_CANCELLED"
-                        else -> "INCOMING"
+                        CallLog.Calls.BLOCKED_TYPE -> "BLOCKED"
+                        CallLog.Calls.ANSWERED_EXTERNALLY_TYPE -> "ANSWERED_EXTERNALLY"
+                        else -> "UNKNOWN"
                     }
 
-                    records.add(
-                        DeviceCallRecord(
-                            id = id,
-                            number = number,
-                            callerName = name ?: number,
-                            direction = direction,
-                            timestamp = date,
-                            durationSeconds = duration,
-                            phoneAccountId = accountId,
-                            geocodedLocation = location,
-                            isContact = !name.isNullOrBlank()
-                        )
+                    records += DeviceCallRecord(
+                        id = id,
+                        number = number,
+                        callerName = name?.takeIf { it.isNotBlank() } ?: number.ifBlank { "Unknown caller" },
+                        direction = direction,
+                        timestamp = cursor.longOrDefault(dateCol, 0L),
+                        durationSeconds = cursor.longOrDefault(durationCol, 0L),
+                        phoneAccountId = cursor.stringOrNull(accountCol),
+                        geocodedLocation = cursor.stringOrNull(locationCol),
+                        isContact = !name.isNullOrBlank()
                     )
-                } while (cursor.moveToNext())
+                }
             }
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Call log permission was revoked/restricted", e)
         } catch (e: Exception) {
-            Log.e(TAG, "Error querying system CallLog", e)
-        } finally {
-            cursor?.close()
+            Log.e(TAG, "Unable to query Android CallLog.Calls", e)
         }
-
         return records
     }
 
-    /**
-     * Reads authentic contacts from ContactsContract
-     */
     fun fetchDeviceContacts(limit: Int = 300): List<DeviceContact> {
+        if (!hasContactsPermission()) return emptyList()
+        val safeLimit = limit.coerceIn(1, 1000)
         val contacts = mutableListOf<DeviceContact>()
-        if (!hasContactsPermission()) {
-            return contacts
-        }
-
+        val uri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI.buildUpon()
+            .appendQueryParameter("limit", safeLimit.toString())
+            .build()
         val projection = arrayOf(
             ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
             ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
@@ -185,71 +150,58 @@ class CallLogRepository(private val context: Context) {
             ContactsContract.CommonDataKinds.Phone.STARRED
         )
 
-        var cursor: Cursor? = null
         try {
-            cursor = context.contentResolver.query(
-                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                projection,
-                null,
-                null,
-                "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} ASC LIMIT $limit"
-            )
-
-            if (cursor != null && cursor.moveToFirst()) {
+            context.contentResolver.query(
+                uri, projection, null, null,
+                "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} ASC"
+            )?.use { cursor ->
                 val idCol = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_ID)
                 val nameCol = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
-                val numCol = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                val numberCol = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
                 val starCol = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.STARRED)
-
-                do {
-                    val id = if (idCol >= 0) cursor.getString(idCol) else ""
-                    val name = if (nameCol >= 0) cursor.getString(nameCol) ?: "Contact" else "Contact"
-                    val number = if (numCol >= 0) cursor.getString(numCol) ?: "" else ""
-                    val isFavorite = if (starCol >= 0) cursor.getInt(starCol) == 1 else false
-
-                    if (number.isNotBlank()) {
-                        contacts.add(
-                            DeviceContact(
-                                id = id,
-                                name = name,
-                                number = number,
-                                isFavorite = isFavorite
-                            )
-                        )
-                    }
-                } while (cursor.moveToNext())
+                while (cursor.moveToNext()) {
+                    val number = cursor.stringOrEmpty(numberCol)
+                    if (number.isBlank()) continue
+                    contacts += DeviceContact(
+                        id = cursor.stringOrEmpty(idCol),
+                        name = cursor.stringOrEmpty(nameCol).ifBlank { "Contact" },
+                        number = number,
+                        isFavorite = cursor.intOrDefault(starCol, 0) == 1
+                    )
+                }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error querying ContactsContract", e)
-        } finally {
-            cursor?.close()
+            Log.e(TAG, "Unable to query ContactsContract", e)
         }
-
         return contacts
     }
 
+    /** Android's PhoneLookup is the authoritative local contact lookup for a phone number. */
     private fun resolveContactName(number: String): String? {
         val uri = Uri.withAppendedPath(
             ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
             Uri.encode(number)
         )
-        val projection = arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME)
-        var cursor: Cursor? = null
-        try {
-            cursor = context.contentResolver.query(uri, projection, null, null, null)
-            if (cursor != null && cursor.moveToFirst()) {
-                val nameCol = cursor.getColumnIndex(ContactsContract.PhoneLookup.DISPLAY_NAME)
-                if (nameCol >= 0) {
-                    return cursor.getString(nameCol)
-                }
+        return try {
+            context.contentResolver.query(
+                uri,
+                arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.stringOrNull(cursor.getColumnIndex(ContactsContract.PhoneLookup.DISPLAY_NAME)) else null
             }
         } catch (e: Exception) {
-            // Ignore
-        } finally {
-            cursor?.close()
+            Log.w(TAG, "PhoneLookup failed for number", e)
+            null
         }
-        return null
     }
+
+    private fun Cursor.stringOrEmpty(index: Int): String = stringOrNull(index).orEmpty()
+    private fun Cursor.stringOrNull(index: Int): String? = if (index >= 0 && !isNull(index)) getString(index) else null
+    private fun Cursor.intOrDefault(index: Int, fallback: Int): Int = if (index >= 0 && !isNull(index)) getInt(index) else fallback
+    private fun Cursor.longOrDefault(index: Int, fallback: Long): Long = if (index >= 0 && !isNull(index)) getLong(index) else fallback
 
     data class DeviceCallRecord(
         val id: String,
@@ -262,18 +214,16 @@ class CallLogRepository(private val context: Context) {
         val geocodedLocation: String?,
         val isContact: Boolean
     ) {
-        fun toJson(): JSONObject {
-            return JSONObject().apply {
-                put("id", id)
-                put("number", number)
-                put("callerName", callerName)
-                put("type", direction)
-                put("timestamp", timestamp)
-                put("durationSeconds", durationSeconds)
-                put("phoneAccountId", phoneAccountId ?: "")
-                put("location", geocodedLocation ?: "")
-                put("isContact", isContact)
-            }
+        fun toJson() = JSONObject().apply {
+            put("id", id)
+            put("number", number)
+            put("callerName", callerName)
+            put("type", direction)
+            put("timestamp", timestamp)
+            put("durationSeconds", durationSeconds)
+            put("phoneAccountId", phoneAccountId ?: "")
+            put("location", geocodedLocation ?: "")
+            put("isContact", isContact)
         }
     }
 
@@ -283,13 +233,11 @@ class CallLogRepository(private val context: Context) {
         val number: String,
         val isFavorite: Boolean
     ) {
-        fun toJson(): JSONObject {
-            return JSONObject().apply {
-                put("id", id)
-                put("name", name)
-                put("number", number)
-                put("isFavorite", isFavorite)
-            }
+        fun toJson() = JSONObject().apply {
+            put("id", id)
+            put("name", name)
+            put("number", number)
+            put("isFavorite", isFavorite)
         }
     }
 }
