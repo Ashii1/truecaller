@@ -1,0 +1,5 @@
+Production candidate prepared in ChatGPT.
+
+Key changes: native Android default-dialer/InCallService flow, TelecomManager.placeCall, real ContactsContract and CallLog.Calls integration, call-screening role support, local block rules, removal of synthetic caller/call-log data, and optional authorized caller-ID provider integration.
+
+See README_PRODUCTION.md and PRODUCTION_RELEASE_CHECKLIST.md for build and release requirements.
