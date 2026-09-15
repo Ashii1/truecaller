@@ -25,8 +25,6 @@ class ProductionCallScreeningService : CallScreeningService() {
 
         val prefs = getSharedPreferences("vigilshield", Context.MODE_PRIVATE)
 
-        // Saved contacts are never auto-blocked. Repeated-call escalation is a
-        // separate safety signal and does not change the call disposition.
         if (isDeviceContact(number)) {
             EmergencyRepeatCallPolicy.onTrustedIncomingCall(applicationContext, number)
             respondToCall(details, allowResponse())
@@ -42,13 +40,18 @@ class ProductionCallScreeningService : CallScreeningService() {
         val callerName = details.callerDisplayName.orEmpty()
         val risk = CallRiskAnalyzer.analyze(number, callerName)
         val riskEnabled = prefs.getBoolean("phase2_risk_detection_enabled", true)
-        if (riskEnabled && risk.optBoolean("patternWarning", false)) {
+        val financialEnabled = prefs.getBoolean("phase2_financial_warnings_enabled", true)
+        val spoofEnabled = prefs.getBoolean("phase2_spoof_warnings_enabled", true)
+        val patternWarning = risk.optBoolean("patternWarning", false) &&
+            (!risk.optBoolean("financialScam", false) || financialEnabled)
+        val spoofWarning = spoofEnabled && risk.optString("spoofRisk", "LOW") != "LOW"
+        if (riskEnabled && (patternWarning || spoofWarning)) {
             CallNotificationHelper.showSecurityWarning(
                 applicationContext,
                 callerName.ifBlank { number.ifBlank { "Unknown caller" } },
                 risk.optString("risk", "UNKNOWN"),
                 risk.optString("spoofRisk", "LOW"),
-                risk.optString("explanation", "Caller identity could not be verified.")
+                risk.optString("explanation", "Caller identity could not be verified locally.")
             )
         }
 
@@ -70,8 +73,6 @@ class ProductionCallScreeningService : CallScreeningService() {
             return
         }
 
-        // Unknown callers are handled independently from spam rules. This lets
-        // ordinary unknown calls remain usable while still offering a quiet mode.
         val silenceUnknown = prefs.getBoolean("unknown_caller_silence", false)
         val rejectUnknown = prefs.getBoolean("unknown_caller_reject", false)
         val smartSilentUnknown = prefs.getBoolean("smart_silent_unknown_only", false) ||
