@@ -7,6 +7,7 @@ import { registerSW } from 'virtual:pwa-register';
 import { runVigilShieldTestSuite } from './tests/callerId.test';
 
 class AppErrorBoundary extends Component<{children: ReactNode}, {error: Error | null}> {
+  declare readonly props: {children: ReactNode};
   state = {error: null as Error | null};
 
   static getDerivedStateFromError(error: Error) {
