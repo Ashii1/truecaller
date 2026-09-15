@@ -10,6 +10,7 @@ interface HeaderProps {
   isDefaultDialer: boolean;
   onRequestDefaultDialer: () => void;
   onOpenPermissionCenter?: () => void;
+  [key: string]: unknown;
 }
 
 type PrivacySettings = {
