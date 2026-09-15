@@ -76,7 +76,10 @@ class MainActivity : AppCompatActivity() {
         }
         webView.webChromeClient = object : WebChromeClient() {
             override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-                if(consoleMessage.messageLevel()==ConsoleMessage.MessageLevel.ERROR){ lastConsoleError="${consoleMessage.message()} (line ${consoleMessage.lineNumber()})"; if(pageFinished) showError("VigilShield UI error.\n\n$lastConsoleError") }
+                // Console errors are diagnostic signals, not proof that the whole UI failed.
+                // Previously any console.error() immediately replaced the app with the fatal screen,
+                // which turned optional native bridge failures into an app-start crash.
+                if(consoleMessage.messageLevel()==ConsoleMessage.MessageLevel.ERROR){ lastConsoleError="${consoleMessage.message()} (line ${consoleMessage.lineNumber()})" }
                 return true
             }
         }
@@ -118,8 +121,6 @@ class MainActivity : AppCompatActivity() {
             val current=permissionSignature()
             if(lastPermissionSignature!=null && current!=lastPermissionSignature){
                 lastPermissionSignature=current
-                // The React app automatically reads the device CallLog/Contacts on startup.
-                // Reload only when Android permission state changed, so granted CallLog data appears immediately.
                 webView.postDelayed({ if(!isFinishing && !isDestroyed) webView.reload() }, 250)
             } else lastPermissionSignature=current
         }
