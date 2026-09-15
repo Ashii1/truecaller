@@ -18,77 +18,11 @@ object CallNotificationHelper {
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < 26) return
         val manager = context.getSystemService(NotificationManager::class.java)
-        if (manager.getNotificationChannel(CHANNEL_ID) == null) {
-            val channel = NotificationChannel(CHANNEL_ID, "Calls", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Incoming, ongoing and missed call alerts"
-                enableVibration(false)
-                setSound(null, null)
-                lightColor = Color.BLUE
-            }
-            manager.createNotificationChannel(channel)
-        }
-        if (manager.getNotificationChannel(SECURITY_CHANNEL_ID) == null) {
-            val channel = NotificationChannel(SECURITY_CHANNEL_ID, "Call security", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Local caller safety warnings"
-                enableVibration(false)
-                setSound(null, null)
-                lightColor = Color.RED
-            }
-            manager.createNotificationChannel(channel)
-        }
+        if (manager.getNotificationChannel(CHANNEL_ID) == null) manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Calls", NotificationManager.IMPORTANCE_HIGH).apply { description = "Incoming, ongoing and missed call alerts"; enableVibration(false); setSound(null, null); lightColor = Color.BLUE })
+        if (manager.getNotificationChannel(SECURITY_CHANNEL_ID) == null) manager.createNotificationChannel(NotificationChannel(SECURITY_CHANNEL_ID, "Call security", NotificationManager.IMPORTANCE_HIGH).apply { description = "Local caller safety warnings"; enableVibration(false); setSound(null, null); lightColor = Color.RED })
     }
-
-    fun showMissedCall(context: Context, name: String, number: String) {
-        ensureChannel(context)
-        val openIntent = PendingIntent.getActivity(context, MISSED_ID, Intent(context, MainActivity::class.java).apply { putExtra("open_tab", "recents"); putExtra("search_number", number) }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val displayName = if (name.isBlank() || name == number) number else name
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield)
-            .setContentTitle("Missed call")
-            .setContentText(if (displayName == number) number else "$displayName · $number")
-            .setCategory(NotificationCompat.CATEGORY_MISSED_CALL)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            .setContentIntent(openIntent)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("You missed a call from $displayName. Tap to open Recents."))
-            .build()
-        context.getSystemService(NotificationManager::class.java).notify(MISSED_ID, notification)
-    }
-
-    fun showIncomingCall(context: Context, callId: String, name: String, number: String) {
-        ensureChannel(context)
-        val openIntent = PendingIntent.getActivity(context, callId.hashCode(), Intent(context, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val answer = PendingIntent.getBroadcast(context, callId.hashCode() + 1, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_ANSWER).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val decline = PendingIntent.getBroadcast(context, callId.hashCode() + 2, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_DECLINE).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val person = Person.Builder().setName(if (name.isBlank()) number else name).setImportant(true).build()
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID).setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield).setContentIntent(openIntent).setOngoing(true).setCategory(NotificationCompat.CATEGORY_CALL).setPriority(NotificationCompat.PRIORITY_MAX)
-        if (Build.VERSION.SDK_INT >= 31) builder.setStyle(NotificationCompat.CallStyle.forIncomingCall(person, decline, answer))
-        else builder.setContentTitle(if (name.isBlank()) number else name).setContentText("Incoming call").addAction(0, "Decline", decline).addAction(0, "Answer", answer)
-        context.getSystemService(NotificationManager::class.java).notify(callId.hashCode(), builder.build())
-    }
-
-    fun showSecurityWarning(context: Context, name: String, risk: String, spoofRisk: String, explanation: String) {
-        ensureChannel(context)
-        val title = when (risk) {
-            "HIGH_RISK" -> "High-risk call pattern detected"
-            "SUSPICIOUS" -> "Suspicious call pattern"
-            else -> "Caller safety warning"
-        }
-        val identity = if (name.isBlank()) "Unknown caller" else name
-        val text = "$identity · Spoof risk: $spoofRisk"
-        val openIntent = PendingIntent.getActivity(context, (name + risk).hashCode(), Intent(context, MainActivity::class.java).putExtra("open_tab", "recents"), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val notification = NotificationCompat.Builder(context, SECURITY_CHANNEL_ID)
-            .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$explanation Caller ID is not proof of identity. Never share OTPs, PINs or passwords."))
-            .setCategory(NotificationCompat.CATEGORY_WARNING)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            .setContentIntent(openIntent)
-            .build()
-        context.getSystemService(NotificationManager::class.java).notify((name + risk + spoofRisk).hashCode(), notification)
-    }
-
+    fun showMissedCall(context: Context, name: String, number: String) { ensureChannel(context); val openIntent=PendingIntent.getActivity(context,MISSED_ID,Intent(context,MainActivity::class.java).apply{putExtra("open_tab","recents");putExtra("search_number",number)},PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE); val displayName=if(name.isBlank()||name==number)number else name; val notification=NotificationCompat.Builder(context,CHANNEL_ID).setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield).setContentTitle("Missed call").setContentText(if(displayName==number)number else "$displayName · $number").setCategory(NotificationCompat.CATEGORY_MISSED_CALL).setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true).setContentIntent(openIntent).setStyle(NotificationCompat.BigTextStyle().bigText("You missed a call from $displayName. Tap to open Recents.")).build(); context.getSystemService(NotificationManager::class.java).notify(MISSED_ID,notification) }
+    fun showIncomingCall(context: Context, callId: String, name: String, number: String) { ensureChannel(context); val openIntent=PendingIntent.getActivity(context,callId.hashCode(),Intent(context,MainActivity::class.java),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE); val answer=PendingIntent.getBroadcast(context,callId.hashCode()+1,Intent(context,CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_ANSWER).putExtra(CallActionReceiver.EXTRA_CALL_ID,callId),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE); val decline=PendingIntent.getBroadcast(context,callId.hashCode()+2,Intent(context,CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_DECLINE).putExtra(CallActionReceiver.EXTRA_CALL_ID,callId),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE); val person=Person.Builder().setName(if(name.isBlank())number else name).setImportant(true).build(); val builder=NotificationCompat.Builder(context,CHANNEL_ID).setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield).setContentIntent(openIntent).setOngoing(true).setCategory(NotificationCompat.CATEGORY_CALL).setPriority(NotificationCompat.PRIORITY_MAX); if(Build.VERSION.SDK_INT>=31)builder.setStyle(NotificationCompat.CallStyle.forIncomingCall(person,decline,answer)) else builder.setContentTitle(if(name.isBlank())number else name).setContentText("Incoming call").addAction(0,"Decline",decline).addAction(0,"Answer",answer); context.getSystemService(NotificationManager::class.java).notify(callId.hashCode(),builder.build()) }
+    fun showSecurityWarning(context: Context, name: String, risk: String, spoofRisk: String, explanation: String) { ensureChannel(context); val title=when(risk){"HIGH_RISK"->"High-risk call pattern detected";"SUSPICIOUS"->"Suspicious call pattern";else->"Caller safety warning"}; val identity=if(name.isBlank())"Unknown caller" else name; val text="$identity · Spoof risk: $spoofRisk"; val openIntent=PendingIntent.getActivity(context,(name+risk).hashCode(),Intent(context,MainActivity::class.java).putExtra("open_tab","recents"),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE); val notification=NotificationCompat.Builder(context,SECURITY_CHANNEL_ID).setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield).setContentTitle(title).setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText("$explanation Caller ID is not proof of identity. Never share OTPs, PINs or passwords.")).setCategory(NotificationCompat.CATEGORY_STATUS).setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true).setContentIntent(openIntent).build(); context.getSystemService(NotificationManager::class.java).notify((name+risk+spoofRisk).hashCode(),notification) }
     fun clearCall(context: Context, callId: String) { context.getSystemService(NotificationManager::class.java).cancel(callId.hashCode()) }
 }
