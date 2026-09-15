@@ -8,22 +8,24 @@ import android.telecom.CallScreeningService
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Fast, local-first call firewall. It never waits on the network: Android gives
- * a screening service only a short response window. Contacts and user rules are
- * therefore evaluated synchronously.
- */
+/** Fast, local-first incoming call firewall. */
 class ProductionCallScreeningService : CallScreeningService() {
     override fun onScreenCall(details: Call.Details) {
         val number = details.handle?.schemeSpecificPart.orEmpty()
         val normalized = normalize(number)
-
         if (details.callDirection != Call.Details.DIRECTION_INCOMING) {
             respondToCall(details, allowResponse())
             return
         }
 
         val prefs = getSharedPreferences("vigilshield", Context.MODE_PRIVATE)
+        val emergencyContact = EmergencySafetyPolicy.isEmergencyContact(applicationContext, number)
+        val emergencyMode = EmergencySafetyPolicy.emergencyModeEnabled(applicationContext)
+        if (emergencyContact || emergencyMode) {
+            if (isDeviceContact(number)) EmergencyRepeatCallPolicy.onTrustedIncomingCall(applicationContext, number)
+            respondToCall(details, allowResponse())
+            return
+        }
 
         if (isDeviceContact(number)) {
             EmergencyRepeatCallPolicy.onTrustedIncomingCall(applicationContext, number)
@@ -57,19 +59,19 @@ class ProductionCallScreeningService : CallScreeningService() {
 
         val rules = readArray(prefs.getString("block_rules", "[]"))
         val matched = findRule(rules, normalized)
+        val drivingMode = EmergencySafetyPolicy.drivingModeEnabled(applicationContext)
 
+        // Explicit block rules remain blocking. Smart quieting can soften them only when requested.
         if (matched != null) {
             val rejectHighRisk = prefs.getBoolean("smart_spam_reject_high_risk", false)
             val quietSpam = prefs.getBoolean("smart_spam_quiet_enabled", false)
-            val shouldSilence = quietSpam && !rejectHighRisk
-            val response = CallResponse.Builder()
-                .setDisallowCall(rejectHighRisk)
-                .setRejectCall(rejectHighRisk)
-                .setSilenceCall(shouldSilence)
-                .setSkipCallLog(false)
-                .setSkipNotification(false)
-                .build()
-            respondToCall(details, response)
+            val builder = CallResponse.Builder()
+            if (rejectHighRisk || !quietSpam) {
+                builder.setDisallowCall(true).setRejectCall(true).setSilenceCall(false)
+            } else {
+                builder.setDisallowCall(false).setRejectCall(false).setSilenceCall(true)
+            }
+            respondToCall(details, builder.setSkipCallLog(false).setSkipNotification(false).build())
             return
         }
 
@@ -77,10 +79,12 @@ class ProductionCallScreeningService : CallScreeningService() {
         val rejectUnknown = prefs.getBoolean("unknown_caller_reject", false)
         val smartSilentUnknown = prefs.getBoolean("smart_silent_unknown_only", false) ||
             prefs.getBoolean("smart_silent_unknown_and_spam", false)
+        val shouldSilenceUnknown = drivingMode || silenceUnknown || smartSilentUnknown
+        val shouldRejectUnknown = !drivingMode && rejectUnknown
         val response = CallResponse.Builder()
-            .setDisallowCall(rejectUnknown)
-            .setRejectCall(rejectUnknown)
-            .setSilenceCall(silenceUnknown || smartSilentUnknown)
+            .setDisallowCall(shouldRejectUnknown)
+            .setRejectCall(shouldRejectUnknown)
+            .setSilenceCall(shouldSilenceUnknown)
             .setSkipCallLog(false)
             .setSkipNotification(false)
             .build()
@@ -88,12 +92,8 @@ class ProductionCallScreeningService : CallScreeningService() {
     }
 
     private fun allowResponse(): CallResponse = CallResponse.Builder()
-        .setDisallowCall(false)
-        .setRejectCall(false)
-        .setSilenceCall(false)
-        .setSkipCallLog(false)
-        .setSkipNotification(false)
-        .build()
+        .setDisallowCall(false).setRejectCall(false).setSilenceCall(false)
+        .setSkipCallLog(false).setSkipNotification(false).build()
 
     private fun findRule(rules: JSONArray, number: String): JSONObject? {
         for (i in 0 until rules.length()) {
@@ -132,11 +132,7 @@ class ProductionCallScreeningService : CallScreeningService() {
                 Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number)),
                 arrayOf(ContactsContract.PhoneLookup._ID), null, null, null
             )?.use { it.moveToFirst() } == true
-        } catch (_: SecurityException) {
-            false
-        } catch (_: Exception) {
-            false
-        }
+        } catch (_: SecurityException) { false } catch (_: Exception) { false }
     }
 
     private fun readArray(value: String?): JSONArray = try { JSONArray(value ?: "[]") } catch (_: Exception) { JSONArray() }
