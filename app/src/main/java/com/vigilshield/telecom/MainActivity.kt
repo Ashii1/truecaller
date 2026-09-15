@@ -41,10 +41,10 @@ class MainActivity : AppCompatActivity() {
         setContentView(webView)
         webView.loadUrl("file:///android_asset/index.html")
 
-        // Android requires apps that need call-log permissions to become the
-        // default phone handler before requesting those sensitive permissions.
-        // Requesting READ_CALL_LOG first can cause the RoleController to deny
-        // the default-phone prompt with a sensitive-permissions warning.
+        // Request the Phone role before any normal runtime permissions. The
+        // manifest deliberately contains no hard-restricted Call Log permission,
+        // because a sideloaded APK cannot be installer-allowlisted for it and
+        // Android will otherwise block the ROLE_DIALER confirmation dialog.
         requestDefaultDialerIfAvailable()
     }
 
@@ -68,7 +68,9 @@ class MainActivity : AppCompatActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == DIALER_ROLE_REQ) {
-            // Only request call-log access after the role has been granted.
+            // After the Phone role is granted, request only ordinary runtime
+            // permissions. Call history is handled from Telecom events rather
+            // than the hard-restricted Call Log provider.
             requestPermissionsIfNeeded()
             bridge.dispatchWebEvent("ROLE_STATUS_CHANGED", bridge.roleStatus())
         }
@@ -93,9 +95,9 @@ class MainActivity : AppCompatActivity() {
     private fun requestPermissionsIfNeeded() {
         val permissions = mutableListOf(
             Manifest.permission.READ_CONTACTS,
-            Manifest.permission.READ_CALL_LOG,
             Manifest.permission.CALL_PHONE,
-            Manifest.permission.READ_PHONE_STATE
+            Manifest.permission.READ_PHONE_STATE,
+            Manifest.permission.ANSWER_PHONE_CALLS
         )
         if (Build.VERSION.SDK_INT >= 33) permissions += Manifest.permission.POST_NOTIFICATIONS
         val missing = permissions.filter {
@@ -111,8 +113,6 @@ class MainActivity : AppCompatActivity() {
             val rm = getSystemService(RoleManager::class.java)
             if (rm.isRoleAvailable(RoleManager.ROLE_DIALER)) {
                 if (rm.isRoleHeld(RoleManager.ROLE_DIALER)) {
-                    // Already the default phone app; it is now safe to request
-                    // the call-log permission needed for real call history.
                     requestPermissionsIfNeeded()
                 } else {
                     startActivityForResult(
@@ -121,8 +121,6 @@ class MainActivity : AppCompatActivity() {
                     )
                 }
             } else {
-                // On devices without the dialer role, request only the normal
-                // runtime permissions and let the UI degrade gracefully.
                 requestPermissionsIfNeeded()
             }
         } else {
