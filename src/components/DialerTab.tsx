@@ -3,7 +3,7 @@ import { Check, Delete, Layers, Phone, Search, ShieldAlert, ShieldCheck, User, X
 import { ContactItem, CallLogItem, TruecallerDirectoryProfile, ShieldSettings } from '../types';
 import { smartDialerSearch } from '../utils/t9Search';
 import { formatPhoneNumber } from '../utils/spamEngine';
-import { playDtmfTone, triggerHapticFeedback } from '../utils/audioAlerts';
+import { triggerHapticFeedback } from '../utils/audioAlerts';
 
 interface DialerTabProps {
   contacts: ContactItem[];
@@ -20,7 +20,7 @@ interface DialerTabProps {
 
 const KEYPAD = [['1',''],['2','ABC'],['3','DEF'],['4','GHI'],['5','JKL'],['6','MNO'],['7','PQRS'],['8','TUV'],['9','WXYZ'],['*',''],['0','+'],['#','']];
 
-export default function DialerTab({ contacts, recentCalls, settings: _settings, lookupProfile, onInitiateCall, onOpenCallerDetail, onSaveContact, selectedSim, onChangeSim, initialNumber }: DialerTabProps) {
+export default function DialerTab({ contacts, recentCalls, settings: _settings, lookupProfile, onInitiateCall, onOpenCallerDetail, onSaveContact: _onSaveContact, selectedSim, onChangeSim, initialNumber }: DialerTabProps) {
   const [value, setValue] = useState(initialNumber || '');
   const [showSimPicker, setShowSimPicker] = useState(false);
 
@@ -44,13 +44,12 @@ export default function DialerTab({ contacts, recentCalls, settings: _settings, 
   const hasSuggestions = Boolean(value && (results.matchingContacts.length || results.matchingRecents.length || results.possibleCaller));
 
   const press = (digit: string) => {
-    playDtmfTone(digit);
+    // Deliberately no DTMF/WebAudio sound: keypad typing is silent.
     triggerHapticFeedback(12);
     setValue(v => v + digit);
   };
   const backspace = () => {
     if (!value) return;
-    playDtmfTone('*', 50);
     triggerHapticFeedback(10);
     setValue(v => v.slice(0, -1));
   };
@@ -73,7 +72,6 @@ export default function DialerTab({ contacts, recentCalls, settings: _settings, 
           {value && <button onClick={() => setValue('')} className="rounded-full p-1 text-slate-400" aria-label="Clear"><X className="h-4 w-4" /></button>}
         </div>
 
-        {/* Fixed-height suggestion tray: it never pushes or covers the keypad while typing. */}
         <div className="h-11 overflow-hidden" aria-live="polite">
           {hasSuggestions && (
             <div className="mt-1 flex h-10 items-center gap-2 overflow-x-auto rounded-xl border border-slate-800 bg-slate-900 px-2">
