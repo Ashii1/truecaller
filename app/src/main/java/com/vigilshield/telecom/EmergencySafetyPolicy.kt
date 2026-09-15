@@ -12,6 +12,8 @@ object EmergencySafetyPolicy {
         val normalized = normalize(number)
         if (normalized.isEmpty()) return false
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val perNumberKey = "phase3_emergency_contact_$normalized"
+        if (prefs.getBoolean(perNumberKey, false)) return true
         return try {
             val values = JSONArray(prefs.getString(KEY_CONTACTS, "[]") ?: "[]")
             (0 until values.length()).any { i ->
