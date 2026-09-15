@@ -23,7 +23,32 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
-      - run: gradle :app:assembleRelease --no-daemon
+      - name: Configure persistent release signing
+        if: ${{ secrets.VIGILSHIELD_KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.VIGILSHIELD_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.VIGILSHIELD_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.VIGILSHIELD_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.VIGILSHIELD_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/vigilshield-release.jks"
+          test -s "$RUNNER_TEMP/vigilshield-release.jks"
+          {
+            echo "VIGILSHIELD_KEYSTORE_FILE=$RUNNER_TEMP/vigilshield-release.jks"
+            echo "VIGILSHIELD_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "VIGILSHIELD_KEY_ALIAS=$KEY_ALIAS"
+            echo "VIGILSHIELD_KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+      - name: Build release APK
+        run: gradle :app:assembleRelease --no-daemon
+      - name: Verify APK signature and version
+        run: |
+          APK=$(find app/build/outputs/apk/release -name '*.apk' -type f | head -n 1)
+          test -n "$APK"
+          echo "Built $APK"
+          if command -v apksigner >/dev/null 2>&1; then
+            apksigner verify --verbose "$APK"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: vigilshield-release-apk
