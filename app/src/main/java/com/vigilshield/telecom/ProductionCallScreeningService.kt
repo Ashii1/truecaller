@@ -21,13 +21,14 @@ class ProductionCallScreeningService : CallScreeningService() {
         val prefs = getSharedPreferences("vigilshield", Context.MODE_PRIVATE)
         val emergencyContact = EmergencySafetyPolicy.isEmergencyContact(applicationContext, number)
         val emergencyMode = EmergencySafetyPolicy.emergencyModeEnabled(applicationContext)
+        val deviceContact = isDeviceContact(number)
         if (emergencyContact || emergencyMode) {
-            if (isDeviceContact(number)) EmergencyRepeatCallPolicy.onTrustedIncomingCall(applicationContext, number)
+            if (deviceContact) EmergencyRepeatCallPolicy.onTrustedIncomingCall(applicationContext, number)
             respondToCall(details, allowResponse())
             return
         }
 
-        if (isDeviceContact(number)) {
+        if (deviceContact) {
             EmergencyRepeatCallPolicy.onTrustedIncomingCall(applicationContext, number)
             respondToCall(details, allowResponse())
             return
@@ -40,6 +41,8 @@ class ProductionCallScreeningService : CallScreeningService() {
         }
 
         val callerName = details.callerDisplayName.orEmpty()
+        RepeatedCallAttentionPolicy.onIncomingCall(applicationContext, number, callerName, trusted = false)
+
         val risk = CallRiskAnalyzer.analyze(number, callerName)
         val riskEnabled = prefs.getBoolean("phase2_risk_detection_enabled", true)
         val financialEnabled = prefs.getBoolean("phase2_financial_warnings_enabled", true)
