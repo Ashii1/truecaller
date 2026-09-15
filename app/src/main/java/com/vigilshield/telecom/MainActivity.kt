@@ -39,6 +39,7 @@ class MainActivity : AppCompatActivity() {
     private var pageFinished = false
     private var uiReportedReady = false
     private var lastConsoleError: String? = null
+    private var lastPermissionSignature: String? = null
 
     companion object {
         private const val PERMISSION_REQ = 7002
@@ -57,6 +58,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(root)
 
         bridge = AndroidTelephonyBridge(this, webView)
+        lastPermissionSignature = permissionSignature()
         assetLoader = WebViewAssetLoader.Builder().addPathHandler("/", WebViewAssetLoader.AssetsPathHandler(this)).build()
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
@@ -82,6 +84,14 @@ class MainActivity : AppCompatActivity() {
         requestDefaultDialerIfAvailable()
     }
 
+    private fun permissionSignature(): String = listOf(
+        Manifest.permission.READ_CONTACTS,
+        Manifest.permission.READ_CALL_LOG,
+        Manifest.permission.CALL_PHONE,
+        Manifest.permission.READ_PHONE_STATE,
+        Manifest.permission.ANSWER_PHONE_CALLS
+    ).joinToString("|") { "$it:${ContextCompat.checkSelfPermission(this,it)==PackageManager.PERMISSION_GRANTED}" }
+
     private fun verifyReactMounted(view: WebView) {
         if(uiReportedReady || isFinishing || isDestroyed) return
         view.evaluateJavascript("(function(){var r=document.getElementById('root');return r&&r.children.length>0?'READY':'EMPTY';})()") { result ->
@@ -100,11 +110,24 @@ class MainActivity : AppCompatActivity() {
     private fun showError(message:String){loadingView.visibility=View.GONE;errorText.text=message;errorView.visibility=View.VISIBLE}
     private fun hideError(){errorView.visibility=View.GONE}
 
-    override fun onResume(){super.onResume();if(::bridge.isInitialized){bridge.dispatchWebEvent("ROLE_STATUS_CHANGED",bridge.roleStatus());if(bridge.hasDevicePermissions())bridge.dispatchWebEvent("PERMISSIONS_CHANGED",bridge.permissionStatus())}}
+    override fun onResume(){
+        super.onResume()
+        if(::bridge.isInitialized){
+            bridge.dispatchWebEvent("ROLE_STATUS_CHANGED", bridge.roleStatus())
+            bridge.dispatchWebEvent("PERMISSIONS_CHANGED", bridge.permissionStatus())
+            val current=permissionSignature()
+            if(lastPermissionSignature!=null && current!=lastPermissionSignature){
+                lastPermissionSignature=current
+                // The React app automatically reads the device CallLog/Contacts on startup.
+                // Reload only when Android permission state changed, so granted CallLog data appears immediately.
+                webView.postDelayed({ if(!isFinishing && !isDestroyed) webView.reload() }, 250)
+            } else lastPermissionSignature=current
+        }
+    }
     override fun onNewIntent(intent:Intent?){super.onNewIntent(intent);setIntent(intent);handleDialIntent(intent)}
     @Deprecated("Deprecated in Android API 31; kept for API 29/30 role flow compatibility")
     override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){super.onActivityResult(requestCode,resultCode,data);when(requestCode){DIALER_ROLE_REQ->{bridge.dispatchWebEvent("ROLE_STATUS_CHANGED",bridge.roleStatus());requestPermissionsIfNeeded()};SCREENING_ROLE_REQ->{bridge.dispatchWebEvent("ROLE_STATUS_CHANGED",bridge.roleStatus())}}}
-    override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){super.onRequestPermissionsResult(requestCode,permissions,grantResults);if(requestCode==PERMISSION_REQ){bridge.dispatchWebEvent("PERMISSIONS_CHANGED",bridge.permissionStatus());if(bridge.isDefaultDialer())requestCallScreeningRoleOnce()}}
+    override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){super.onRequestPermissionsResult(requestCode,permissions,grantResults);if(requestCode==PERMISSION_REQ){lastPermissionSignature=permissionSignature();bridge.dispatchWebEvent("PERMISSIONS_CHANGED",bridge.permissionStatus());if(bridge.isDefaultDialer())requestCallScreeningRoleOnce();webView.postDelayed({if(!isFinishing&&!isDestroyed)webView.reload()},150)}}
 
     private fun handleDialIntent(intent:Intent?){val uri:Uri=intent?.data?:return;if(uri.scheme=="tel"){val number=uri.schemeSpecificPart;if(!number.isNullOrBlank()&&::webView.isInitialized){val quoted=org.json.JSONObject.quote(number);webView.post{webView.evaluateJavascript("if(window.__onAndroidDialIntent){window.__onAndroidDialIntent($quoted);}",null)}}}}
     private fun requestPermissionsIfNeeded(){
