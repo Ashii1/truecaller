@@ -13,8 +13,9 @@ android {
         applicationId = "com.vigilshield.telecom"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        // Incremented so this APK is a true in-place update of the existing install.
+        versionCode = 2
+        versionName = "1.1"
     }
     buildTypes {
         release {
