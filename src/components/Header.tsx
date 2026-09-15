@@ -45,6 +45,20 @@ export default function Header({ settings, onToggleShield, isDefaultDialer, onRe
   const [showSettings, setShowSettings] = useState(false);
   const [privacy, setPrivacy] = useState<PrivacySettings>(readPrivacySettings);
 
+  // First-run phone role prompt: the app should ask for the official Android
+  // default Phone role immediately instead of hiding it inside a setup wizard.
+  useEffect(() => {
+    if (isDefaultDialer || !telecomBridge.isAndroidEnvironment()) return;
+    try {
+      if (sessionStorage.getItem('vigilshield_default_phone_prompted') === 'true') return;
+      sessionStorage.setItem('vigilshield_default_phone_prompted', 'true');
+    } catch {
+      // If storage is unavailable, still make the first-run request.
+    }
+    const timer = window.setTimeout(() => onRequestDefaultDialer(), 350);
+    return () => window.clearTimeout(timer);
+  }, [isDefaultDialer, onRequestDefaultDialer]);
+
   useEffect(() => {
     localStorage.setItem('vigilshield_privacy_settings', JSON.stringify(privacy));
     telecomBridge.setSecuritySetting('call_recording_enabled', privacy.callRecordingEnabled);
@@ -80,6 +94,7 @@ export default function Header({ settings, onToggleShield, isDefaultDialer, onRe
         <section className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto border-l border-slate-700 bg-slate-950 shadow-2xl sm:relative sm:mx-auto sm:my-8 sm:h-auto sm:max-h-[calc(100vh-4rem)] sm:rounded-3xl sm:border" onMouseDown={e => e.stopPropagation()}>
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-slate-950/95 p-5 backdrop-blur"><div><h2 className="text-lg font-bold text-white">Settings</h2><p className="mt-0.5 text-xs text-slate-400">Simple by default. Emergency protection is controlled by you.</p></div><button onClick={() => setShowSettings(false)} className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close settings"><X className="h-5 w-5" /></button></div>
           <div className="space-y-3 p-4">
+            {!isDefaultDialer && <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4"><div className="flex items-start gap-3"><PhoneCall className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" /><div className="min-w-0 flex-1"><div className="text-sm font-bold text-white">Default Phone App</div><div className="mt-1 text-xs leading-5 text-slate-400">VigilShield needs Android's official Phone role to handle real cellular calls and show the in-call screen.</div><button onClick={onRequestDefaultDialer} className="mt-3 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-500">Set as default Phone app</button></div></div></div>}
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4"><div className="flex items-start gap-3"><LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" /><div><div className="text-sm font-bold text-white">Privacy mode</div><div className="mt-1 text-xs leading-5 text-slate-400">Caller details stay minimal on notification and lock-screen surfaces.</div></div></div></div>
             <SettingRow icon={<MicOff className="h-4 w-4" />} title="Call recording" description="OFF by default. VigilShield never silently starts recording." checked={privacy.callRecordingEnabled} onChange={v => updatePrivacy('callRecordingEnabled', v)} danger={privacy.callRecordingEnabled} />
             <SettingRow icon={<Bell className="h-4 w-4" />} title="Detailed caller notifications" description="Show names and risk details in notifications." checked={privacy.showCallerDetailsInNotifications} onChange={v => updatePrivacy('showCallerDetailsInNotifications', v)} />
@@ -96,7 +111,7 @@ export default function Header({ settings, onToggleShield, isDefaultDialer, onRe
               <div className="mt-3 rounded-xl bg-slate-900/70 p-3 text-[11px] leading-5 text-slate-500">When the screen is off and the phone is silent, VigilShield makes a short best-effort audible alert without changing your global ringer setting. When you are actively using the phone, it uses a visible high-priority alert instead.</div>
             </div>
 
-            {onOpenPermissionCenter && <button onClick={onOpenPermissionCenter} className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-left text-sm font-semibold text-slate-200 hover:bg-slate-800">Permission Center & Android setup<span className="mt-1 block text-xs font-normal text-slate-500">Review Contacts, Call Log, Notifications and Default Phone role.</span></button>}
+            {onOpenPermissionCenter && <button onClick={onOpenPermissionCenter} className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-left text-sm font-semibold text-slate-200 hover:bg-slate-800">Permission Center<span className="mt-1 block text-xs font-normal text-slate-500">Live Android status for Phone role, Contacts, Call Log, Notifications and protection.</span></button>}
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-xs leading-5 text-slate-500">Security principle: no recording by default, no automatic blocking of saved contacts, no silent change to your ringer mode, and settings remain local.</div>
           </div>
         </section>
