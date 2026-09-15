@@ -85,7 +85,7 @@ class AndroidTelephonyBridge(
             .put("isNetworkAvailable", true)
             .put("networkOperatorName", "Android")
             .put("simCarrierIdName", "Unknown")
-            .put("activeCallsCount", NativeInCallService.calls.size)
+            .put("activeCallsCount", NativeInCallService.activeCalls.size)
             .put("callLogPermission", hasCallLogPermission())
             .put("contactsPermission", hasContactsPermission())
             .put("sim1Available", accounts.isNotEmpty())
@@ -149,21 +149,21 @@ class AndroidTelephonyBridge(
 
     @JavascriptInterface
     fun answerCall(callId: String): Boolean {
-        val call = NativeInCallService.calls[callId] ?: return false
+        val call = NativeInCallService.activeCalls[callId] ?: return false
         call.answer(0)
         return true
     }
 
     @JavascriptInterface
     fun rejectCall(callId: String, reason: String?): Boolean {
-        val call = NativeInCallService.calls[callId] ?: return false
+        val call = NativeInCallService.activeCalls[callId] ?: return false
         call.reject(false, reason ?: "")
         return true
     }
 
     @JavascriptInterface
     fun disconnectCall(callId: String): Boolean {
-        val call = NativeInCallService.calls[callId] ?: return false
+        val call = NativeInCallService.activeCalls[callId] ?: return false
         call.disconnect()
         return true
     }
@@ -357,18 +357,18 @@ class AndroidTelephonyBridge(
 class NativeInCallService : InCallService() {
     companion object {
         var instance: NativeInCallService? = null
-        val calls: MutableMap<String, Call> = mutableMapOf()
+        val activeCalls: MutableMap<String, Call> = mutableMapOf()
     }
 
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
         instance = this
-        calls[call.toString()] = call
+        activeCalls[call.toString()] = call
     }
 
     override fun onCallRemoved(call: Call) {
-        calls.remove(call.toString())
-        if (calls.isEmpty()) instance = null
+        activeCalls.remove(call.toString())
+        if (activeCalls.isEmpty()) instance = null
         super.onCallRemoved(call)
     }
 }
