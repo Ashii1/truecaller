@@ -1,19 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Bell, LockKeyhole, MicOff, PhoneCall, Settings, ShieldAlert, ShieldCheck, X } from 'lucide-react';
+import { Bell, LockKeyhole, MicOff, PhoneCall, Settings, ShieldAlert, ShieldCheck, X, Siren } from 'lucide-react';
 import { ShieldSettings } from '../types';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 
 interface HeaderProps {
   settings: ShieldSettings;
   onToggleShield: () => void;
-  onSyncDatabase: () => void;
-  isSyncing: boolean;
-  onTriggerIncomingCall: () => void;
-  autoCancelEnabled: boolean;
-  onToggleAutoCancel: () => void;
-  onOpenInstallModal: () => void;
-  onOpenDataSources: () => void;
-  onOpenDiagnostics: () => void;
   isDefaultDialer: boolean;
   onRequestDefaultDialer: () => void;
   onOpenPermissionCenter?: () => void;
@@ -24,6 +16,9 @@ type PrivacySettings = {
   showCallerDetailsInNotifications: boolean;
   privacyMode: boolean;
   clipboardPasteDetection: boolean;
+  emergencyRepeatEnabled: boolean;
+  emergencyRepeatThreshold: 3 | 4 | 5;
+  emergencyRepeatWindow: 3 | 5 | 10;
 };
 
 const PRIVACY_DEFAULTS: PrivacySettings = {
@@ -31,12 +26,16 @@ const PRIVACY_DEFAULTS: PrivacySettings = {
   showCallerDetailsInNotifications: false,
   privacyMode: true,
   clipboardPasteDetection: true,
+  emergencyRepeatEnabled: true,
+  emergencyRepeatThreshold: 3,
+  emergencyRepeatWindow: 5,
 };
 
 function readPrivacySettings(): PrivacySettings {
   try {
     const raw = localStorage.getItem('vigilshield_privacy_settings');
-    return raw ? { ...PRIVACY_DEFAULTS, ...JSON.parse(raw) } : PRIVACY_DEFAULTS;
+    const parsed = raw ? JSON.parse(raw) : {};
+    return { ...PRIVACY_DEFAULTS, ...parsed };
   } catch {
     return PRIVACY_DEFAULTS;
   }
@@ -52,9 +51,14 @@ export default function Header({ settings, onToggleShield, isDefaultDialer, onRe
     telecomBridge.setSecuritySetting('notification_caller_details', privacy.showCallerDetailsInNotifications);
     telecomBridge.setSecuritySetting('privacy_mode', privacy.privacyMode);
     telecomBridge.setSecuritySetting('clipboard_paste_detection', privacy.clipboardPasteDetection);
+    telecomBridge.setSecuritySetting('emergency_repeat_enabled', privacy.emergencyRepeatEnabled);
+    telecomBridge.setSecuritySetting('emergency_repeat_threshold_4', privacy.emergencyRepeatThreshold === 4);
+    telecomBridge.setSecuritySetting('emergency_repeat_threshold_5', privacy.emergencyRepeatThreshold === 5);
+    telecomBridge.setSecuritySetting('emergency_repeat_window_3', privacy.emergencyRepeatWindow === 3);
+    telecomBridge.setSecuritySetting('emergency_repeat_window_10', privacy.emergencyRepeatWindow === 10);
   }, [privacy]);
 
-  const updatePrivacy = (key: keyof PrivacySettings, value: boolean) => setPrivacy(prev => ({ ...prev, [key]: value }));
+  const updatePrivacy = (key: keyof PrivacySettings, value: boolean | 3 | 4 | 5 | 10) => setPrivacy(prev => ({ ...prev, [key]: value } as PrivacySettings));
 
   return (
     <>
@@ -74,15 +78,26 @@ export default function Header({ settings, onToggleShield, isDefaultDialer, onRe
 
       {showSettings && <div className="fixed inset-0 z-[70] bg-black/60 p-0 sm:p-4" onMouseDown={() => setShowSettings(false)}>
         <section className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto border-l border-slate-700 bg-slate-950 shadow-2xl sm:relative sm:mx-auto sm:my-8 sm:h-auto sm:max-h-[calc(100vh-4rem)] sm:rounded-3xl sm:border" onMouseDown={e => e.stopPropagation()}>
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-slate-950/95 p-5 backdrop-blur"><div><h2 className="text-lg font-bold text-white">Settings</h2><p className="mt-0.5 text-xs text-slate-400">Private by default. Change only what you need.</p></div><button onClick={() => setShowSettings(false)} className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close settings"><X className="h-5 w-5" /></button></div>
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-slate-950/95 p-5 backdrop-blur"><div><h2 className="text-lg font-bold text-white">Settings</h2><p className="mt-0.5 text-xs text-slate-400">Simple by default. Emergency protection is controlled by you.</p></div><button onClick={() => setShowSettings(false)} className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close settings"><X className="h-5 w-5" /></button></div>
           <div className="space-y-3 p-4">
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4"><div className="flex items-start gap-3"><LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" /><div><div className="text-sm font-bold text-white">Privacy mode</div><div className="mt-1 text-xs leading-5 text-slate-400">Keeps caller details minimal in notification surfaces and avoids unnecessary data exposure.</div></div></div></div>
-            <SettingRow icon={<MicOff className="h-4 w-4" />} title="Call recording" description="Off by default. VigilShield will not record calls unless you explicitly enable this option." checked={privacy.callRecordingEnabled} onChange={v => updatePrivacy('callRecordingEnabled', v)} danger={privacy.callRecordingEnabled} />
-            <SettingRow icon={<Bell className="h-4 w-4" />} title="Detailed caller notifications" description="Show names and risk details in notifications. Keep off for a cleaner, more private lock screen." checked={privacy.showCallerDetailsInNotifications} onChange={v => updatePrivacy('showCallerDetailsInNotifications', v)} />
-            <SettingRow icon={<LockKeyhole className="h-4 w-4" />} title="Private notification mode" description="Use generic notification text instead of exposing caller identity on the lock screen." checked={privacy.privacyMode} onChange={v => updatePrivacy('privacyMode', v)} />
-            <SettingRow icon={<Settings className="h-4 w-4" />} title="Copied-number paste helper" description="Lets the dialer offer a copied number as a one-tap Paste action when available." checked={privacy.clipboardPasteDetection} onChange={v => updatePrivacy('clipboardPasteDetection', v)} />
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4"><div className="flex items-start gap-3"><LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" /><div><div className="text-sm font-bold text-white">Privacy mode</div><div className="mt-1 text-xs leading-5 text-slate-400">Caller details stay minimal on notification and lock-screen surfaces.</div></div></div></div>
+            <SettingRow icon={<MicOff className="h-4 w-4" />} title="Call recording" description="OFF by default. VigilShield never silently starts recording." checked={privacy.callRecordingEnabled} onChange={v => updatePrivacy('callRecordingEnabled', v)} danger={privacy.callRecordingEnabled} />
+            <SettingRow icon={<Bell className="h-4 w-4" />} title="Detailed caller notifications" description="Show names and risk details in notifications." checked={privacy.showCallerDetailsInNotifications} onChange={v => updatePrivacy('showCallerDetailsInNotifications', v)} />
+            <SettingRow icon={<LockKeyhole className="h-4 w-4" />} title="Private notification mode" description="Use generic text instead of exposing caller identity on the lock screen." checked={privacy.privacyMode} onChange={v => updatePrivacy('privacyMode', v)} />
+            <SettingRow icon={<Settings className="h-4 w-4" />} title="Copied-number paste helper" description="Offer a copied number as a one-tap Paste action in the dialer." checked={privacy.clipboardPasteDetection} onChange={v => updatePrivacy('clipboardPasteDetection', v)} />
+
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
+              <div className="flex items-start gap-3"><Siren className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" /><div className="min-w-0"><div className="text-sm font-bold text-white">Repeated-call emergency alert</div><div className="mt-1 text-xs leading-5 text-slate-400">Only saved device contacts qualify. Repeated calls never get blocked; they are escalated as a possible urgent call.</div></div></div>
+              <div className="mt-3"><SettingRow icon={<Siren className="h-4 w-4" />} title="Enable repeat-call alert" description="Alert after the selected number of calls inside the selected time window." checked={privacy.emergencyRepeatEnabled} onChange={v => updatePrivacy('emergencyRepeatEnabled', v)} /></div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <label className="rounded-xl border border-slate-700 bg-slate-900 p-3 text-xs text-slate-400">Calls needed<select value={privacy.emergencyRepeatThreshold} onChange={e => updatePrivacy('emergencyRepeatThreshold', Number(e.target.value) as 3|4|5)} className="mt-1 w-full rounded-lg bg-slate-800 px-2 py-2 text-sm font-semibold text-white outline-none"><option value={3}>3 calls</option><option value={4}>4 calls</option><option value={5}>5 calls</option></select></label>
+                <label className="rounded-xl border border-slate-700 bg-slate-900 p-3 text-xs text-slate-400">Time window<select value={privacy.emergencyRepeatWindow} onChange={e => updatePrivacy('emergencyRepeatWindow', Number(e.target.value) as 3|5|10)} className="mt-1 w-full rounded-lg bg-slate-800 px-2 py-2 text-sm font-semibold text-white outline-none"><option value={3}>3 minutes</option><option value={5}>5 minutes</option><option value={10}>10 minutes</option></select></label>
+              </div>
+              <div className="mt-3 rounded-xl bg-slate-900/70 p-3 text-[11px] leading-5 text-slate-500">When the screen is off and the phone is silent, VigilShield makes a short best-effort audible alert without changing your global ringer setting. When you are actively using the phone, it uses a visible high-priority alert instead.</div>
+            </div>
+
             {onOpenPermissionCenter && <button onClick={onOpenPermissionCenter} className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-left text-sm font-semibold text-slate-200 hover:bg-slate-800">Permission Center & Android setup<span className="mt-1 block text-xs font-normal text-slate-500">Review Contacts, Call Log, Notifications and Default Phone role.</span></button>}
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-xs leading-5 text-slate-500">Security principle: recordings are never enabled silently, notification details are minimized by default, and settings are stored locally on this device.</div>
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-xs leading-5 text-slate-500">Security principle: no recording by default, no automatic blocking of saved contacts, no silent change to your ringer mode, and settings remain local.</div>
           </div>
         </section>
       </div>}
