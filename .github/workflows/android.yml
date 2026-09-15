@@ -13,7 +13,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
       - run: npm install --no-audit --no-fund
       - run: npm run build
       - run: rm -rf app/src/main/assets && mkdir -p app/src/main/assets && cp -R dist/. app/src/main/assets/
