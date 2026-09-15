@@ -6,6 +6,7 @@ import android.provider.ContactsContract
 import android.telecom.Call
 import android.telecom.CallScreeningService
 import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * Fast, local-first call firewall. It never waits on the network: Android gives
@@ -18,22 +19,23 @@ class ProductionCallScreeningService : CallScreeningService() {
         val normalized = normalize(number)
 
         if (details.callDirection != Call.Details.DIRECTION_INCOMING) {
-            respondToCall(details, CallResponse.Builder().setDisallowCall(false).build())
-            return
-        }
-
-        // Saved contacts are never auto-blocked. Repeated-call escalation is a
-        // separate opt-in safety signal and does not change the call disposition.
-        if (isDeviceContact(number)) {
-            EmergencyRepeatCallPolicy.onTrustedIncomingCall(applicationContext, number)
-            respondToCall(details, CallResponse.Builder().setDisallowCall(false).build())
+            respondToCall(details, allowResponse())
             return
         }
 
         val prefs = getSharedPreferences("vigilshield", Context.MODE_PRIVATE)
+
+        // Saved contacts are never auto-blocked. Repeated-call escalation is a
+        // separate safety signal and does not change the call disposition.
+        if (isDeviceContact(number)) {
+            EmergencyRepeatCallPolicy.onTrustedIncomingCall(applicationContext, number)
+            respondToCall(details, allowResponse())
+            return
+        }
+
         val whitelist = readArray(prefs.getString("whitelist", "[]"))
         if (matchesList(whitelist, normalized)) {
-            respondToCall(details, CallResponse.Builder().setDisallowCall(false).build())
+            respondToCall(details, allowResponse())
             return
         }
 
@@ -41,9 +43,13 @@ class ProductionCallScreeningService : CallScreeningService() {
         val matched = findRule(rules, normalized)
 
         if (matched != null) {
+            val rejectHighRisk = prefs.getBoolean("smart_spam_reject_high_risk", false)
+            val quietSpam = prefs.getBoolean("smart_spam_quiet_enabled", false)
+            val shouldSilence = quietSpam && !rejectHighRisk
             val response = CallResponse.Builder()
-                .setDisallowCall(true)
-                .setRejectCall(true)
+                .setDisallowCall(rejectHighRisk)
+                .setRejectCall(rejectHighRisk)
+                .setSilenceCall(shouldSilence)
                 .setSkipCallLog(false)
                 .setSkipNotification(false)
                 .build()
@@ -51,10 +57,31 @@ class ProductionCallScreeningService : CallScreeningService() {
             return
         }
 
-        respondToCall(details, CallResponse.Builder().setDisallowCall(false).build())
+        // Unknown callers are handled independently from spam rules. This lets
+        // ordinary unknown calls remain usable while still offering a quiet mode.
+        val silenceUnknown = prefs.getBoolean("unknown_caller_silence", false)
+        val rejectUnknown = prefs.getBoolean("unknown_caller_reject", false)
+        val smartSilentUnknown = prefs.getBoolean("smart_silent_unknown_only", false) ||
+            prefs.getBoolean("smart_silent_unknown_and_spam", false)
+        val response = CallResponse.Builder()
+            .setDisallowCall(rejectUnknown)
+            .setRejectCall(rejectUnknown)
+            .setSilenceCall(silenceUnknown || smartSilentUnknown)
+            .setSkipCallLog(false)
+            .setSkipNotification(false)
+            .build()
+        respondToCall(details, response)
     }
 
-    private fun findRule(rules: JSONArray, number: String): String? {
+    private fun allowResponse(): CallResponse = CallResponse.Builder()
+        .setDisallowCall(false)
+        .setRejectCall(false)
+        .setSilenceCall(false)
+        .setSkipCallLog(false)
+        .setSkipNotification(false)
+        .build()
+
+    private fun findRule(rules: JSONArray, number: String): JSONObject? {
         for (i in 0 until rules.length()) {
             val rule = rules.optJSONObject(i) ?: continue
             if (!rule.optBoolean("enabled", true)) continue
@@ -70,7 +97,7 @@ class ProductionCallScreeningService : CallScreeningService() {
                 "KEYWORD" -> number.contains(digits)
                 else -> number == digits
             }
-            if (matched) return rule.optString("id", "rule-$i")
+            if (matched) return rule
         }
         return null
     }
