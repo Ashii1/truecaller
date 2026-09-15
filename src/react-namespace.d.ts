@@ -1,5 +1,3 @@
-import type { ReactNode } from 'react';
-
 declare namespace React {
-  type ReactNode = ReactNode;
+  type ReactNode = import('react').ReactNode;
 }
