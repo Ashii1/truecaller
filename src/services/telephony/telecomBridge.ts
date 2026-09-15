@@ -32,7 +32,22 @@ class TelecomBridgeService {
   private listeners=new Set<Listener>();
   private dialListeners=new Set<DialListener>();
   private defaultDialerConfirmed=false;
-  constructor(){this.refreshStatus();this.initEvents();}
+  constructor(){
+    this.refreshStatus();
+    this.initEvents();
+    // First-launch UX: ask Android for ROLE_DIALER once, immediately after the
+    // WebView is ready. If declined, Settings > Permission Center remains the
+    // permanent place to request it again.
+    if (this.native() && !this.defaultDialerConfirmed && typeof window !== 'undefined') {
+      const promptedKey='vigilshield_default_role_prompted_v1';
+      if (window.localStorage.getItem(promptedKey) !== 'true') {
+        window.localStorage.setItem(promptedKey,'true');
+        window.setTimeout(()=>{
+          if (!this.defaultDialerConfirmed) this.requestDefaultDialerRole();
+        },700);
+      }
+    }
+  }
   private native(){return typeof window!=='undefined' && !!window.AndroidTelecomBridge;}
   private refreshStatus(){
     if(!this.native()){this.defaultDialerConfirmed=false;return;}
@@ -93,7 +108,6 @@ class TelecomBridgeService {
   public fetchDeviceContacts(limit=200):ContactItem[]{
     if(!this.native())return[];try{const a=JSON.parse(window.AndroidTelecomBridge!.fetchRealContacts(limit));return Array.isArray(a)?a.map((x:any)=>({id:String(x.id),name:x.name||'Contact',number:x.number||'',category:'GENERAL',trusted:true,isFavorite:!!x.isFavorite,notes:'Android Contacts'})):[];}catch{return[];}
   }
-  /** Resolve a phone number through Android Contacts/PhoneLookup. Never throws when the native method is unavailable. */
   public lookupContactName(number:string):string|null{
     if(!this.native() || !number?.trim()) return null;
     const nativeLookup=window.AndroidTelecomBridge!.lookupContactName;
