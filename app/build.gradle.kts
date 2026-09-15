@@ -39,6 +39,7 @@ kotlin {
 dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("androidx.webkit:webkit:1.12.1")
 }
 
 // Build the real React UI and bundle it into the APK. The Android app never loads localhost.
