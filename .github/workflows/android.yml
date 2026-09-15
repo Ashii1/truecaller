@@ -8,6 +8,8 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    env:
+      VIGILSHIELD_HAS_RELEASE_KEY: ${{ secrets.VIGILSHIELD_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,7 +26,7 @@ jobs:
         with:
           gradle-version: '8.10.2'
       - name: Configure persistent release signing
-        if: ${{ secrets.VIGILSHIELD_KEYSTORE_BASE64 != '' }}
+        if: ${{ env.VIGILSHIELD_HAS_RELEASE_KEY == 'true' }}
         env:
           KEYSTORE_BASE64: ${{ secrets.VIGILSHIELD_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.VIGILSHIELD_KEYSTORE_PASSWORD }}
