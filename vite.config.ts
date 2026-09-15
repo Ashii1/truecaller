@@ -6,6 +6,9 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
+    // Android WebView loads the production bundle from file:///android_asset/.
+    // Relative asset URLs are required; absolute /assets URLs resolve incorrectly.
+    base: './',
     plugins: [
       react(),
       tailwindcss(),
@@ -13,36 +16,21 @@ export default defineConfig(() => {
         registerType: 'autoUpdate',
         includeAssets: ['favicon.png', 'apple-touch-icon.png', 'icon.svg'],
         manifest: {
-          id: '/',
-          name: 'SpamShield',
-          short_name: 'SpamShield',
-          description: 'Intelligent spam call and SMS blocker with rule management, call & message screening simulation, blacklist/whitelist, and live protection logs.',
+          id: './',
+          name: 'VigilShield',
+          short_name: 'VigilShield',
+          description: 'Intelligent caller ID and spam protection.',
           theme_color: '#0f172a',
           background_color: '#020617',
           display: 'standalone',
           orientation: 'portrait',
-          start_url: '/',
-          scope: '/',
+          start_url: './',
+          scope: './',
           categories: ['utilities', 'productivity'],
           icons: [
-            {
-              src: '/pwa-192x192.png',
-              sizes: '192x192',
-              type: 'image/png',
-              purpose: 'any',
-            },
-            {
-              src: '/pwa-512x512.png',
-              sizes: '512x512',
-              type: 'image/png',
-              purpose: 'any',
-            },
-            {
-              src: '/pwa-maskable-512x512.png',
-              sizes: '512x512',
-              type: 'image/png',
-              purpose: 'maskable',
-            },
+            { src: './pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: './pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+            { src: './pwa-maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
           ],
         },
         workbox: {
@@ -60,10 +48,7 @@ export default defineConfig(() => {
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };
