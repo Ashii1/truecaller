@@ -1,6 +1,7 @@
 import {StrictMode, Component, type ErrorInfo, type ReactNode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
+import ThemeBootstrap from './components/ThemeBootstrap';
 import './index.css';
 import { registerSW } from 'virtual:pwa-register';
 import { runVigilShieldTestSuite } from './tests/callerId.test';
@@ -36,7 +37,7 @@ window.addEventListener('error', (event) => {
   console.error('[VigilShield window error]', event.error || event.message);
 });
 window.addEventListener('unhandledrejection', (event) => {
-  console.error('[VigilShield unhandled rejection]', event.reason);
+  console.error('[VigilShield window rejection]', event.reason);
 });
 
 try {
@@ -46,9 +47,6 @@ try {
   console.error('[VigilShield Test Suite] Execution error:', e);
 }
 
-// The Android wrapper exposes AndroidTelecomBridge. Never register the browser
-// service worker inside the native WebView; it is unnecessary there and can
-// interfere with local bundled assets.
 const isAndroidWrapper = typeof window !== 'undefined' &&
   typeof (window as Window & { AndroidTelecomBridge?: unknown }).AndroidTelecomBridge !== 'undefined';
 
@@ -73,6 +71,7 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <AppErrorBoundary>
+      <ThemeBootstrap />
       <App />
     </AppErrorBoundary>
   </StrictMode>,
