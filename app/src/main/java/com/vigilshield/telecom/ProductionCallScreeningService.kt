@@ -39,6 +39,19 @@ class ProductionCallScreeningService : CallScreeningService() {
             return
         }
 
+        val callerName = details.callerDisplayName.orEmpty()
+        val risk = CallRiskAnalyzer.analyze(number, callerName)
+        val riskEnabled = prefs.getBoolean("phase2_risk_detection_enabled", true)
+        if (riskEnabled && risk.optBoolean("patternWarning", false)) {
+            CallNotificationHelper.showSecurityWarning(
+                applicationContext,
+                callerName.ifBlank { number.ifBlank { "Unknown caller" } },
+                risk.optString("risk", "UNKNOWN"),
+                risk.optString("spoofRisk", "LOW"),
+                risk.optString("explanation", "Caller identity could not be verified.")
+            )
+        }
+
         val rules = readArray(prefs.getString("block_rules", "[]"))
         val matched = findRule(rules, normalized)
 
