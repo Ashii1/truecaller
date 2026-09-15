@@ -104,10 +104,15 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent:Intent?){super.onNewIntent(intent);setIntent(intent);handleDialIntent(intent)}
     @Deprecated("Deprecated in Android API 31; kept for API 29/30 role flow compatibility")
     override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){super.onActivityResult(requestCode,resultCode,data);when(requestCode){DIALER_ROLE_REQ->{bridge.dispatchWebEvent("ROLE_STATUS_CHANGED",bridge.roleStatus());requestPermissionsIfNeeded()};SCREENING_ROLE_REQ->{bridge.dispatchWebEvent("ROLE_STATUS_CHANGED",bridge.roleStatus())}}}
-    override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){super.onRequestPermissionsResult(requestCode,permissions,grantResults);if(requestCode==PERMISSION_REQ && bridge.isDefaultDialer())requestCallScreeningRoleOnce()}
+    override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){super.onRequestPermissionsResult(requestCode,permissions,grantResults);if(requestCode==PERMISSION_REQ){bridge.dispatchWebEvent("PERMISSIONS_CHANGED",bridge.permissionStatus());if(bridge.isDefaultDialer())requestCallScreeningRoleOnce()}}
 
     private fun handleDialIntent(intent:Intent?){val uri:Uri=intent?.data?:return;if(uri.scheme=="tel"){val number=uri.schemeSpecificPart;if(!number.isNullOrBlank()&&::webView.isInitialized){val quoted=org.json.JSONObject.quote(number);webView.post{webView.evaluateJavascript("if(window.__onAndroidDialIntent){window.__onAndroidDialIntent($quoted);}",null)}}}}
-    private fun requestPermissionsIfNeeded(){val permissions=mutableListOf(Manifest.permission.READ_CONTACTS,Manifest.permission.CALL_PHONE,Manifest.permission.READ_PHONE_STATE,Manifest.permission.ANSWER_PHONE_CALLS);if(Build.VERSION.SDK_INT>=33)permissions+=Manifest.permission.POST_NOTIFICATIONS;val missing=permissions.filter{ContextCompat.checkSelfPermission(this,it)!=PackageManager.PERMISSION_GRANTED};if(missing.isNotEmpty())ActivityCompat.requestPermissions(this,missing.toTypedArray(),PERMISSION_REQ)else requestCallScreeningRoleOnce()}
+    private fun requestPermissionsIfNeeded(){
+        val permissions=mutableListOf(Manifest.permission.READ_CONTACTS,Manifest.permission.CALL_PHONE,Manifest.permission.READ_PHONE_STATE,Manifest.permission.ANSWER_PHONE_CALLS,Manifest.permission.READ_CALL_LOG)
+        if(Build.VERSION.SDK_INT>=33)permissions+=Manifest.permission.POST_NOTIFICATIONS
+        val missing=permissions.filter{ContextCompat.checkSelfPermission(this,it)!=PackageManager.PERMISSION_GRANTED}
+        if(missing.isNotEmpty())ActivityCompat.requestPermissions(this,missing.toTypedArray(),PERMISSION_REQ)else requestCallScreeningRoleOnce()
+    }
     private fun requestCallScreeningRoleOnce(){if(Build.VERSION.SDK_INT>=29){val rm=getSystemService(RoleManager::class.java);if(rm.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING)&&!rm.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)){startActivityForResult(rm.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING),SCREENING_ROLE_REQ)}}}
     private fun requestDefaultDialerIfAvailable(){if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.Q){val rm=getSystemService(RoleManager::class.java);if(rm.isRoleAvailable(RoleManager.ROLE_DIALER)){if(rm.isRoleHeld(RoleManager.ROLE_DIALER))requestPermissionsIfNeeded()else startActivityForResult(rm.createRequestRoleIntent(RoleManager.ROLE_DIALER),DIALER_ROLE_REQ)}else requestPermissionsIfNeeded()}else requestPermissionsIfNeeded()}
 }
