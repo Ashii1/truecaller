@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.VigilShield" parent="android:style/Theme.Material.Light.NoActionBar">
+    <!-- MainActivity extends AppCompatActivity, so the application theme must inherit from AppCompat. -->
+    <style name="Theme.VigilShield" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:colorAccent">#2563eb</item>
         <item name="android:navigationBarColor">#000000</item>
