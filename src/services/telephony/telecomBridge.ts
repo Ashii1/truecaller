@@ -17,7 +17,7 @@ declare global {
       answerCall:(callId:string)=>boolean; rejectCall:(callId:string,reason?:string)=>boolean; disconnectCall:(callId:string)=>boolean;
       setMuted:(muted:boolean)=>boolean; setSpeakerRoute:(enabled:boolean)=>boolean; sendDtmfTone:(callId:string,digit:string)=>boolean;
       holdCall:(callId:string)=>boolean; unholdCall:(callId:string)=>boolean; swapCalls:()=>boolean; mergeCalls:()=>boolean;
-      fetchRealCallLogs:(limit:number)=>string; fetchRealContacts:(limit:number)=>string;
+      fetchRealCallLogs:(limit:number)=>string; fetchRealContacts:(limit:number)=>string; lookupContactName?:(number:string)=>string;
       setSecuritySetting?:(key:string,value:boolean)=>boolean; syncBlockRules?:(json:string)=>boolean; createContact?:(number:string,name?:string)=>boolean;
     };
     __onAndroidTelecomEvent?:(eventType:string,payload:any)=>void;
@@ -92,6 +92,13 @@ class TelecomBridgeService {
   }
   public fetchDeviceContacts(limit=200):ContactItem[]{
     if(!this.native())return[];try{const a=JSON.parse(window.AndroidTelecomBridge!.fetchRealContacts(limit));return Array.isArray(a)?a.map((x:any)=>({id:String(x.id),name:x.name||'Contact',number:x.number||'',category:'GENERAL',trusted:true,isFavorite:!!x.isFavorite,notes:'Android Contacts'})):[];}catch{return[];}
+  }
+  /** Resolve a phone number through Android Contacts/PhoneLookup. Never throws when the native method is unavailable. */
+  public lookupContactName(number:string):string|null{
+    if(!this.native() || !number?.trim()) return null;
+    const nativeLookup=window.AndroidTelecomBridge!.lookupContactName;
+    if(typeof nativeLookup!=='function') return null;
+    try{return nativeLookup(number.trim())?.trim() || null;}catch{return null;}
   }
   public getDiagnostics():TelephonyDiagnosticsData{
     if(this.native())try{const x=JSON.parse(window.AndroidTelecomBridge!.getTelephonyDiagnostics());return {isDefaultDialer:!!x.isDefaultDialer,isDialerRoleAvailable:!!x.isDialerRoleAvailable,isInCallServiceBound:!!x.inCallServiceBound,hasSim:!!x.hasSim,isAirplaneMode:!!x.isAirplaneMode,isNetworkAvailable:!!x.isNetworkAvailable,networkOperatorName:x.networkOperatorName||'Unknown',simCarrierIdName:x.simCarrierIdName||'Unknown',activeCallsCount:Number(x.activeCallsCount)||0,callLogPermission:!!x.callLogPermission,contactsPermission:!!x.contactsPermission,sim1Available:!!x.sim1Available,sim1Carrier:x.sim1Carrier||'None',sim2Available:!!x.sim2Available,sim2Carrier:x.sim2Carrier||'None',lastCallState:x.lastCallState||'IDLE'};}catch{}
