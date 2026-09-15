@@ -15,7 +15,6 @@ button, input, select, textarea { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
 #root { min-height: 100vh; }
 
-/* Clean phone UI: remove the old neon/glass visual language. */
 .bg-slate-900 { background-color: #11161d !important; }
 .bg-slate-900\/90 { background-color: rgba(17, 22, 29, .96) !important; }
 .bg-slate-900\/95 { background-color: rgba(17, 22, 29, .98) !important; }
@@ -31,11 +30,17 @@ input:focus, select:focus, textarea:focus {
   border-color: rgba(59, 130, 246, .65) !important;
 }
 
+/* Avoid persistent compositor blur after modal/route transitions. */
+.backdrop-blur, .backdrop-blur-sm, .backdrop-blur-md, .backdrop-blur-lg, .backdrop-blur-xl, .backdrop-blur-2xl {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
 @keyframes vs-rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 main > * { animation: vs-rise .18s ease-out both; }
 .safe-bottom { padding-bottom: max(.5rem, env(safe-area-inset-bottom)); }
 .bg-indigo-600 { background-color: #2563eb !important; }
-.hover\:bg-indigo-500:hover { background-color: #3b82f6 !important; }
+.hover\\:bg-indigo-500:hover { background-color: #3b82f6 !important; }
 .text-indigo-400 { color: #60a5fa !important; }
 .text-indigo-300 { color: #93c5fd !important; }
 
