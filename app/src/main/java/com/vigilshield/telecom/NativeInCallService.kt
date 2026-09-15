@@ -4,9 +4,23 @@ import android.content.Intent
 import android.telecom.Call
 import android.telecom.InCallService
 
-/** Native Telecom endpoint required for ROLE_DIALER. */
+/** Native Telecom endpoint required for ROLE_DIALER and in-call control. */
 class NativeInCallService : InCallService() {
-    private val activeCalls = LinkedHashMap<String, Call>()
+    companion object {
+        @JvmStatic var instance: NativeInCallService? = null
+        @JvmStatic val activeCalls: MutableMap<String, Call> = LinkedHashMap()
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+    }
+
+    override fun onDestroy() {
+        activeCalls.clear()
+        if (instance === this) instance = null
+        super.onDestroy()
+    }
 
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
@@ -24,7 +38,7 @@ class NativeInCallService : InCallService() {
 
     override fun onCallRemoved(call: Call) {
         activeCalls.remove(call.toString())
-        openCallUi(call, call.state, true, true)
+        openCallUi(call, call.state, false, true)
         super.onCallRemoved(call)
     }
 
