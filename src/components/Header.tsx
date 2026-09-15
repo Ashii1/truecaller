@@ -1,16 +1,4 @@
-import { 
-  Shield, 
-  ShieldAlert, 
-  ShieldCheck, 
-  RefreshCw, 
-  PhoneCall, 
-  PhoneOff, 
-  Package, 
-  Database,
-  Sliders,
-  Sparkles,
-  Terminal
-} from 'lucide-react';
+import { Shield, ShieldAlert, ShieldCheck, RefreshCw, PhoneCall, PhoneOff, Package, Database, Terminal } from 'lucide-react';
 import { ShieldSettings } from '../types';
 
 interface HeaderProps {
@@ -29,182 +17,37 @@ interface HeaderProps {
   onOpenPermissionCenter?: () => void;
 }
 
-export default function Header({
-  settings,
-  onToggleShield,
-  onSyncDatabase,
-  isSyncing,
-  onTriggerIncomingCall,
-  autoCancelEnabled,
-  onToggleAutoCancel,
-  onOpenInstallModal,
-  onOpenDataSources,
-  onOpenDiagnostics,
-  isDefaultDialer,
-  onRequestDefaultDialer,
-  onOpenPermissionCenter,
-}: HeaderProps) {
+export default function Header({ settings, onToggleShield, onSyncDatabase, isSyncing, onTriggerIncomingCall: _onTriggerIncomingCall, autoCancelEnabled, onToggleAutoCancel, onOpenInstallModal, onOpenDataSources, onOpenDiagnostics, isDefaultDialer, onRequestDefaultDialer, onOpenPermissionCenter }: HeaderProps) {
   return (
-    <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-40">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Brand Logo & Telephony Status Indicators */}
-          <div className="flex items-center space-x-3">
-            <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 ${
-                settings.masterEnabled
-                  ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-lg shadow-indigo-950/50'
-                  : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-              }`}
-            >
-              {settings.masterEnabled ? (
-                <ShieldCheck className="w-6 h-6" />
-              ) : (
-                <ShieldAlert className="w-6 h-6" />
-              )}
+    <header className="sticky top-0 z-40 border-b border-white/[.07] bg-[#07111f]/80 backdrop-blur-2xl">
+      <div className="mx-auto flex h-[68px] max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-[14px] border shadow-xl ${settings.masterEnabled ? 'border-cyan-300/20 bg-gradient-to-br from-cyan-400/20 to-indigo-500/20 text-cyan-200 shadow-cyan-950/30' : 'border-rose-400/20 bg-rose-500/10 text-rose-300'}`}>
+            {settings.masterEnabled ? <ShieldCheck className="h-5 w-5" /> : <ShieldAlert className="h-5 w-5" />}
+            <span className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#07111f] ${settings.masterEnabled ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="truncate text-[17px] font-extrabold tracking-tight text-white sm:text-lg">VigilShield</span>
+              <span className={`hidden rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider sm:inline-flex ${settings.masterEnabled ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : 'border-rose-400/20 bg-rose-400/10 text-rose-300'}`}>{settings.masterEnabled ? 'Protected' : 'Paused'}</span>
             </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="text-lg sm:text-xl font-extrabold tracking-tight text-white">
-                  VigilShield
-                </span>
-                
-                {/* Telecom Status Badges: Caller Protection & Default Phone App */}
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border hidden sm:inline-flex items-center gap-1 ${
-                  settings.masterEnabled ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${settings.masterEnabled ? 'bg-emerald-400' : 'bg-slate-500'}`} />
-                  <span>Caller Protection: {settings.masterEnabled ? 'ON' : 'OFF'}</span>
-                </span>
-
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border hidden sm:inline-flex items-center gap-1 ${
-                  isDefaultDialer ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${isDefaultDialer ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-                  <span>Default Phone App: {isDefaultDialer ? 'ON' : 'OFF'}</span>
-                </span>
-              </div>
-
-              {/* Status subline */}
-              <div className="flex items-center space-x-2 text-[11px] text-slate-400 mt-0.5">
-                <span className="sm:hidden">
-                  Protection: {settings.masterEnabled ? 'ON' : 'OFF'} • Dialer: {isDefaultDialer ? 'ON' : 'OFF'}
-                </span>
-                <span className="hidden sm:inline">
-                  {isDefaultDialer 
-                    ? 'Default Android Dialer Active • Direct Cellular Voice' 
-                    : 'System Telecom Standby • Tap setup to claim Default Phone App role'}
-                </span>
-              </div>
+            <div className="mt-0.5 flex items-center gap-2 text-[10px] text-slate-400">
+              <span>{isDefaultDialer ? 'Phone service active' : 'Phone role not active'}</span>
+              <span className="h-1 w-1 rounded-full bg-slate-600" />
+              <span>{isDefaultDialer ? 'Ready for calls' : 'Setup required'}</span>
             </div>
           </div>
+        </div>
 
-          {/* Quick Action Controls */}
-          <div className="flex items-center space-x-1.5 sm:space-x-2.5">
-            {/* Set as Default Phone App Button (Prominent when OFF) */}
-            {!isDefaultDialer && (
-              <button
-                onClick={onRequestDefaultDialer}
-                id="btn-set-default-dialer"
-                className="inline-flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 hover:text-white transition active:scale-95 shadow-sm"
-                title="Grant official Android Telecom ROLE_DIALER to handle cellular voice calls"
-              >
-                <PhoneCall className="w-3.5 h-3.5 text-amber-400" />
-                <span>Set as default phone app</span>
-              </button>
-            )}
-
-            {/* Permission Center & Onboarding Wizard */}
-            {onOpenPermissionCenter && (
-              <button
-                onClick={onOpenPermissionCenter}
-                className="inline-flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 hover:text-white transition active:scale-95 shadow-sm"
-                title="View live permission status and 5-step telephony onboarding"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="hidden lg:inline">Permissions</span>
-              </button>
-            )}
-
-            {/* System Diagnostics */}
-            <button
-              onClick={onOpenDiagnostics}
-              className="inline-flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-950/50 hover:bg-indigo-900/60 text-indigo-300 border border-indigo-700/50 hover:text-white transition active:scale-95 shadow-sm"
-              title="Inspect platform capabilities, Telecom status, Dual-SIM accounts, and CallLog permissions"
-            >
-              <Terminal className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="hidden md:inline">Diagnostics</span>
-            </button>
-
-            {/* Data Sources & Privacy Center */}
-            <button
-              onClick={onOpenDataSources}
-              className="inline-flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 hover:text-white transition active:scale-95"
-              title="Inspect legal data sources, privacy guarantees and architecture"
-            >
-              <Database className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="hidden md:inline">Data Sources</span>
-            </button>
-
-            {/* Get APK / Install Button */}
-            <button
-              onClick={onOpenInstallModal}
-              className="hidden sm:inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-600/30 hover:text-white transition active:scale-95 shadow-sm"
-              title="Download Android APK package or install directly as WebAPK"
-            >
-              <Package className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Get APK</span>
-            </button>
-
-            {/* Auto-Cancel Toggle Button */}
-            <button
-              onClick={onToggleAutoCancel}
-              className={`hidden lg:inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-                autoCancelEnabled
-                  ? 'bg-rose-950/50 text-rose-300 border border-rose-700/50 hover:bg-rose-900/50'
-                  : 'bg-slate-800 text-slate-400 border border-slate-700 hover:text-white'
-              }`}
-              title="Automatically terminate identified scam calls before phone rings"
-            >
-              <PhoneOff className="w-3.5 h-3.5" />
-              <span>Auto-Cancel: {autoCancelEnabled ? 'ON' : 'OFF'}</span>
-            </button>
-
-            {/* Test Call Trigger Button */}
-            <button
-              onClick={onTriggerIncomingCall}
-              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-950/40 transition active:scale-95"
-              title="Simulate incoming call to test real-time screening"
-            >
-              <PhoneCall className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Simulate Call</span>
-              <span className="sm:hidden">Test</span>
-            </button>
-
-            {/* Sync Database Button */}
-            <button
-              onClick={onSyncDatabase}
-              disabled={isSyncing}
-              className="hidden xl:inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 hover:text-white transition active:scale-95 disabled:opacity-50"
-              title="Sync with global SpamShield community directory"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-indigo-400' : ''}`} />
-              <span>{isSyncing ? 'Syncing...' : 'Sync'}</span>
-            </button>
-
-            {/* Master Protection Toggle */}
-            <button
-              onClick={onToggleShield}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition shadow-sm ${
-                settings.masterEnabled
-                  ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-900/30'
-                  : 'bg-rose-600 text-white hover:bg-rose-500 shadow-rose-900/30'
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5" />
-              <span>{settings.masterEnabled ? 'Active' : 'Off'}</span>
-            </button>
-          </div>
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {!isDefaultDialer && <button onClick={onRequestDefaultDialer} className="hidden items-center gap-2 rounded-xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-200 transition hover:bg-amber-300/15 sm:flex"><PhoneCall className="h-3.5 w-3.5" />Set as phone app</button>}
+          {onOpenPermissionCenter && <button onClick={onOpenPermissionCenter} className="rounded-xl border border-white/10 bg-white/[.05] p-2 text-slate-300 transition hover:bg-white/[.08] hover:text-white" title="Permissions"><ShieldCheck className="h-4 w-4" /></button>}
+          <button onClick={onOpenDiagnostics} className="hidden rounded-xl border border-white/10 bg-white/[.05] p-2 text-slate-300 transition hover:bg-white/[.08] hover:text-white md:block" title="Diagnostics"><Terminal className="h-4 w-4" /></button>
+          <button onClick={onOpenDataSources} className="hidden rounded-xl border border-white/10 bg-white/[.05] p-2 text-slate-300 transition hover:bg-white/[.08] hover:text-white md:block" title="Data sources"><Database className="h-4 w-4" /></button>
+          <button onClick={onOpenInstallModal} className="hidden rounded-xl border border-white/10 bg-white/[.05] p-2 text-slate-300 transition hover:bg-white/[.08] hover:text-white lg:block" title="Get APK"><Package className="h-4 w-4" /></button>
+          <button onClick={onSyncDatabase} disabled={isSyncing} className="hidden rounded-xl border border-white/10 bg-white/[.05] p-2 text-slate-300 transition hover:bg-white/[.08] hover:text-white xl:block" title="Refresh"><RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin text-cyan-300' : ''}`} /></button>
+          <button onClick={onToggleAutoCancel} className={`hidden items-center gap-1.5 rounded-xl border px-2.5 py-2 text-[10px] font-bold lg:flex ${autoCancelEnabled ? 'border-rose-400/20 bg-rose-400/10 text-rose-300' : 'border-white/10 bg-white/[.04] text-slate-400'}`}><PhoneOff className="h-3.5 w-3.5" />{autoCancelEnabled ? 'Auto-block ON' : 'Auto-block OFF'}</button>
+          <button onClick={onToggleShield} className={`rounded-xl px-3 py-2 text-xs font-extrabold shadow-lg transition active:scale-95 ${settings.masterEnabled ? 'bg-gradient-to-r from-cyan-500 to-indigo-500 text-white shadow-cyan-950/30' : 'bg-rose-500 text-white shadow-rose-950/30'}`}>{settings.masterEnabled ? 'Protected' : 'Paused'}</button>
         </div>
       </div>
     </header>
