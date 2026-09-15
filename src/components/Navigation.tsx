@@ -1,10 +1,4 @@
-import { 
-  Phone, 
-  Clock, 
-  Users, 
-  ShieldCheck, 
-  Sparkles 
-} from 'lucide-react';
+import { Phone, Clock3, UsersRound, ShieldCheck, Sparkles } from 'lucide-react';
 import { TabId } from '../types';
 
 interface NavigationProps {
@@ -15,117 +9,49 @@ interface NavigationProps {
   assistantAlertsCount?: number;
 }
 
-export default function Navigation({
-  activeTab,
-  onChangeTab,
-  spamCallsCount = 0,
-  activeRulesCount = 0,
-  assistantAlertsCount = 0,
-}: NavigationProps) {
+export default function Navigation({ activeTab, onChangeTab, spamCallsCount = 0, activeRulesCount = 0, assistantAlertsCount = 0 }: NavigationProps) {
   const tabs = [
-    {
-      id: 'dialer' as TabId,
-      name: 'Dialer',
-      icon: Phone,
-    },
-    {
-      id: 'recents' as TabId,
-      name: 'Recents',
-      icon: Clock,
-      badge: spamCallsCount > 0 ? spamCallsCount : undefined,
-      badgeColor: 'bg-rose-500 text-white',
-    },
-    {
-      id: 'contacts' as TabId,
-      name: 'Contacts',
-      icon: Users,
-    },
-    {
-      id: 'protection' as TabId,
-      name: 'Protection',
-      icon: ShieldCheck,
-      badge: activeRulesCount > 0 ? activeRulesCount : undefined,
-      badgeColor: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
-    },
-    {
-      id: 'assistant' as TabId,
-      name: 'Assistant',
-      icon: Sparkles,
-      badge: assistantAlertsCount > 0 ? '✨' : undefined,
-      badgeColor: 'bg-indigo-500 text-white',
-    },
+    { id: 'dialer' as TabId, name: 'Home', icon: Phone },
+    { id: 'recents' as TabId, name: 'Recents', icon: Clock3, badge: spamCallsCount > 0 ? spamCallsCount : undefined },
+    { id: 'contacts' as TabId, name: 'Contacts', icon: UsersRound },
+    { id: 'protection' as TabId, name: 'Shield', icon: ShieldCheck, badge: activeRulesCount > 0 ? activeRulesCount : undefined },
+    { id: 'assistant' as TabId, name: 'Assistant', icon: Sparkles, badge: assistantAlertsCount > 0 ? '•' : undefined },
   ];
 
   return (
     <>
-      {/* Desktop / Tablet Top Sticky Nav Bar */}
-      <div className="hidden sm:block bg-slate-900/90 border-b border-slate-800/80 backdrop-blur sticky top-16 z-30">
-        <div className="max-w-4xl mx-auto px-4">
-          <nav className="flex items-center justify-around py-2.5">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-
-              return (
-                <button
-                  key={tab.id}
-                  id={`desktop-tab-${tab.id}`}
-                  onClick={() => onChangeTab(tab.id)}
-                  className={`flex items-center space-x-2.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                    isActive
-                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/40 ring-1 ring-indigo-400/30 scale-102'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                  }`}
-                >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                  <span>{tab.name}</span>
-                  {tab.badge !== undefined && (
-                    <span
-                      className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                        isActive ? 'bg-indigo-700 text-white' : tab.badgeColor
-                      }`}
-                    >
-                      {tab.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-      </div>
-
-      {/* Mobile Fixed Bottom Navigation Bar (5 clean tabs, >=48px touch targets) */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 border-t border-slate-800 backdrop-blur-xl px-2 py-2 shadow-2xl safe-bottom">
-        <div className="grid grid-cols-5 gap-1 items-center max-w-md mx-auto">
+      <div className="hidden sm:block sticky top-16 z-30 px-4 py-3">
+        <nav className="mx-auto flex max-w-3xl items-center justify-center gap-1 rounded-2xl border border-white/10 bg-slate-900/70 p-1.5 shadow-2xl shadow-black/20 backdrop-blur-2xl">
           {tabs.map((tab) => {
             const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-
+            const active = activeTab === tab.id;
             return (
-              <button
-                key={tab.id}
-                id={`mobile-tab-${tab.id}`}
-                onClick={() => onChangeTab(tab.id)}
-                className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl transition min-h-[48px] relative ${
-                  isActive ? 'text-indigo-400 font-bold' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <div className={`p-1 rounded-xl transition-all ${isActive ? 'bg-indigo-600/20 text-indigo-400 ring-1 ring-indigo-500/30' : ''}`}>
-                  <Icon className={`w-5 h-5 ${isActive ? 'text-indigo-400' : 'text-slate-400'}`} />
-                  {tab.badge !== undefined && (
-                    <span className="absolute top-1 right-2 px-1 rounded-full text-[9px] font-bold bg-rose-600 text-white min-w-[14px] text-center shadow">
-                      {tab.badge}
-                    </span>
-                  )}
-                </div>
-                <span className="text-[11px] mt-0.5 tracking-tight font-medium">
-                  {tab.name}
-                </span>
+              <button key={tab.id} id={`desktop-tab-${tab.id}`} onClick={() => onChangeTab(tab.id)}
+                className={`relative flex min-w-[105px] items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200 ${active ? 'bg-white/10 text-white shadow-lg ring-1 ring-cyan-300/15' : 'text-slate-400 hover:bg-white/[.04] hover:text-slate-100'}`}>
+                <Icon className={`h-4 w-4 ${active ? 'text-cyan-300' : ''}`} />
+                <span>{tab.name}</span>
+                {tab.badge !== undefined && <span className="rounded-full bg-rose-500 px-1.5 text-[9px] font-bold text-white">{tab.badge}</span>}
               </button>
             );
           })}
-        </div>
+        </nav>
+      </div>
+
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 px-3 pb-[max(.65rem,env(safe-area-inset-bottom))] pt-2">
+        <nav className="mx-auto grid max-w-md grid-cols-5 rounded-[24px] border border-white/10 bg-[#0b1728]/90 p-1.5 shadow-[0_-10px_40px_rgba(0,0,0,.35)] backdrop-blur-2xl">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+            return (
+              <button key={tab.id} id={`mobile-tab-${tab.id}`} onClick={() => onChangeTab(tab.id)}
+                className={`relative flex min-h-[54px] flex-col items-center justify-center rounded-[18px] transition-all ${active ? 'bg-gradient-to-b from-cyan-400/15 to-indigo-500/10 text-white ring-1 ring-cyan-300/15' : 'text-slate-500 hover:text-slate-200'}`}>
+                <Icon className={`h-5 w-5 ${active ? 'text-cyan-300' : ''}`} />
+                <span className="mt-1 text-[10px] font-semibold tracking-wide">{tab.name}</span>
+                {tab.badge !== undefined && <span className="absolute right-2 top-1.5 min-w-3 rounded-full bg-rose-500 px-1 text-[8px] font-bold text-white">{tab.badge}</span>}
+              </button>
+            );
+          })}
+        </nav>
       </div>
     </>
   );
