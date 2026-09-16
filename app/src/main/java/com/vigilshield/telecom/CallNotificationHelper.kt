@@ -15,6 +15,7 @@ object CallNotificationHelper {
     private const val SECURITY_CHANNEL_ID = "security"
     private const val MISSED_ID = 4101
     private const val REPEATED_ID = 4102
+    private const val ENDED_ID = 4103
     private const val PREFS = "vigilshield"
 
     fun ensureChannel(context: Context) {
@@ -69,7 +70,11 @@ object CallNotificationHelper {
     fun showIncomingCall(context: Context, callId: String, name: String, number: String) {
         if (!callAlertsEnabled(context)) return
         ensureChannel(context)
-        val openIntent = PendingIntent.getActivity(context, callId.hashCode(), Intent(context, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val openIntent = PendingIntent.getActivity(context, callId.hashCode(), Intent(context, MainActivity::class.java).apply {
+            putExtra("open_call_id", callId)
+            putExtra("open_call_number", number)
+            putExtra("open_call_name", name)
+        }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val answer = PendingIntent.getBroadcast(context, callId.hashCode() + 1, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_ANSWER).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val decline = PendingIntent.getBroadcast(context, callId.hashCode() + 2, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_DECLINE).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val display = identity(context, name, number)
@@ -79,10 +84,26 @@ object CallNotificationHelper {
             .setContentIntent(openIntent)
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setPriority(NotificationCompat.PRIORITY_MAX), context)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setFullScreenIntent(openIntent, true), context)
         if (Build.VERSION.SDK_INT >= 31) builder.setStyle(NotificationCompat.CallStyle.forIncomingCall(person, decline, answer))
         else builder.setContentTitle(display).setContentText("Incoming call").addAction(0, "Decline", decline).addAction(0, "Answer", answer)
         context.getSystemService(NotificationManager::class.java).notify(callId.hashCode(), builder.build())
+    }
+
+    fun showCallEnded(context: Context) {
+        if (!callAlertsEnabled(context)) return
+        ensureChannel(context)
+        val openIntent = PendingIntent.getActivity(context, ENDED_ID, Intent(context, MainActivity::class.java).putExtra("open_tab", "recents"), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val notification = applyPrivacy(NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield)
+            .setContentTitle("Call ended")
+            .setContentText("Call details were saved to Recents.")
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(openIntent), context).build()
+        context.getSystemService(NotificationManager::class.java).notify(ENDED_ID, notification)
     }
 
     fun showSecurityWarning(context: Context, name: String, risk: String, spoofRisk: String, explanation: String) {
@@ -125,5 +146,8 @@ object CallNotificationHelper {
         context.getSystemService(NotificationManager::class.java).notify(REPEATED_ID, notification)
     }
 
-    fun clearCall(context: Context, callId: String) { context.getSystemService(NotificationManager::class.java).cancel(callId.hashCode()) }
+    fun clearCall(context: Context, callId: String) {
+        context.getSystemService(NotificationManager::class.java).cancel(callId.hashCode())
+        showCallEnded(context)
+    }
 }
