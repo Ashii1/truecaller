@@ -56,6 +56,7 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
     @JavascriptInterface fun syncBlockRules(json: String): Boolean { activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("block_rules", json).apply(); return true }
     @JavascriptInterface fun syncWhitelist(json: String): Boolean { activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("whitelist", json).apply(); return true }
     @JavascriptInterface fun setSecuritySetting(key: String, value: Boolean): Boolean { activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(key, value).apply(); return true }
+    @JavascriptInterface fun analyzeChatSpam(message: String, senderKnown: Boolean, recentMessageCount: Int): String = ChatSpamProtection.analyze(message, senderKnown, recentMessageCount.coerceIn(0, 1000)).toJson().toString()
     @JavascriptInterface fun createContact(number: String, name: String?): Boolean = false
     fun isDefaultDialer(): Boolean = if (Build.VERSION.SDK_INT >= 29) activity.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_DIALER) else telecom.defaultDialerPackage == activity.packageName
     fun hasCallLogPermission(): Boolean = ContextCompat.checkSelfPermission(activity, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED
