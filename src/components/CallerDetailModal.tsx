@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Ban,
+  Check,
   CheckCircle2,
   ChevronDown,
   Clock,
@@ -70,7 +71,17 @@ export default function CallerDetailModal({
       setRecordingsExpanded(true);
       setEditing(false);
       setName(call?.callerName || profile?.name || '');
-      setNote(call?.notes || '');
+      let existingNote = call?.notes || '';
+      if (!existingNote && number) {
+        try {
+          const raw = localStorage.getItem('vigilshield_call_notes_v1');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            existingNote = parsed[key] || '';
+          }
+        } catch {}
+      }
+      setNote(existingNote);
 
       // Load all call recordings for this specific number from device storage
       if (number) {
@@ -132,7 +143,21 @@ export default function CallerDetailModal({
       ? t('verified_caller')
       : `${t('safe_badge')} · ${t('public_directory_verified')}`;
 
+  const [noteSavedFeedback, setNoteSavedFeedback] = useState(false);
+
   const saveNote = () => {
+    try {
+      const raw = localStorage.getItem('vigilshield_call_notes_v1') || '{}';
+      const parsed = JSON.parse(raw);
+      if (note.trim()) {
+        parsed[key] = note.trim();
+      } else {
+        delete parsed[key];
+      }
+      localStorage.setItem('vigilshield_call_notes_v1', JSON.stringify(parsed));
+      setNoteSavedFeedback(true);
+      setTimeout(() => setNoteSavedFeedback(false), 2000);
+    } catch {}
     if (call && onSaveNote) onSaveNote(call.id, note.trim());
   };
 
@@ -403,13 +428,21 @@ export default function CallerDetailModal({
               placeholder="Write a private note about this caller…"
               className="mt-3 w-full resize-none rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-white outline-none placeholder-slate-600 focus:border-amber-500/40"
             />
-            <button
-              onClick={saveNote}
-              disabled={!call || !onSaveNote}
-              className="mt-2 rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-bold text-slate-950 disabled:opacity-40 transition"
-            >
-              Save note
-            </button>
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                onClick={saveNote}
+                disabled={!number}
+                className="rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-bold text-slate-950 disabled:opacity-40 transition"
+              >
+                Save note
+              </button>
+              {noteSavedFeedback && (
+                <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1 animate-in fade-in">
+                  <Check className="w-3.5 h-3.5" />
+                  Saved note
+                </span>
+              )}
+            </div>
           </section>
 
           {/* Protection details */}

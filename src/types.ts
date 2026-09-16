@@ -27,7 +27,7 @@ export interface CallRecordingItem {
   quality: string;    // "48 kHz Studio Lossless"
 }
 
-export interface PostCallState { isOpen:boolean; callId:string; number:string; name:string; durationSeconds:number; durationStr?:string; sim?:string; isSpam?:boolean; wasSpam?:boolean; alreadyClassified?:boolean; }
+export interface PostCallState { isOpen:boolean; callId:string; number:string; name:string; durationSeconds:number; durationStr?:string; sim?:string; isSpam?:boolean; wasSpam?:boolean; alreadyClassified?:boolean; notes?:string; }
 export interface SecurityTimelineEvent { id:string; timestamp:number; timeStr:string; title:string; description:string; severity:'INFO'|'WARNING'|'BLOCK'|'SAFE'; matchedNumber?:string; }
 export interface CallLogItem { id:string; number:string; callerName:string; type:CallDirection; timestamp:number; durationSeconds:number; isSpam:boolean; spamCategory?:SpamCategory; spamReason?:string; riskScore:number; riskLevel?:RiskLevel; classification?:CallClassification; confidence?:number; identificationSource?:string; userAction?:'NONE'|'BLOCKED'|'MARKED_SAFE'|'DISPUTED'|'REPORTED'; aiSummary?:string; riskSignals?:string[]; rawSource?:'device_os'|'imported_file'|'web_contact_picker'|'test_pipeline'; reportsCount:number; carrier?:string; location?:string; isVerifiedBusiness?:boolean; isContact?:boolean; labelVerdict?:'SPAM'|'NOT_SPAM'; repeatCount?:number; explainReason?:string; notes?:string; recordingUri?:string; }
 export interface ProtectionScoreBreakdown { score:number; rating:'Excellent'|'Good'|'Fair'|'At Risk'; factors:{label:string;impact:string;isPositive:boolean}[]; explanation:string; }

@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react';
-import { Check, X, UserPlus, ShieldBan, AlertTriangle, FileText, Clock, Phone, Star, ShieldCheck, HelpCircle, Flag } from 'lucide-react';
+import { useState, useEffect, type FormEvent } from 'react';
+import { Check, X, UserPlus, ShieldBan, AlertTriangle, FileText, Clock, Phone, Star, ShieldCheck, HelpCircle, Flag, StickyNote, Copy } from 'lucide-react';
 import { PostCallState, SpamCategory, ContactItem } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import CallContextCard from './CallContextCard';
@@ -22,6 +22,23 @@ export default function PostCallModal({ postCall, onDismiss, onAddContact, onBlo
   const [showNoteEditor, setShowNoteEditor] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [savedSuccessMessage, setSavedSuccessMessage] = useState<string | null>(null);
+
+  // Sync in-call notes
+  useEffect(() => {
+    if (!postCall) return;
+    const cleanKey = postCall.number.replace(/\D/g, '');
+    let existingNote = postCall.notes || '';
+    if (!existingNote) {
+      try {
+        const raw = localStorage.getItem('vigilshield_call_notes_v1');
+        if (raw) {
+          const notesMap = JSON.parse(raw);
+          existingNote = notesMap[cleanKey] || '';
+        }
+      } catch {}
+    }
+    setNoteText(existingNote);
+  }, [postCall]);
 
   if (!postCall) return null;
 
@@ -63,6 +80,42 @@ export default function PostCallModal({ postCall, onDismiss, onAddContact, onBlo
         </div>
 
         <CallContextCard number={postCall.number} name={postCall.name} />
+
+        {/* In-Call Note summary card */}
+        {noteText && !showNoteEditor && (
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-amber-300">
+              <span className="flex items-center space-x-1.5">
+                <StickyNote className="w-3.5 h-3.5 text-amber-400" />
+                <span>In-Call Private Note</span>
+              </span>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(noteText);
+                    setSavedSuccessMessage('Note copied to clipboard');
+                    setTimeout(() => setSavedSuccessMessage(null), 2000);
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[10px] font-semibold flex items-center space-x-1"
+                >
+                  <Copy className="w-3 h-3" />
+                  <span>Copy</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowNoteEditor(true)}
+                  className="text-slate-400 hover:text-white text-[10px] underline"
+                >
+                  Edit
+                </button>
+              </div>
+            </div>
+            <p className="text-xs text-slate-200 whitespace-pre-wrap font-sans bg-slate-900/70 p-2.5 rounded-xl border border-slate-800">
+              {noteText}
+            </p>
+          </div>
+        )}
 
         {savedSuccessMessage && <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-xs font-semibold text-emerald-300 flex items-center space-x-2"><Check className="w-4 h-4" /><span>{savedSuccessMessage}</span></div>}
 

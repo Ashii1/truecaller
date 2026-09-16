@@ -17,7 +17,10 @@ import {
   Check, 
   X,
   AlertCircle,
-  Folder
+  Folder,
+  StickyNote,
+  Copy,
+  Trash2
 } from 'lucide-react';
 import { ActiveCallSession, TruecallerDirectoryProfile, CallRecordingItem } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
@@ -28,7 +31,7 @@ import { callRecordingService, DEFAULT_RECORDINGS_FOLDER } from '../services/cal
 
 interface ActiveCallModalProps {
   session: ActiveCallSession | null;
-  onEndCall: (recordingItem?: CallRecordingItem | null, callDuration?: number) => void;
+  onEndCall: (recordingItem?: CallRecordingItem | null, callDuration?: number, callerNote?: string) => void;
   lookupProfile: (num: string) => TruecallerDirectoryProfile;
   onAddCall?: (number: string) => void;
 }
@@ -53,8 +56,33 @@ export default function ActiveCallModal({
   const [showAddCallPrompt, setShowAddCallPrompt] = useState(false);
   const [secondCallInput, setSecondCallInput] = useState('');
 
+  // In-Call Private Notes state for jotting down details during the live call
+  const [showInCallNotes, setShowInCallNotes] = useState(false);
+  const [callerNote, setCallerNote] = useState('');
+  const [noteSavedNotice, setNoteSavedNotice] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
+  const notesInputRef = useRef<HTMLTextAreaElement>(null);
+
   const durationRef = useRef(duration);
   durationRef.current = duration;
+
+  // Load existing notes for this caller on session start
+  useEffect(() => {
+    if (!session?.number) return;
+    const cleanKey = session.number.replace(/\D/g, '');
+    try {
+      const raw = localStorage.getItem('vigilshield_call_notes_v1');
+      if (raw) {
+        const obj = JSON.parse(raw);
+        const existing = obj[cleanKey] || session.notes || '';
+        setCallerNote(existing);
+      } else if (session.notes) {
+        setCallerNote(session.notes);
+      }
+    } catch {
+      if (session.notes) setCallerNote(session.notes);
+    }
+  }, [session?.number, session?.notes]);
 
   // Call timer increment
   useEffect(() => {
@@ -78,6 +106,56 @@ export default function ActiveCallModal({
   }, [isRecording]);
 
   if (!session) return null;
+
+  const saveNoteLocally = (text: string) => {
+    if (!session?.number) return;
+    const cleanKey = session.number.replace(/\D/g, '');
+    try {
+      const raw = localStorage.getItem('vigilshield_call_notes_v1') || '{}';
+      const obj = JSON.parse(raw);
+      if (text.trim()) {
+        obj[cleanKey] = text.trim();
+      } else {
+        delete obj[cleanKey];
+      }
+      localStorage.setItem('vigilshield_call_notes_v1', JSON.stringify(obj));
+      setNoteSavedNotice(true);
+      setTimeout(() => setNoteSavedNotice(false), 1600);
+    } catch {
+      // Storage fallback
+    }
+  };
+
+  const handleNoteChange = (text: string) => {
+    setCallerNote(text);
+    saveNoteLocally(text);
+  };
+
+  const handleInsertTag = (tag: string) => {
+    const updated = callerNote ? `${callerNote.trim()}\n${tag}` : tag;
+    setCallerNote(updated);
+    saveNoteLocally(updated);
+    if (notesInputRef.current) {
+      notesInputRef.current.focus();
+    }
+  };
+
+  const handleCopyNote = () => {
+    if (!callerNote.trim()) return;
+    try {
+      navigator.clipboard?.writeText(callerNote);
+      triggerHapticFeedback(20);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch {}
+  };
+
+  const handleClearNote = () => {
+    if (window.confirm('Clear your in-call note?')) {
+      setCallerNote('');
+      saveNoteLocally('');
+    }
+  };
 
   const formatTimer = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -167,14 +245,17 @@ export default function ActiveCallModal({
       setIsRecording(false);
       recordingItem = await callRecordingService.stopRecording();
     }
-    onEndCall(recordingItem, durationRef.current);
+    if (callerNote.trim()) {
+      saveNoteLocally(callerNote);
+    }
+    onEndCall(recordingItem, durationRef.current, callerNote.trim() || undefined);
   };
 
   const callerProfile = lookupProfile(session.number);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
-      <div className="w-full max-w-sm bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5 text-white text-center relative overflow-hidden">
+      <div className="w-full max-w-sm bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 text-white text-center relative overflow-hidden max-h-[95vh] overflow-y-auto">
         {/* Top Status & SIM info */}
         <div className="flex items-center justify-between text-xs text-slate-400">
           <span className="flex items-center space-x-1.5">
@@ -187,16 +268,16 @@ export default function ActiveCallModal({
         </div>
 
         {/* Caller Avatar & Identity */}
-        <div className="space-y-2">
-          <div className="w-20 h-20 rounded-full mx-auto bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-3xl font-extrabold shadow-xl ring-4 ring-indigo-500/20">
+        <div className="space-y-1.5">
+          <div className="w-16 h-16 rounded-full mx-auto bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-2xl font-extrabold shadow-xl ring-4 ring-indigo-500/20">
             {session.name ? session.name.slice(0, 1).toUpperCase() : '👤'}
           </div>
 
           <div>
-            <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center justify-center space-x-1.5">
-              <span>{session.name || t('unknown_caller')}</span>
+            <h2 className="text-lg font-extrabold text-white tracking-tight flex items-center justify-center space-x-1.5">
+              <span className="truncate max-w-[240px]">{session.name || t('unknown_caller')}</span>
               {session.isVerifiedBusiness && (
-                <ShieldCheck className="w-4 h-4 text-blue-400" />
+                <ShieldCheck className="w-4 h-4 text-blue-400 shrink-0" />
               )}
             </h2>
             <p className="text-xs text-slate-400 font-mono mt-0.5">
@@ -211,7 +292,7 @@ export default function ActiveCallModal({
         </div>
 
         {/* Real-time Call Intelligence panel */}
-        <div className="p-3 rounded-2xl bg-slate-800/80 border border-slate-700 text-left space-y-1 text-xs">
+        <div className="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700 text-left space-y-1 text-xs">
           <div className="flex items-center justify-between text-emerald-400 font-bold text-[11px]">
             <span className="flex items-center space-x-1">
               <Lock className="w-3 h-3" />
@@ -260,6 +341,102 @@ export default function ActiveCallModal({
           <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-500/30 text-xs text-amber-300 font-semibold animate-pulse flex items-center justify-center space-x-1.5">
             <AlertCircle className="w-4 h-4" />
             <span>Audio recording active · 48 kHz High Fidelity</span>
+          </div>
+        )}
+
+        {/* IN-CALL PRIVATE NOTE TAKING PAD */}
+        {showInCallNotes && (
+          <div className="p-3.5 rounded-2xl bg-slate-950/95 border border-amber-500/40 text-left space-y-2.5 animate-in fade-in zoom-in-95 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-1.5">
+                <StickyNote className="w-4 h-4 text-amber-400" />
+                <span className="text-xs font-bold text-amber-300">In-Call Private Scratchpad</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                {noteSavedNotice ? (
+                  <span className="text-[10px] text-emerald-400 font-semibold flex items-center space-x-1">
+                    <Check className="w-3 h-3" />
+                    <span>Auto-saved</span>
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-slate-400 flex items-center space-x-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    <span>Private & Local</span>
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowInCallNotes(false)}
+                  className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+                  aria-label="Close notes"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Quick-Insert Tags */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[10px]">
+              <span className="text-slate-500 shrink-0 font-medium">Quick:</span>
+              {[
+                { label: '📍 Address', text: '📍 Address: ' },
+                { label: '🔢 Ref #', text: '🔢 Ref No: ' },
+                { label: '💰 Price', text: '💰 Price: ' },
+                { label: '📅 Meet', text: '📅 Meeting: ' },
+                { label: '⏰ Callback', text: '⏰ Call back at: ' },
+                { label: '📞 Alt No', text: '📞 Alt phone: ' },
+              ].map((chip) => (
+                <button
+                  key={chip.label}
+                  type="button"
+                  onClick={() => handleInsertTag(chip.text)}
+                  className="px-2 py-0.5 rounded-full bg-slate-800 hover:bg-amber-500/20 hover:text-amber-300 border border-slate-700 text-slate-300 shrink-0 font-medium transition active:scale-95"
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Note Area */}
+            <textarea
+              ref={notesInputRef}
+              value={callerNote}
+              onChange={(e) => handleNoteChange(e.target.value)}
+              rows={3}
+              placeholder="Jot down notes, address, OTP, codes, or instructions during the call…"
+              className="w-full resize-none rounded-xl border border-slate-700 bg-slate-900/90 p-2.5 text-xs text-white placeholder-slate-500 outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/40 font-sans"
+            />
+
+            {/* Footer Toolbar */}
+            <div className="flex items-center justify-between pt-0.5">
+              <div className="flex items-center space-x-1.5">
+                <button
+                  type="button"
+                  onClick={handleCopyNote}
+                  disabled={!callerNote.trim()}
+                  className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-30 text-[11px] font-semibold flex items-center space-x-1 transition"
+                >
+                  {copySuccess ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copySuccess ? 'Copied' : 'Copy'}</span>
+                </button>
+                {callerNote.trim() && (
+                  <button
+                    type="button"
+                    onClick={handleClearNote}
+                    className="px-2 py-1 rounded-lg text-slate-500 hover:text-rose-400 text-[11px] font-medium transition"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowInCallNotes(false)}
+                className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold transition shadow-sm"
+              >
+                Done
+              </button>
+            </div>
           </div>
         )}
 
@@ -322,8 +499,8 @@ export default function ActiveCallModal({
           </div>
         )}
 
-        {/* In-Call Action Grid */}
-        <div className="grid grid-cols-3 gap-3 pt-2">
+        {/* In-Call Action Grid (6 Key Functions) */}
+        <div className="grid grid-cols-3 gap-2.5 pt-1">
           {/* Mute */}
           <button
             onClick={handleToggleMute}
@@ -339,7 +516,11 @@ export default function ActiveCallModal({
 
           {/* Keypad */}
           <button
-            onClick={() => setShowInCallKeypad((prev) => !prev)}
+            onClick={() => {
+              setShowInCallKeypad((prev) => !prev);
+              setShowInCallNotes(false);
+              setShowAddCallPrompt(false);
+            }}
             className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition active:scale-95 ${
               showInCallKeypad
                 ? 'bg-indigo-600/30 border-indigo-500 text-indigo-300'
@@ -363,13 +544,28 @@ export default function ActiveCallModal({
             <span className="text-[10px] font-semibold mt-1">{isSpeaker ? t('earpiece') : t('speaker')}</span>
           </button>
 
-          {/* Add Call */}
+          {/* In-Call Notes (User's feature request to jot down details during call) */}
           <button
-            onClick={() => setShowAddCallPrompt((prev) => !prev)}
-            className="flex flex-col items-center justify-center p-3 rounded-2xl border bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800 transition active:scale-95"
+            onClick={() => {
+              setShowInCallNotes((prev) => !prev);
+              setShowInCallKeypad(false);
+              setShowAddCallPrompt(false);
+            }}
+            className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition active:scale-95 relative ${
+              showInCallNotes
+                ? 'bg-amber-500/25 border-amber-500 text-amber-300 ring-2 ring-amber-500/40'
+                : callerNote.trim()
+                ? 'bg-amber-500/15 border-amber-500/60 text-amber-300 hover:bg-amber-500/25'
+                : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
+            }`}
           >
-            <UserPlus className="w-5 h-5" />
-            <span className="text-[10px] font-semibold mt-1">{t('add_call')}</span>
+            <StickyNote className="w-5 h-5" />
+            {callerNote.trim() && (
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-amber-400 animate-pulse ring-2 ring-slate-900" />
+            )}
+            <span className="text-[10px] font-semibold mt-1">
+              {callerNote.trim() ? 'Note • Active' : 'Notes'}
+            </span>
           </button>
 
           {/* Hold */}
@@ -401,19 +597,30 @@ export default function ActiveCallModal({
           </button>
         </div>
 
-        {/* Dual Call Management (Swap / Merge) */}
-        <div className="flex gap-2 pt-1">
+        {/* Dual Call Management & Conference toolbar */}
+        <div className="grid grid-cols-3 gap-2 pt-1">
+          <button
+            onClick={() => {
+              setShowAddCallPrompt((prev) => !prev);
+              setShowInCallNotes(false);
+              setShowInCallKeypad(false);
+            }}
+            className="py-1.5 px-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-[10px] font-medium text-slate-300 hover:bg-slate-700 transition flex items-center justify-center space-x-1"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            <span>+ Add Call</span>
+          </button>
           <button
             onClick={handleSwapCalls}
-            className="flex-1 py-1.5 px-2 rounded-xl bg-slate-800/80 border border-slate-700 text-[11px] font-medium text-slate-300 hover:bg-slate-700 transition"
+            className="py-1.5 px-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-[10px] font-medium text-slate-300 hover:bg-slate-700 transition"
           >
             Swap Calls
           </button>
           <button
             onClick={handleMergeCalls}
-            className="flex-1 py-1.5 px-2 rounded-xl bg-slate-800/80 border border-slate-700 text-[11px] font-medium text-slate-300 hover:bg-slate-700 transition"
+            className="py-1.5 px-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-[10px] font-medium text-slate-300 hover:bg-slate-700 transition"
           >
-            Merge Calls (Conference)
+            Merge Calls
           </button>
         </div>
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import DialerTab from './components/DialerTab';
@@ -46,6 +46,111 @@ export default function App(){
  const [toastMessage,setToastMessage]=useState<{text:string,type:'info'|'error'|'success'}|null>(null);
  const showToast=(text:string,type:'info'|'error'|'success'='info')=>{setToastMessage({text,type});window.setTimeout(()=>setToastMessage(null),3800)};
 
+ const lastBackPressTimeRef = useRef<number>(0);
+ const stateRef = useRef({
+   activeTab,
+   isCallerModalOpen,
+   postCallState,
+   isInstallModalOpen,
+   isFastReportOpen,
+   isDisputeOpen,
+   isDataSourcesModalOpen,
+   isDiagnosticsModalOpen,
+   isPermissionCenterOpen,
+   activeIncomingCall,
+ });
+ stateRef.current = {
+   activeTab,
+   isCallerModalOpen,
+   postCallState,
+   isInstallModalOpen,
+   isFastReportOpen,
+   isDisputeOpen,
+   isDataSourcesModalOpen,
+   isDiagnosticsModalOpen,
+   isPermissionCenterOpen,
+   activeIncomingCall,
+ };
+
+ const handleAppBack = (): boolean => {
+   const current = stateRef.current;
+   if (current.isCallerModalOpen) {
+     setIsCallerModalOpen(false);
+     return true;
+   }
+   if (current.postCallState) {
+     setPostCallState(null);
+     return true;
+   }
+   if (current.isFastReportOpen) {
+     setIsFastReportOpen(false);
+     return true;
+   }
+   if (current.isDisputeOpen) {
+     setIsDisputeOpen(false);
+     return true;
+   }
+   if (current.isDataSourcesModalOpen) {
+     setIsDataSourcesModalOpen(false);
+     return true;
+   }
+   if (current.isDiagnosticsModalOpen) {
+     setIsDiagnosticsModalOpen(false);
+     return true;
+   }
+   if (current.isPermissionCenterOpen) {
+     setIsPermissionCenterOpen(false);
+     return true;
+   }
+   if (current.isInstallModalOpen) {
+     setIsInstallModalOpen(false);
+     return true;
+   }
+   if (current.activeIncomingCall) {
+     setActiveIncomingCall(null);
+     return true;
+   }
+   if (current.activeTab !== 'dialer') {
+     setActiveTab('dialer');
+     return true;
+   }
+
+   const now = Date.now();
+   if (now - lastBackPressTimeRef.current < 2000) {
+     return false;
+   }
+   lastBackPressTimeRef.current = now;
+   showToast('Press back again to exit', 'info');
+   return true;
+ };
+
+ useEffect(() => {
+   window.history.pushState({ app: 'vigilshield' }, '', window.location.href);
+
+   const onPopState = () => {
+     const handled = handleAppBack();
+     if (handled) {
+       window.history.pushState({ app: 'vigilshield' }, '', window.location.href);
+     } else {
+       window.history.back();
+     }
+   };
+
+   const onAndroidBack = () => {
+     return handleAppBack();
+   };
+
+   window.addEventListener('popstate', onPopState);
+   (window as any).__onAndroidBackPressed = onAndroidBack;
+   window.addEventListener('android_back_pressed', onAndroidBack);
+
+   return () => {
+     window.removeEventListener('popstate', onPopState);
+     delete (window as any).__onAndroidBackPressed;
+     window.removeEventListener('android_back_pressed', onAndroidBack);
+   };
+ }, []);
+
  useEffect(()=>{const handler=(e:any)=>{e.preventDefault();setDeferredPrompt(e)};window.addEventListener('beforeinstallprompt',handler);return()=>window.removeEventListener('beforeinstallprompt',handler)},[]);
  useEffect(()=>{const unsub=telecomBridge.onDialIntent(n=>{setActiveTab('dialer');setDialerInitialNumber(n)});return unsub},[]);
  useEffect(()=>{const handleCallsUpdate=(e:any)=>{if(e.detail&&Array.isArray(e.detail)){setCalls(e.detail)}else{const fresh=safeParse<CallLogItem[]>('vigilshield_calls',[]);if(fresh?.length)setCalls(fresh)}};window.addEventListener('vigilshield_calls_updated',handleCallsUpdate as EventListener);externalDirectoryService.batchEnrichLocalCalls();return()=>window.removeEventListener('vigilshield_calls_updated',handleCallsUpdate as EventListener)},[]);
@@ -69,7 +174,45 @@ export default function App(){
  const handleClearAllData=()=>{['vigilshield_settings','vigilshield_rules','vigilshield_whitelist','vigilshield_contacts','vigilshield_calls','vigilshield_timeline','vigilshield_autocancel','vigilshield_privacy_settings'].forEach(k=>localStorage.removeItem(k));setSettings(INITIAL_SETTINGS);setRules(BASELINE_RULES);setWhitelist([]);setContacts([]);setCalls([]);setTimelineEvents([]);setAutoCancelEnabled(true);showToast('Local app state reset','success')};
  const handleImportAllData=(data:any)=>{if(data?.settings)setSettings(data.settings);if(Array.isArray(data?.rules))setRules(data.rules);if(Array.isArray(data?.whitelist))setWhitelist(data.whitelist);if(Array.isArray(data?.contacts))setContacts(data.contacts);if(Array.isArray(data?.calls))setCalls(data.calls);if(Array.isArray(data?.timelineEvents))setTimelineEvents(data.timelineEvents);showToast('Backup restored','success')};
  const handleTriggerInstall=async()=>{if(deferredPrompt){await deferredPrompt.prompt();setDeferredPrompt(null);return}showToast('Use your browser menu to install the app','info')};
- const handleEndCall=(recordingItem?: CallRecordingItem | null, callDuration?: number)=>{if(activeCallSession?.id)telecomBridge.disconnectCall(activeCallSession.id);if(activeCallSession){const dur=callDuration||activeCallSession.durationSeconds||1;const newCallLog:CallLogItem={id:`call-${Date.now()}`,number:activeCallSession.number,callerName:activeCallSession.name||activeCallSession.number,type:'OUTGOING',timestamp:Date.now(),durationSeconds:dur,isSpam:Boolean(activeCallSession.isSpam),spamCategory:activeCallSession.spamCategory,riskScore:activeCallSession.riskScore||0,riskLevel:activeCallSession.riskLevel||'SAFE',reportsCount:0,recordingUri:recordingItem?recordingItem.dataUri:undefined};setCalls(p=>[newCallLog,...p]);if(recordingItem){showToast(`Saved to ${recordingItem.folderPath}${recordingItem.fileName}`,'success');}}setActiveCallSession(null)};
+ const handleEndCall=(recordingItem?: CallRecordingItem | null, callDuration?: number, callerNotes?: string)=>{
+   if(activeCallSession?.id)telecomBridge.disconnectCall(activeCallSession.id);
+   if(activeCallSession){
+     const dur=callDuration||activeCallSession.durationSeconds||1;
+     const note=callerNotes||activeCallSession.notes;
+     const newCallLog:CallLogItem={
+       id:`call-${Date.now()}`,
+       number:activeCallSession.number,
+       callerName:activeCallSession.name||activeCallSession.number,
+       type:'OUTGOING',
+       timestamp:Date.now(),
+       durationSeconds:dur,
+       isSpam:Boolean(activeCallSession.isSpam),
+       spamCategory:activeCallSession.spamCategory,
+       riskScore:activeCallSession.riskScore||0,
+       riskLevel:activeCallSession.riskLevel||'SAFE',
+       reportsCount:0,
+       recordingUri:recordingItem?recordingItem.dataUri:undefined,
+       notes:note
+     };
+     setCalls(p=>[newCallLog,...p]);
+     if(recordingItem){
+       showToast(`Saved to ${recordingItem.folderPath}${recordingItem.fileName}`,'success');
+     }
+     setPostCallState({
+       isOpen:true,
+       callId:activeCallSession.id,
+       number:activeCallSession.number,
+       name:activeCallSession.name,
+       durationSeconds:dur,
+       durationStr:`${dur}s`,
+       sim:activeCallSession.sim,
+       isSpam:activeCallSession.isSpam,
+       wasSpam:activeCallSession.isSpam,
+       notes:note
+     });
+   }
+   setActiveCallSession(null);
+ };
  const openCaller=(call:CallLogItem)=>{setSelectedProfile(handleLookupProfile(call.number));setSelectedCall(call);setIsCallerModalOpen(true)};
 
  return <div className="min-h-screen bg-[#070b10] text-white">
@@ -93,6 +236,16 @@ export default function App(){
   <SystemDiagnosticsModal isOpen={isDiagnosticsModalOpen} onClose={()=>setIsDiagnosticsModalOpen(false)} contacts={contacts} calls={calls} rules={rules} whitelist={whitelist} settings={settings} timelineEvents={timelineEvents} onResetToCleanState={handleClearAllData} onImportAllData={handleImportAllData} isDefaultDialer={isDefaultDialer} onRequestDefaultDialer={handleRequestDefaultDialer}/>
   <PermissionCenterModal isOpen={isPermissionCenterOpen} onClose={()=>setIsPermissionCenterOpen(false)} settings={settings} onUpdateSettings={setSettings} isDefaultDialer={isDefaultDialer} onRequestDefaultDialer={handleRequestDefaultDialer} onSyncContacts={handleSyncDeviceData}/>
   <InstallApkModal isOpen={isInstallModalOpen} onClose={()=>setIsInstallModalOpen(false)} deferredPrompt={deferredPrompt} onTriggerInstall={handleTriggerInstall}/>
-  {toastMessage&&<div className="fixed bottom-6 left-1/2 z-[100] -translate-x-1/2 rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-xs font-semibold shadow-2xl">{toastMessage.text}</div>}
+  {toastMessage && (
+    <div className={`fixed bottom-24 sm:bottom-8 left-1/2 z-[100] -translate-x-1/2 max-w-[90vw] rounded-2xl border px-4 py-3 text-xs font-bold shadow-2xl backdrop-blur-md flex items-center space-x-2 transition-all duration-300 animate-in fade-in slide-in-from-bottom-2 ${
+      toastMessage.type === 'error'
+        ? 'bg-rose-950/95 border-rose-500/50 text-rose-200'
+        : toastMessage.type === 'success'
+        ? 'bg-emerald-950/95 border-emerald-500/50 text-emerald-200'
+        : 'bg-slate-900/95 border-slate-700/80 text-white'
+    }`}>
+      <span>{toastMessage.text}</span>
+    </div>
+  )}
  </div>;
 }
