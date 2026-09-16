@@ -24,9 +24,12 @@ object CallNotificationHelper {
         if (manager.getNotificationChannel(SECURITY_CHANNEL_ID) == null) manager.createNotificationChannel(NotificationChannel(SECURITY_CHANNEL_ID, "Call security", NotificationManager.IMPORTANCE_HIGH).apply { description = "Local caller safety warnings"; enableVibration(false); setSound(null, null); lightColor = Color.RED })
     }
 
-    private fun privacyMode(context: Context): Boolean = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("privacy_mode", true)
-
-    private fun detailedNotifications(context: Context): Boolean = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("notification_caller_details", false)
+    private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private fun privacyMode(context: Context): Boolean = prefs(context).getBoolean("privacy_mode", true)
+    private fun detailedNotifications(context: Context): Boolean = prefs(context).getBoolean("notification_caller_details", false)
+    private fun notificationsEnabled(context: Context): Boolean = prefs(context).getBoolean("security_notifications", true)
+    private fun callAlertsEnabled(context: Context): Boolean = prefs(context).getBoolean("security_call_alerts", true)
+    private fun privateLockScreen(context: Context): Boolean = prefs(context).getBoolean("security_privacy_lock_screen", true) || privacyMode(context)
 
     private fun identity(context: Context, name: String, number: String): String {
         if (privacyMode(context)) return "Private caller"
@@ -40,12 +43,18 @@ object CallNotificationHelper {
         return if (detailedNotifications(context) && number.isNotBlank() && who != number) "$who · $number" else who
     }
 
+    private fun applyPrivacy(builder: NotificationCompat.Builder, context: Context): NotificationCompat.Builder {
+        if (privateLockScreen(context)) builder.setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+        return builder
+    }
+
     fun showMissedCall(context: Context, name: String, number: String) {
+        if (!callAlertsEnabled(context)) return
         ensureChannel(context)
         val openIntent = PendingIntent.getActivity(context, MISSED_ID, Intent(context, MainActivity::class.java).apply { putExtra("open_tab", "recents"); putExtra("search_number", number) }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val display = identityWithNumber(context, name, number)
         val detail = if (privacyMode(context)) "You missed a call. Tap to open Recents." else "You missed a call from $display. Tap to open Recents."
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val notification = applyPrivacy(NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield)
             .setContentTitle("Missed call")
             .setContentText(display)
@@ -53,37 +62,38 @@ object CallNotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(openIntent)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(detail))
-            .build()
+            .setStyle(NotificationCompat.BigTextStyle().bigText(detail)), context).build()
         context.getSystemService(NotificationManager::class.java).notify(MISSED_ID, notification)
     }
 
     fun showIncomingCall(context: Context, callId: String, name: String, number: String) {
+        if (!callAlertsEnabled(context)) return
         ensureChannel(context)
         val openIntent = PendingIntent.getActivity(context, callId.hashCode(), Intent(context, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val answer = PendingIntent.getBroadcast(context, callId.hashCode() + 1, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_ANSWER).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val decline = PendingIntent.getBroadcast(context, callId.hashCode() + 2, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_DECLINE).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val display = identity(context, name, number)
         val person = Person.Builder().setName(display).setImportant(true).build()
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = applyPrivacy(NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield)
             .setContentIntent(openIntent)
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setPriority(NotificationCompat.PRIORITY_MAX), context)
         if (Build.VERSION.SDK_INT >= 31) builder.setStyle(NotificationCompat.CallStyle.forIncomingCall(person, decline, answer))
         else builder.setContentTitle(display).setContentText("Incoming call").addAction(0, "Decline", decline).addAction(0, "Answer", answer)
         context.getSystemService(NotificationManager::class.java).notify(callId.hashCode(), builder.build())
     }
 
     fun showSecurityWarning(context: Context, name: String, risk: String, spoofRisk: String, explanation: String) {
+        if (!notificationsEnabled(context)) return
         ensureChannel(context)
         val title = when (risk) { "HIGH_RISK" -> "High-risk call pattern detected"; "SUSPICIOUS" -> "Suspicious call pattern"; else -> "Caller safety warning" }
         val identityText = if (privacyMode(context)) "Private caller" else identity(context, name, "")
         val text = if (privacyMode(context)) "Review this call before sharing sensitive information" else "$identityText · Spoof risk: $spoofRisk"
         val openIntent = PendingIntent.getActivity(context, (name + risk).hashCode(), Intent(context, MainActivity::class.java).putExtra("open_tab", "recents"), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val body = if (privacyMode(context)) "$explanation Caller ID is not proof of identity. Never share OTPs, PINs or passwords." else "$explanation Caller ID is not proof of identity. Never share OTPs, PINs or passwords."
-        val notification = NotificationCompat.Builder(context, SECURITY_CHANNEL_ID)
+        val body = "$explanation Caller ID is not proof of identity. Never share OTPs, PINs or passwords."
+        val notification = applyPrivacy(NotificationCompat.Builder(context, SECURITY_CHANNEL_ID)
             .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield)
             .setContentTitle(title)
             .setContentText(text)
@@ -91,19 +101,19 @@ object CallNotificationHelper {
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .setContentIntent(openIntent)
-            .build()
+            .setContentIntent(openIntent), context).build()
         context.getSystemService(NotificationManager::class.java).notify((name + risk + spoofRisk).hashCode(), notification)
     }
 
     fun showRepeatedCallAttention(context: Context, name: String, number: String) {
+        if (!notificationsEnabled(context)) return
         ensureChannel(context)
         val identityText = if (privacyMode(context)) "The same caller" else identity(context, name, number)
         val detail = if (privacyMode(context)) "" else if (detailedNotifications(context) && number.isNotBlank()) " · $number" else ""
         val openIntent = PendingIntent.getActivity(context, REPEATED_ID, Intent(context, MainActivity::class.java).putExtra("open_tab", "recents").putExtra("search_number", number), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val text = if (privacyMode(context)) "A caller contacted you repeatedly within 10 minutes" else "$identityText$detail called again within 10 minutes"
         val body = if (privacyMode(context)) "A caller called again within 10 minutes. If you were expecting the call, review it from Recents." else "$identityText called again within 10 minutes. If you were expecting this call, you can return it from Recents. If not, review the caller before calling back."
-        val notification = NotificationCompat.Builder(context, SECURITY_CHANNEL_ID)
+        val notification = applyPrivacy(NotificationCompat.Builder(context, SECURITY_CHANNEL_ID)
             .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield)
             .setContentTitle("Repeated call needs your attention")
             .setContentText(text)
@@ -111,8 +121,7 @@ object CallNotificationHelper {
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .setContentIntent(openIntent)
-            .build()
+            .setContentIntent(openIntent), context).build()
         context.getSystemService(NotificationManager::class.java).notify(REPEATED_ID, notification)
     }
 
