@@ -13,12 +13,20 @@ class ProductionCallScreeningService : CallScreeningService() {
     override fun onScreenCall(details: Call.Details) {
         val number = details.handle?.schemeSpecificPart.orEmpty()
         val normalized = normalize(number)
+        val prefs = getSharedPreferences("vigilshield", Context.MODE_PRIVATE)
+
+        // The web setting is mirrored into native preferences. When protection is
+        // disabled, the screening service must become a transparent pass-through.
+        if (!prefs.getBoolean("masterEnabled", true)) {
+            respondToCall(details, allowResponse())
+            return
+        }
+
         if (details.callDirection != Call.Details.DIRECTION_INCOMING) {
             respondToCall(details, allowResponse())
             return
         }
 
-        val prefs = getSharedPreferences("vigilshield", Context.MODE_PRIVATE)
         val emergencyContact = EmergencySafetyPolicy.isEmergencyContact(applicationContext, number)
         val emergencyMode = EmergencySafetyPolicy.emergencyModeEnabled(applicationContext)
         val deviceContact = isDeviceContact(number)
@@ -64,7 +72,6 @@ class ProductionCallScreeningService : CallScreeningService() {
         val matched = findRule(rules, normalized)
         val drivingMode = EmergencySafetyPolicy.drivingModeEnabled(applicationContext)
 
-        // Explicit block rules remain blocking. Smart quieting can soften them only when requested.
         if (matched != null) {
             val rejectHighRisk = prefs.getBoolean("smart_spam_reject_high_risk", false)
             val quietSpam = prefs.getBoolean("smart_spam_quiet_enabled", false)
