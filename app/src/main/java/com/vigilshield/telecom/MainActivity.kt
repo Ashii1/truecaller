@@ -93,6 +93,7 @@ class MainActivity : AppCompatActivity() {
                 pageFinished = true
                 bridge.dispatchWebEvent("ROLE_STATUS_CHANGED", bridge.roleStatus())
                 bridge.dispatchWebEvent("PERMISSIONS_CHANGED", bridge.permissionStatus())
+                syncWebSettingsToNative()
                 handleDialIntent(intent)
                 scheduleReactMountCheck(view)
             }
@@ -128,6 +129,27 @@ class MainActivity : AppCompatActivity() {
         Manifest.permission.ANSWER_PHONE_CALLS
     ).joinToString("|") { "$it:${ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED}" }
 
+    /** Mirrors the React protection settings into native SharedPreferences so the
+     * background CallScreeningService follows the same enable/disable state. */
+    private fun syncWebSettingsToNative() {
+        if (!::webView.isInitialized || !::bridge.isInitialized) return
+        webView.evaluateJavascript("localStorage.getItem('vigilshield_settings')") { raw ->
+            runCatching {
+                val value = raw?.trim()?.let { if (it == "null") null else org.json.JSONTokener(it).nextValue() as? String } ?: return@runCatching
+                val settings = org.json.JSONObject(value)
+                bridge.setSecuritySetting("masterEnabled", settings.optBoolean("masterEnabled", true))
+                bridge.setSecuritySetting("phase2_risk_detection_enabled", settings.optBoolean("scamShieldEnabled", true))
+                bridge.setSecuritySetting("phase2_financial_warnings_enabled", settings.optBoolean("financialWarningsEnabled", true))
+                bridge.setSecuritySetting("phase2_spoof_warnings_enabled", settings.optBoolean("spoofWarningsEnabled", true))
+                bridge.setSecuritySetting("smart_spam_reject_high_risk", settings.optBoolean("autoCancelSpamCalls", false))
+                bridge.setSecuritySetting("block_private_hidden", settings.optBoolean("blockPrivateHidden", false))
+                bridge.setSecuritySetting("block_international", settings.optBoolean("blockInternational", false))
+                bridge.setSecuritySetting("unknown_caller_silence", settings.optBoolean("unknownCallerSilence", false))
+                bridge.setSecuritySetting("unknown_caller_reject", settings.optBoolean("unknownCallerReject", false))
+            }
+        }
+    }
+
     private fun scheduleReactMountCheck(view: WebView?) {
         if (view == null || isFinishing || isDestroyed || uiReportedReady) return
         startupCheckAttempts = 0
@@ -155,6 +177,7 @@ class MainActivity : AppCompatActivity() {
                 mainHandler.removeCallbacksAndMessages("react-startup")
                 hideLoading()
                 hideError()
+                syncWebSettingsToNative()
             } else if (startupCheckAttempts >= 10) {
                 showError("VigilShield UI did not finish starting.\n\n${lastConsoleError ?: "The interface took too long to mount."}")
             }
@@ -242,11 +265,10 @@ class MainActivity : AppCompatActivity() {
         if (::bridge.isInitialized) {
             bridge.dispatchWebEvent("ROLE_STATUS_CHANGED", bridge.roleStatus())
             bridge.dispatchWebEvent("PERMISSIONS_CHANGED", bridge.permissionStatus())
+            syncWebSettingsToNative()
             val current = permissionSignature()
             if (lastPermissionSignature != current) {
                 lastPermissionSignature = current
-                // Do not reload the WebView when a permission changes. Reloading here
-                // caused a visible white startup screen and could interrupt the UI.
             }
         }
     }
@@ -275,7 +297,6 @@ class MainActivity : AppCompatActivity() {
             lastPermissionSignature = permissionSignature()
             bridge.dispatchWebEvent("PERMISSIONS_CHANGED", bridge.permissionStatus())
             if (bridge.isDefaultDialer()) requestCallScreeningRoleOnce()
-            // Keep the current React screen alive; it already receives the live event.
         }
     }
 
