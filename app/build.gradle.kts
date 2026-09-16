@@ -23,8 +23,8 @@ android {
         minSdk = 29
         targetSdk = 35
         // Every release must increase this value so Android accepts it as an update.
-        versionCode = 5
-        versionName = "1.4"
+        versionCode = 6
+        versionName = "1.5"
     }
 
     if (hasPersistentReleaseKey) {
