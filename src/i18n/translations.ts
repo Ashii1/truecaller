@@ -134,6 +134,7 @@ export const TRANSLATIONS = {
     import_contacts: 'Import',
     import: 'Import',
     add_contact: 'Add',
+    add_to_contacts: 'Add to Contacts',
     add: 'Add',
     search_contacts_placeholder: 'Search contacts',
     search_contacts: 'Search contacts',
@@ -287,11 +288,14 @@ export const TRANSLATIONS = {
     robocall: 'Robocall',
 
     // Navigation Aliases & Core Action Labels
-    nav_phone: 'Phone',
+    nav_phone: 'Keypad',
     nav_recents: 'Recents',
     nav_contacts: 'Contacts',
     nav_protection: 'Protection',
     nav_assistant: 'Assistant',
+    notifications: 'Notifications',
+    notification_panel_title: 'Notification Panel',
+    notification_panel_empty: 'No new notifications',
 
     // Keypad & Dialer
     dialer_keypad: 'Keypad',
@@ -453,6 +457,7 @@ export const TRANSLATIONS = {
     import_contacts: 'இறக்குமதி',
     import: 'இறக்குமதி',
     add_contact: 'சேர்',
+    add_to_contacts: 'தொடர்புகளில் சேர்',
     add: 'சேர்',
     search_contacts_placeholder: 'தொடர்புகளைத் தேடுக',
     search_contacts: 'தொடர்புகளைத் தேடுக',
@@ -606,11 +611,14 @@ export const TRANSLATIONS = {
     robocall: 'தானியங்கி அழைப்பு',
 
     // Navigation Aliases & Core Action Labels
-    nav_phone: 'அழைப்பாளர்',
+    nav_phone: 'விசைப்பலகை',
     nav_recents: 'அழைப்புகள்',
     nav_contacts: 'தொடர்புகள்',
     nav_protection: 'பாதுகாப்பு',
     nav_assistant: 'உதவியாளர்',
+    notifications: 'அறிவிப்புகள்',
+    notification_panel_title: 'அறிவிப்பு பலகம்',
+    notification_panel_empty: 'புதிய அறிவிப்புகள் இல்லை',
 
     // Keypad & Dialer
     dialer_keypad: 'விசைப்பலகை',

@@ -12,6 +12,21 @@ export type TrustedCategory = 'FAMILY' | 'FRIENDS' | 'WORK' | 'DOCTOR' | 'SCHOOL
 export type TabId = 'dialer' | 'recents' | 'contacts' | 'protection' | 'assistant' | 'home' | 'calls' | 'intelligence' | 'search' | 'profile';
 export interface ContactItem { id:string; name:string; number:string; avatarColor?:string; category:'FAVORITE'|'FAMILY'|'WORK'|'BUSINESS'|'GENERAL'|'PERSONAL'; isFavorite?:boolean; isVerifiedBusiness?:boolean; businessCategory?:string; website?:string; notes?:string; trusted:boolean; totalCallsCount?:number; lastCallTimestamp?:number; }
 export interface ActiveCallSession { id:string; number:string; name:string; isSpam:boolean; spamCategory?:SpamCategory; riskScore:number; riskLevel:RiskLevel; durationSeconds:number; status:'DIALING'|'CONNECTED'|'MUTED'|'HELD'; isMuted:boolean; isSpeaker:boolean; isHeld:boolean; isKeypadOpen:boolean; selectedSim?:'SIM 1 (Personal)'|'SIM 2 (Work)'; sim?:string; isVerifiedBusiness?:boolean; riskWarningUpdated?:boolean; warningDismissed?:boolean; notes?:string; }
+export interface CallRecordingItem {
+  id: string;
+  callId?: string;
+  number: string;
+  callerName?: string;
+  timestamp: number;
+  durationSeconds: number;
+  folderPath: string; // e.g. "Internal Storage/Recordings/VigilShield/"
+  fileName: string;   // e.g. "REC_9876543210_20260916_1224.wav"
+  fileSizeBytes: number;
+  mimeType: string;
+  dataUri: string;
+  quality: string;    // "48 kHz Studio Lossless"
+}
+
 export interface PostCallState { isOpen:boolean; callId:string; number:string; name:string; durationSeconds:number; durationStr?:string; sim?:string; isSpam?:boolean; wasSpam?:boolean; alreadyClassified?:boolean; }
 export interface SecurityTimelineEvent { id:string; timestamp:number; timeStr:string; title:string; description:string; severity:'INFO'|'WARNING'|'BLOCK'|'SAFE'; matchedNumber?:string; }
 export interface CallLogItem { id:string; number:string; callerName:string; type:CallDirection; timestamp:number; durationSeconds:number; isSpam:boolean; spamCategory?:SpamCategory; spamReason?:string; riskScore:number; riskLevel?:RiskLevel; classification?:CallClassification; confidence?:number; identificationSource?:string; userAction?:'NONE'|'BLOCKED'|'MARKED_SAFE'|'DISPUTED'|'REPORTED'; aiSummary?:string; riskSignals?:string[]; rawSource?:'device_os'|'imported_file'|'web_contact_picker'|'test_pipeline'; reportsCount:number; carrier?:string; location?:string; isVerifiedBusiness?:boolean; isContact?:boolean; labelVerdict?:'SPAM'|'NOT_SPAM'; repeatCount?:number; explainReason?:string; notes?:string; recordingUri?:string; }

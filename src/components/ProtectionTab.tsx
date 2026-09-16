@@ -177,20 +177,20 @@ export default function ProtectionTab({
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-4 space-y-5">
+    <div className="max-w-2xl mx-auto px-3 py-2 space-y-4">
       {/* 1. SMART CALL FIREWALL STATUS HERO */}
-      <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-slate-900 via-slate-850 to-indigo-950/40 border border-slate-700/80 shadow-2xl relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center space-x-3.5">
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border shadow-lg ${
+      <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-850 to-indigo-950/40 border border-slate-700/80 shadow-xl relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center space-x-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-md ${
               settings.masterEnabled
-                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-emerald-950/40 animate-pulse'
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-emerald-950/40'
                 : 'bg-rose-500/20 text-rose-400 border-rose-500/40'
             }`}>
               {settings.masterEnabled ? (
-                <ShieldCheck className="w-8 h-8" />
+                <ShieldCheck className="w-5 h-5" />
               ) : (
-                <ShieldAlert className="w-8 h-8" />
+                <ShieldAlert className="w-5 h-5" />
               )}
             </div>
 

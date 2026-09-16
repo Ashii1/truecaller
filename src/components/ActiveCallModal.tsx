@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   PhoneOff, 
   Mic, 
@@ -16,17 +16,19 @@ import {
   Radio, 
   Check, 
   X,
-  AlertCircle
+  AlertCircle,
+  Folder
 } from 'lucide-react';
-import { ActiveCallSession, TruecallerDirectoryProfile } from '../types';
+import { ActiveCallSession, TruecallerDirectoryProfile, CallRecordingItem } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
-import { playDtmfTone, triggerHapticFeedback } from '../utils/audioAlerts';
+import { playDtmfTone, triggerHapticFeedback, playNotificationChime } from '../utils/audioAlerts';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 import { useI18n } from '../i18n/LanguageContext';
+import { callRecordingService, DEFAULT_RECORDINGS_FOLDER } from '../services/callRecordingService';
 
 interface ActiveCallModalProps {
   session: ActiveCallSession | null;
-  onEndCall: () => void;
+  onEndCall: (recordingItem?: CallRecordingItem | null, callDuration?: number) => void;
   lookupProfile: (num: string) => TruecallerDirectoryProfile;
   onAddCall?: (number: string) => void;
 }
@@ -43,11 +45,16 @@ export default function ActiveCallModal({
   const [isSpeaker, setIsSpeaker] = useState(session?.isSpeaker || false);
   const [isOnHold, setIsOnHold] = useState(session?.isHeld || false);
   const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordingWarningPlayed, setRecordingWarningPlayed] = useState(false);
+  const [savedNotice, setSavedNotice] = useState<string | null>(null);
   const [showInCallKeypad, setShowInCallKeypad] = useState(false);
   const [keypadDigits, setKeypadDigits] = useState('');
   const [showAddCallPrompt, setShowAddCallPrompt] = useState(false);
   const [secondCallInput, setSecondCallInput] = useState('');
+
+  const durationRef = useRef(duration);
+  durationRef.current = duration;
 
   // Call timer increment
   useEffect(() => {
@@ -57,6 +64,18 @@ export default function ActiveCallModal({
     }, 1000);
     return () => clearInterval(interval);
   }, [session]);
+
+  // Recording timer increment
+  useEffect(() => {
+    if (!isRecording) {
+      setRecordingDuration(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setRecordingDuration((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isRecording]);
 
   if (!session) return null;
 
@@ -118,14 +137,37 @@ export default function ActiveCallModal({
     setSecondCallInput('');
   };
 
-  const handleToggleRecording = () => {
+  const handleToggleRecording = async () => {
     if (!isRecording) {
       setIsRecording(true);
       setRecordingWarningPlayed(true);
-      setTimeout(() => setRecordingWarningPlayed(false), 4000);
+      playNotificationChime();
+      triggerHapticFeedback(40);
+      await callRecordingService.startRecording(
+        session.number,
+        session.name || 'Unknown Caller',
+        session.id
+      );
+      setTimeout(() => setRecordingWarningPlayed(false), 3500);
     } else {
       setIsRecording(false);
+      triggerHapticFeedback(30);
+      const savedRec = await callRecordingService.stopRecording();
+      if (savedRec) {
+        setSavedNotice(savedRec.fileName);
+        playNotificationChime();
+        setTimeout(() => setSavedNotice(null), 4000);
+      }
     }
+  };
+
+  const handleEndCallAction = async () => {
+    let recordingItem: CallRecordingItem | null = null;
+    if (isRecording) {
+      setIsRecording(false);
+      recordingItem = await callRecordingService.stopRecording();
+    }
+    onEndCall(recordingItem, durationRef.current);
   };
 
   const callerProfile = lookupProfile(session.number);
@@ -177,20 +219,47 @@ export default function ActiveCallModal({
             </span>
             <span className="flex items-center space-x-1">
               <Radio className="w-3 h-3" />
-              <span>HD Voice Active</span>
+              <span>HD Voice Active (48 kHz)</span>
             </span>
           </div>
           <div className="text-slate-400 text-[11px] flex items-center space-x-1 pt-0.5">
             <Sparkles className="w-3 h-3 text-indigo-400 shrink-0" />
-            <span>AI Real-time Firewall: No phishing signals detected</span>
+            <span>AI Real-time Firewall: Verified Clean Stream</span>
           </div>
         </div>
 
-        {/* Call Recording Notice */}
+        {/* Real-time Call Recording Active Banner */}
+        {isRecording && (
+          <div className="p-2.5 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-semibold flex items-center justify-between animate-pulse">
+            <div className="flex items-center space-x-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
+              <span className="font-extrabold text-rose-200">
+                REC {formatTimer(recordingDuration)}
+              </span>
+              <span className="text-[10px] bg-rose-500/20 px-1.5 py-0.5 rounded text-rose-300">
+                48 kHz Lossless
+              </span>
+            </div>
+            <div className="flex items-center space-x-1 text-[10px] text-slate-400 font-mono">
+              <Folder className="w-3 h-3 text-amber-400/80" />
+              <span>VigilShield/</span>
+            </div>
+          </div>
+        )}
+
+        {/* Saved Recording Notification */}
+        {savedNotice && (
+          <div className="p-2 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-xs text-emerald-300 font-semibold flex items-center justify-center space-x-1.5">
+            <Check className="w-4 h-4 text-emerald-400" />
+            <span className="truncate">Saved to device storage: {savedNotice}</span>
+          </div>
+        )}
+
+        {/* Call Recording Compliance Notice */}
         {recordingWarningPlayed && (
           <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-500/30 text-xs text-amber-300 font-semibold animate-pulse flex items-center justify-center space-x-1.5">
             <AlertCircle className="w-4 h-4" />
-            <span>Compliance: Audio recording announcement played</span>
+            <span>Audio recording active · 48 kHz High Fidelity</span>
           </div>
         )}
 
@@ -223,26 +292,29 @@ export default function ActiveCallModal({
           </div>
         )}
 
-        {/* Add Call Prompt Dialog */}
+        {/* Add Call (Conference) Popover */}
         {showAddCallPrompt && (
-          <div className="p-3 rounded-2xl bg-slate-850 border border-slate-700 space-y-2 text-left animate-in fade-in">
+          <div className="p-3 rounded-2xl bg-slate-850 border border-slate-700 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-200">Add Second Call (Conference / Hold)</span>
-              <button onClick={() => setShowAddCallPrompt(false)} className="text-slate-400 hover:text-white">
+              <span className="text-xs font-bold text-slate-300">Add Second Call</span>
+              <button
+                onClick={() => setShowAddCallPrompt(false)}
+                className="p-0.5 text-slate-400 hover:text-white"
+              >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
-            <div className="flex gap-1.5">
+            <div className="flex space-x-2">
               <input
                 type="tel"
-                placeholder="Enter phone number..."
                 value={secondCallInput}
                 onChange={(e) => setSecondCallInput(e.target.value)}
-                className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                placeholder="Enter phone number"
+                className="flex-1 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
               />
               <button
                 onClick={handleExecuteAddCall}
-                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition"
+                className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white"
               >
                 Call
               </button>
@@ -250,8 +322,8 @@ export default function ActiveCallModal({
           </div>
         )}
 
-        {/* In-Call Controls 6-Button Grid */}
-        <div className="grid grid-cols-3 gap-3 pt-1">
+        {/* In-Call Action Grid */}
+        <div className="grid grid-cols-3 gap-3 pt-2">
           {/* Mute */}
           <button
             onClick={handleToggleMute}
@@ -262,15 +334,15 @@ export default function ActiveCallModal({
             }`}
           >
             {isMuted ? <MicOff className="w-5 h-5 text-rose-400" /> : <Mic className="w-5 h-5" />}
-            <span className="text-[10px] font-semibold mt-1">{isMuted ? t('call_muted') : t('mute')}</span>
+            <span className="text-[10px] font-semibold mt-1">{isMuted ? t('unmute') : t('mute')}</span>
           </button>
 
           {/* Keypad */}
           <button
-            onClick={() => setShowInCallKeypad(!showInCallKeypad)}
+            onClick={() => setShowInCallKeypad((prev) => !prev)}
             className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition active:scale-95 ${
               showInCallKeypad
-                ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300'
+                ? 'bg-indigo-600/30 border-indigo-500 text-indigo-300'
                 : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
             }`}
           >
@@ -283,18 +355,18 @@ export default function ActiveCallModal({
             onClick={handleToggleSpeaker}
             className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition active:scale-95 ${
               isSpeaker
-                ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300'
+                ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
                 : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
             }`}
           >
-            {isSpeaker ? <Volume2 className="w-5 h-5 text-indigo-400" /> : <VolumeX className="w-5 h-5" />}
-            <span className="text-[10px] font-semibold mt-1">{isSpeaker ? t('speaker') : t('speaker')}</span>
+            {isSpeaker ? <Volume2 className="w-5 h-5 text-emerald-400" /> : <VolumeX className="w-5 h-5" />}
+            <span className="text-[10px] font-semibold mt-1">{isSpeaker ? t('earpiece') : t('speaker')}</span>
           </button>
 
           {/* Add Call */}
           <button
-            onClick={() => setShowAddCallPrompt(!showAddCallPrompt)}
-            className="flex flex-col items-center justify-center p-3 rounded-2xl bg-slate-800/80 border border-slate-700 text-slate-300 hover:bg-slate-800 transition active:scale-95"
+            onClick={() => setShowAddCallPrompt((prev) => !prev)}
+            className="flex flex-col items-center justify-center p-3 rounded-2xl border bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800 transition active:scale-95"
           >
             <UserPlus className="w-5 h-5" />
             <span className="text-[10px] font-semibold mt-1">{t('add_call')}</span>
@@ -313,17 +385,19 @@ export default function ActiveCallModal({
             <span className="text-[10px] font-semibold mt-1">{isOnHold ? t('unhold') : t('hold')}</span>
           </button>
 
-          {/* Record */}
+          {/* Record - High Quality 48kHz */}
           <button
             onClick={handleToggleRecording}
             className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition active:scale-95 ${
               isRecording
-                ? 'bg-rose-500/20 border-rose-500 text-rose-300 animate-pulse'
+                ? 'bg-rose-500/25 border-rose-500 text-rose-300 ring-2 ring-rose-500/40'
                 : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
             }`}
           >
-            <Disc className={`w-5 h-5 ${isRecording ? 'text-rose-400' : ''}`} />
-            <span className="text-[10px] font-semibold mt-1">{isRecording ? t('recording') : t('record')}</span>
+            <Disc className={`w-5 h-5 ${isRecording ? 'text-rose-400 animate-spin' : ''}`} />
+            <span className="text-[10px] font-semibold mt-1">
+              {isRecording ? t('recording') : t('record')}
+            </span>
           </button>
         </div>
 
@@ -346,7 +420,7 @@ export default function ActiveCallModal({
         {/* Large End Call Button */}
         <div className="pt-2">
           <button
-            onClick={onEndCall}
+            onClick={handleEndCallAction}
             className="w-full py-3.5 rounded-2xl bg-rose-600 hover:bg-rose-500 active:scale-98 text-white font-extrabold text-sm shadow-xl shadow-rose-950/60 transition flex items-center justify-center space-x-2"
           >
             <PhoneOff className="w-5 h-5" />
