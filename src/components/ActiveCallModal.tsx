@@ -22,6 +22,7 @@ import { ActiveCallSession, TruecallerDirectoryProfile } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import { playDtmfTone, triggerHapticFeedback } from '../utils/audioAlerts';
 import { telecomBridge } from '../services/telephony/telecomBridge';
+import { useI18n } from '../i18n/LanguageContext';
 
 interface ActiveCallModalProps {
   session: ActiveCallSession | null;
@@ -36,6 +37,7 @@ export default function ActiveCallModal({
   lookupProfile,
   onAddCall,
 }: ActiveCallModalProps) {
+  const { t } = useI18n();
   const [duration, setDuration] = useState(session?.durationSeconds || 0);
   const [isMuted, setIsMuted] = useState(session?.isMuted || false);
   const [isSpeaker, setIsSpeaker] = useState(session?.isSpeaker || false);
@@ -135,7 +137,7 @@ export default function ActiveCallModal({
         <div className="flex items-center justify-between text-xs text-slate-400">
           <span className="flex items-center space-x-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-semibold text-emerald-400">Call Active</span>
+            <span className="font-semibold text-emerald-400">{t('call_connected')}</span>
           </span>
           <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-medium">
             {session.sim || 'SIM 1'}
@@ -150,7 +152,7 @@ export default function ActiveCallModal({
 
           <div>
             <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center justify-center space-x-1.5">
-              <span>{session.name || 'Unknown Caller'}</span>
+              <span>{session.name || t('unknown_caller')}</span>
               {session.isVerifiedBusiness && (
                 <ShieldCheck className="w-4 h-4 text-blue-400" />
               )}
@@ -260,7 +262,7 @@ export default function ActiveCallModal({
             }`}
           >
             {isMuted ? <MicOff className="w-5 h-5 text-rose-400" /> : <Mic className="w-5 h-5" />}
-            <span className="text-[10px] font-semibold mt-1">{isMuted ? 'Muted' : 'Mute'}</span>
+            <span className="text-[10px] font-semibold mt-1">{isMuted ? t('call_muted') : t('mute')}</span>
           </button>
 
           {/* Keypad */}
@@ -273,7 +275,7 @@ export default function ActiveCallModal({
             }`}
           >
             <Grid className="w-5 h-5" />
-            <span className="text-[10px] font-semibold mt-1">Keypad</span>
+            <span className="text-[10px] font-semibold mt-1">{t('keypad')}</span>
           </button>
 
           {/* Speaker */}
@@ -286,7 +288,7 @@ export default function ActiveCallModal({
             }`}
           >
             {isSpeaker ? <Volume2 className="w-5 h-5 text-indigo-400" /> : <VolumeX className="w-5 h-5" />}
-            <span className="text-[10px] font-semibold mt-1">{isSpeaker ? 'Speaker' : 'Earpiece'}</span>
+            <span className="text-[10px] font-semibold mt-1">{isSpeaker ? t('speaker') : t('speaker')}</span>
           </button>
 
           {/* Add Call */}
@@ -295,7 +297,7 @@ export default function ActiveCallModal({
             className="flex flex-col items-center justify-center p-3 rounded-2xl bg-slate-800/80 border border-slate-700 text-slate-300 hover:bg-slate-800 transition active:scale-95"
           >
             <UserPlus className="w-5 h-5" />
-            <span className="text-[10px] font-semibold mt-1">Add Call</span>
+            <span className="text-[10px] font-semibold mt-1">{t('add_call')}</span>
           </button>
 
           {/* Hold */}
@@ -308,7 +310,7 @@ export default function ActiveCallModal({
             }`}
           >
             {isOnHold ? <Play className="w-5 h-5 text-amber-400" /> : <Pause className="w-5 h-5" />}
-            <span className="text-[10px] font-semibold mt-1">{isOnHold ? 'Resume' : 'Hold'}</span>
+            <span className="text-[10px] font-semibold mt-1">{isOnHold ? t('unhold') : t('hold')}</span>
           </button>
 
           {/* Record */}
@@ -321,7 +323,7 @@ export default function ActiveCallModal({
             }`}
           >
             <Disc className={`w-5 h-5 ${isRecording ? 'text-rose-400' : ''}`} />
-            <span className="text-[10px] font-semibold mt-1">{isRecording ? 'Recording' : 'Record'}</span>
+            <span className="text-[10px] font-semibold mt-1">{isRecording ? t('recording') : t('record')}</span>
           </button>
         </div>
 
@@ -348,7 +350,7 @@ export default function ActiveCallModal({
             className="w-full py-3.5 rounded-2xl bg-rose-600 hover:bg-rose-500 active:scale-98 text-white font-extrabold text-sm shadow-xl shadow-rose-950/60 transition flex items-center justify-center space-x-2"
           >
             <PhoneOff className="w-5 h-5" />
-            <span>End Call</span>
+            <span>{t('end_call')}</span>
           </button>
         </div>
       </div>

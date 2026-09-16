@@ -2,6 +2,7 @@ import {StrictMode, Component, type ErrorInfo, type ReactNode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import ThemeBootstrap from './components/ThemeBootstrap';
+import { LanguageProvider } from './i18n/LanguageContext';
 import './index.css';
 import { registerSW } from 'virtual:pwa-register';
 import { runVigilShieldTestSuite } from './tests/callerId.test';
@@ -97,8 +98,10 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <AppErrorBoundary>
-      <ThemeBootstrap />
-      <App />
+      <LanguageProvider>
+        <ThemeBootstrap />
+        <App />
+      </LanguageProvider>
     </AppErrorBoundary>
   </StrictMode>,
 );

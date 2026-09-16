@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { CallLogItem, ContactItem, TruecallerDirectoryProfile, BlockRule } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
+import { useI18n } from '../i18n/LanguageContext';
 
 interface AssistantTabProps {
   calls: CallLogItem[];
@@ -38,6 +39,7 @@ export default function AssistantTab({
   onInitiateCall,
   onAddRule,
 }: AssistantTabProps) {
+  const { t } = useI18n();
   const [investigateInput, setInvestigateInput] = useState('');
   const [analyzedResult, setAnalyzedResult] = useState<{
     number: string;
@@ -161,10 +163,10 @@ export default function AssistantTab({
       <div>
         <h1 className="text-2xl font-extrabold text-white tracking-tight flex items-center space-x-2">
           <Sparkles className="w-6 h-6 text-indigo-400" />
-          <span>AI Assistant & Intelligence Hub</span>
+          <span>{t('assistant_hub_title')}</span>
         </h1>
         <p className="text-xs text-slate-400 mt-0.5">
-          Proactive security reports, deep caller investigation & behavioral forensics
+          {t('assistant_hub_desc')}
         </p>
       </div>
 
@@ -174,15 +176,15 @@ export default function AssistantTab({
           <div className="flex items-center space-x-2">
             <TrendingUp className="w-4 h-4 text-emerald-400" />
             <h2 className="text-sm font-bold text-white uppercase tracking-wider">
-              Weekly Protection Digest
+              {t('weekly_digest_title')}
             </h2>
           </div>
-          <span className="text-[11px] text-slate-400">Past 7 days</span>
+          <span className="text-[11px] text-slate-400">{t('past_7_days')}</span>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           <div className="p-3 rounded-2xl bg-slate-800/80 border border-slate-700">
-            <div className="text-[11px] text-slate-400">Calls Handled</div>
+            <div className="text-[11px] text-slate-400">{t('calls_handled')}</div>
             <div className="text-xl font-extrabold text-white mt-1">
               {digestMetrics.totalWeek}
             </div>
@@ -190,7 +192,7 @@ export default function AssistantTab({
           </div>
 
           <div className="p-3 rounded-2xl bg-slate-800/80 border border-slate-700">
-            <div className="text-[11px] text-slate-400">Spam Shielded</div>
+            <div className="text-[11px] text-slate-400">{t('spam_shielded')}</div>
             <div className="text-xl font-extrabold text-rose-400 mt-1">
               {digestMetrics.blockedWeek}
             </div>
@@ -198,7 +200,7 @@ export default function AssistantTab({
           </div>
 
           <div className="p-3 rounded-2xl bg-slate-800/80 border border-slate-700">
-            <div className="text-[11px] text-slate-400">Verified Entities</div>
+            <div className="text-[11px] text-slate-400">{t('verified_entities')}</div>
             <div className="text-xl font-extrabold text-blue-400 mt-1">
               {digestMetrics.verifiedWeek}
             </div>
@@ -206,7 +208,7 @@ export default function AssistantTab({
           </div>
 
           <div className="p-3 rounded-2xl bg-slate-800/80 border border-slate-700">
-            <div className="text-[11px] text-slate-400">Contacts Safety</div>
+            <div className="text-[11px] text-slate-400">{t('contacts_safety')}</div>
             <div className="text-xl font-extrabold text-emerald-400 mt-1">
               100%
             </div>
@@ -219,7 +221,7 @@ export default function AssistantTab({
       <div className="p-4 sm:p-5 rounded-3xl bg-slate-850 border border-slate-750 shadow-xl space-y-4">
         <div className="flex items-center space-x-2">
           <Brain className="w-5 h-5 text-indigo-400" />
-          <h2 className="text-base font-bold text-white">AI Caller Forensics & Investigation</h2>
+          <h2 className="text-base font-bold text-white">{t('investigator_title')}</h2>
         </div>
         <p className="text-xs text-slate-400">
           Enter any phone number to inspect risk score, community flags, and behavioral patterns.
@@ -232,7 +234,7 @@ export default function AssistantTab({
               type="text"
               value={investigateInput}
               onChange={(e) => setInvestigateInput(e.target.value)}
-              placeholder="Enter phone number to analyze..."
+              placeholder={t('investigate_placeholder')}
               className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
@@ -242,7 +244,7 @@ export default function AssistantTab({
             className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 text-white font-bold text-xs transition flex items-center space-x-1.5 shrink-0 shadow-lg shadow-indigo-950/50"
           >
             {isAnalyzing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-            <span>Investigate</span>
+            <span>{t('investigate_btn')}</span>
           </button>
         </div>
 
@@ -348,10 +350,10 @@ export default function AssistantTab({
             <div className="flex items-center space-x-2">
               <Clock className="w-4 h-4 text-amber-400" />
               <h2 className="text-sm font-bold text-white uppercase tracking-wider">
-                Call Follow-Ups & Reminders
+                {t('smart_reminders_title')}
               </h2>
             </div>
-            <span className="text-xs text-slate-400">{reminders.length} pending</span>
+            <span className="text-xs text-slate-400">{reminders.length}</span>
           </div>
 
           <div className="space-y-2">
@@ -370,14 +372,14 @@ export default function AssistantTab({
                   <button
                     onClick={() => onInitiateCall(rem.number, rem.name)}
                     className="w-8 h-8 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center transition shadow"
-                    title="Call Now"
+                    title={t('call_action')}
                   >
                     <Phone className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => setDismissedReminders((prev) => [...prev, rem.id])}
                     className="p-1 text-slate-500 hover:text-slate-300"
-                    title="Dismiss"
+                    title={t('dismiss')}
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -394,7 +396,7 @@ export default function AssistantTab({
           <div className="flex items-center space-x-2">
             <Lightbulb className="w-4 h-4 text-indigo-400" />
             <h2 className="text-sm font-bold text-white uppercase tracking-wider">
-              Smart Security Actions
+              {t('smart_recommendations_title')}
             </h2>
           </div>
 

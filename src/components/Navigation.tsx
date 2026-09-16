@@ -2,6 +2,7 @@ import { memo, useMemo, type ComponentType } from 'react';
 import { Clock3, Phone, ShieldCheck, UsersRound } from 'lucide-react';
 import { TabId } from '../types';
 import NavigationTab from './common/NavigationTab';
+import { useI18n } from '../i18n/LanguageContext';
 
 interface NavigationProps {
   activeTab: TabId;
@@ -24,14 +25,16 @@ const Navigation = memo(function Navigation({
   spamCallsCount = 0,
   activeRulesCount = 0,
 }: NavigationProps) {
+  const { t } = useI18n();
+
   const tabs = useMemo<NavigationItem[]>(
     () => [
-      { id: 'dialer', name: 'Phone', icon: Phone },
-      { id: 'recents', name: 'Recents', icon: Clock3, badge: spamCallsCount || undefined },
-      { id: 'contacts', name: 'Contacts', icon: UsersRound },
-      { id: 'protection', name: 'Protection', icon: ShieldCheck, badge: activeRulesCount || undefined },
+      { id: 'dialer', name: t('nav_phone'), icon: Phone },
+      { id: 'recents', name: t('nav_recents'), icon: Clock3, badge: spamCallsCount || undefined },
+      { id: 'contacts', name: t('nav_contacts'), icon: UsersRound },
+      { id: 'protection', name: t('nav_protection'), icon: ShieldCheck, badge: activeRulesCount || undefined },
     ],
-    [spamCallsCount, activeRulesCount],
+    [spamCallsCount, activeRulesCount, t],
   );
 
   const handleSelect = (id: string) => onChangeTab(id as TabId);

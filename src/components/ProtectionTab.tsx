@@ -30,6 +30,7 @@ import {
   SpamCategory,
   SecurityTimelineEvent 
 } from '../types';
+import { useI18n } from '../i18n/LanguageContext';
 
 interface ProtectionTabProps {
   settings: ShieldSettings;
@@ -57,6 +58,7 @@ export default function ProtectionTab({
   onRemoveWhitelist,
   timelineEvents,
 }: ProtectionTabProps) {
+  const { t } = useI18n();
   const [activeSubTab, setActiveSubTab] = useState<BlockSubTab>('PATTERNS');
   const [isRuleBuilderOpen, setIsRuleBuilderOpen] = useState(false);
 
@@ -195,18 +197,18 @@ export default function ProtectionTab({
             <div>
               <div className="flex items-center space-x-2">
                 <h2 className="text-xl font-extrabold text-white tracking-tight">
-                  Smart Call Firewall
+                  {t('protection_firewall_title')}
                 </h2>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
                   settings.masterEnabled 
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' 
                     : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
                 }`}>
-                  {settings.masterEnabled ? 'Active' : 'Disabled'}
+                  {settings.masterEnabled ? t('status') + ': ' + t('safe') : t('status') + ': ' + t('protection_paused')}
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Multi-layer heuristics & number series firewall filtering spam before ringing
+                {t('protection_firewall_desc')}
               </p>
             </div>
           </div>
@@ -221,7 +223,7 @@ export default function ProtectionTab({
                 : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/40'
             }`}
           >
-            <span>{settings.masterEnabled ? 'Turn Off Firewall' : 'Enable Protection'}</span>
+            <span>{settings.masterEnabled ? t('protection_turn_off') : t('protection_turn_on')}</span>
           </button>
         </div>
 
@@ -230,18 +232,18 @@ export default function ProtectionTab({
           <div className="flex items-center justify-between text-xs">
             <span className="font-bold text-slate-300 flex items-center space-x-1.5">
               <Sliders className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Protection Level</span>
+              <span>{t('protection_level')}</span>
             </span>
             <span className="font-semibold text-indigo-300">
-              {settings.sensitivity === 'AGGRESSIVE' ? 'Strict Protection' : settings.sensitivity === 'STRICT' ? 'Balanced' : 'Low'}
+              {settings.sensitivity === 'AGGRESSIVE' ? t('protection_level_strict') : settings.sensitivity === 'STRICT' ? t('protection_level_balanced') : t('protection_level_low')}
             </span>
           </div>
 
           <div className="grid grid-cols-3 gap-2">
             {[
-              { id: 'MODERATE' as SensitivityLevel, title: 'Low', desc: 'Confirmed scams only' },
-              { id: 'STRICT' as SensitivityLevel, title: 'Balanced', desc: 'Spam, TRAI 140 & bots' },
-              { id: 'AGGRESSIVE' as SensitivityLevel, title: 'Strict', desc: 'All unverified callers' },
+              { id: 'MODERATE' as SensitivityLevel, title: t('protection_level_low'), desc: 'Scams only' },
+              { id: 'STRICT' as SensitivityLevel, title: t('protection_level_balanced'), desc: 'Spam, TRAI 140' },
+              { id: 'AGGRESSIVE' as SensitivityLevel, title: t('protection_level_strict'), desc: 'Strict mode' },
             ].map((lvl) => {
               const isSelected = settings.sensitivity === lvl.id;
               return (
@@ -338,13 +340,13 @@ export default function ProtectionTab({
           <div>
             <h3 className="text-lg font-bold text-white tracking-tight flex items-center space-x-2">
               <ShieldBan className="w-5 h-5 text-rose-400" />
-              <span>Blocked Rules & Patterns</span>
+              <span>{t('blocked_rules_patterns')}</span>
               <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 font-medium">
-                {rules.length} active
+                {rules.length} {t('status')}: {t('safe')}
               </span>
             </h3>
             <p className="text-xs text-slate-400">
-              Manage exact numbers, series patterns, and automated block rules
+              {t('protection_subtitle')}
             </p>
           </div>
 
@@ -354,17 +356,17 @@ export default function ProtectionTab({
             className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition flex items-center space-x-1.5 shadow-lg shadow-indigo-950/50 self-start sm:self-auto"
           >
             <Plus className="w-4 h-4" />
-            <span>Create Block Rule</span>
+            <span>{t('create_block_rule')}</span>
           </button>
         </div>
 
         {/* Sub-tabs: Numbers, Patterns, Private Callers, Spam */}
         <div className="flex items-center space-x-1.5 overflow-x-auto pb-1">
           {[
-            { id: 'PATTERNS', label: 'Series Patterns' },
-            { id: 'NUMBERS', label: 'Blocked Numbers' },
-            { id: 'PRIVATE', label: 'Private Callers' },
-            { id: 'SPAM', label: 'Scam & Robocalls' },
+            { id: 'PATTERNS', label: t('subtab_patterns') },
+            { id: 'NUMBERS', label: t('subtab_numbers') },
+            { id: 'PRIVATE', label: t('subtab_private') },
+            { id: 'SPAM', label: t('subtab_spam') },
           ].map((tab) => (
             <button
               key={tab.id}

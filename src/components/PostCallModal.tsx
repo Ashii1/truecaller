@@ -3,6 +3,7 @@ import { Check, X, UserPlus, ShieldBan, AlertTriangle, FileText, Clock, Phone, S
 import { PostCallState, SpamCategory, ContactItem } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import CallContextCard from './CallContextCard';
+import { useI18n } from '../i18n/LanguageContext';
 
 interface PostCallModalProps {
   postCall: PostCallState | null;
@@ -14,6 +15,7 @@ interface PostCallModalProps {
 }
 
 export default function PostCallModal({ postCall, onDismiss, onAddContact, onBlockNumber, onReportSpam, onSaveNote }: PostCallModalProps) {
+  const { t } = useI18n();
   const [showSpamReport, setShowSpamReport] = useState(false);
   const [spamCategory, setSpamCategory] = useState<SpamCategory>('TELEMARKETING');
   const [spamNotes, setSpamNotes] = useState('');
@@ -79,13 +81,13 @@ export default function PostCallModal({ postCall, onDismiss, onAddContact, onBlo
           </form>
         ) : (
           <div className="grid grid-cols-2 gap-2 text-xs">
-            <button onClick={() => { onAddContact({name: postCall.name || '', number: postCall.number, category: 'GENERAL', trusted: true, isFavorite: false, notes: ''}); onDismiss(); }} className="p-3 rounded-2xl bg-slate-800 border border-slate-700 flex items-center space-x-2.5 font-semibold text-slate-200"><UserPlus className="w-4 h-4 text-indigo-400" /><span>Add to Contacts</span></button>
-            <button onClick={handleBlock} className="p-3 rounded-2xl bg-slate-800 border border-slate-700 flex items-center space-x-2.5 font-semibold text-rose-300"><ShieldBan className="w-4 h-4 text-rose-400" /><span>Block Caller</span></button>
-            <button onClick={() => setShowSpamReport(true)} className="p-3 rounded-2xl bg-slate-800 border border-slate-700 flex items-center space-x-2.5 font-semibold text-amber-300"><Flag className="w-4 h-4 text-amber-400" /><span>Report as Spam</span></button>
+            <button onClick={() => { onAddContact({name: postCall.name || '', number: postCall.number, category: 'GENERAL', trusted: true, isFavorite: false, notes: ''}); onDismiss(); }} className="p-3 rounded-2xl bg-slate-800 border border-slate-700 flex items-center space-x-2.5 font-semibold text-slate-200"><UserPlus className="w-4 h-4 text-indigo-400" /><span>{t('add_contact')}</span></button>
+            <button onClick={handleBlock} className="p-3 rounded-2xl bg-slate-800 border border-slate-700 flex items-center space-x-2.5 font-semibold text-rose-300"><ShieldBan className="w-4 h-4 text-rose-400" /><span>{t('block_action')}</span></button>
+            <button onClick={() => setShowSpamReport(true)} className="p-3 rounded-2xl bg-slate-800 border border-slate-700 flex items-center space-x-2.5 font-semibold text-amber-300"><Flag className="w-4 h-4 text-amber-400" /><span>{t('report_spam')}</span></button>
             <button onClick={() => setShowNoteEditor(true)} className="p-3 rounded-2xl bg-slate-800 border border-slate-700 flex items-center space-x-2.5 font-semibold text-slate-200"><FileText className="w-4 h-4 text-slate-400" /><span>Add Note</span></button>
           </div>
         )}
-        <button onClick={onDismiss} className="w-full py-2.5 rounded-xl bg-slate-800 text-white font-bold text-xs">Done</button>
+        <button onClick={onDismiss} className="w-full py-2.5 rounded-xl bg-slate-800 text-white font-bold text-xs">{t('dismiss')}</button>
       </div>
     </div>
   );
