@@ -3,7 +3,7 @@ import { Building2, Edit2, Phone, Plus, Search, ShieldCheck, Star, Trash2, UserR
 import { ContactItem, CallLogItem } from '../types';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 
-interface ContactsTabProps { contacts:ContactItem[]; onInitiateCall:(number:string,name?:string)=>void; onAddContact:(contact:Omit<ContactItem,'id'>|string,name?:string)=>void; onUpdateContact:(id:string,updates:Partial<ContactItem>)=>void; onDeleteContact:(id:string)=>void; onToggleFavorite:(id:string)=>void; recentCalls:CallLogItem[]; }
+interface ContactsTabProps { contacts:ContactItem[]; onInitiateCall:(number:string,name?:string)=>void; onAddContact:(contact:Omit<ContactItem,'id'>)=>void; onUpdateContact:(id:string,updates:Partial<ContactItem>)=>void; onDeleteContact:(id:string)=>void; onToggleFavorite:(id:string)=>void; recentCalls:CallLogItem[]; }
 type CategoryFilter='ALL'|'FAVORITES'|'FAMILY'|'WORK'|'BUSINESSES'|'RECENT';
 const clean=(v:string)=>v.replace(/\D/g,'');
 
