@@ -9,6 +9,7 @@ val hasPersistentReleaseKey = !releaseKeystorePath.isNullOrBlank() &&
     !releaseKeystorePassword.isNullOrBlank() &&
     !releaseKeyAlias.isNullOrBlank() &&
     !releaseKeyPassword.isNullOrBlank()
+val ciVersionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
 
 plugins {
     id("com.android.application")
@@ -22,8 +23,9 @@ android {
         applicationId = "com.vigilshield.telecom"
         minSdk = 29
         targetSdk = 35
-        // Every release must increase this value so Android accepts it as an update.
-        versionCode = 6
+        // GitHub Actions run numbers monotonically increase, so every CI release
+        // gets a higher versionCode and can update the previous installation.
+        versionCode = ciVersionCode ?: 6
         versionName = "1.5"
     }
 
@@ -39,13 +41,12 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
-            // Use the persistent release key when configured; retain debug fallback for local/CI builds
-            // until repository signing secrets are configured.
-            signingConfig = if (hasPersistentReleaseKey) {
-                signingConfigs.getByName("persistentRelease")
-            } else {
-                signingConfigs.getByName("debug")
+            // Never silently fall back to the runner's debug key: a different
+            // signing key makes Android reject an in-place update.
+            if (!hasPersistentReleaseKey) {
+                throw GradleException("Persistent release signing is required for updateable APKs. Configure VIGILSHIELD_KEYSTORE_FILE, VIGILSHIELD_KEYSTORE_PASSWORD, VIGILSHIELD_KEY_ALIAS and VIGILSHIELD_KEY_PASSWORD.")
             }
+            signingConfig = signingConfigs.getByName("persistentRelease")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
