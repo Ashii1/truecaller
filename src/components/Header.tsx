@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Bell, LockKeyhole, MicOff, PhoneCall, Settings, ShieldAlert, ShieldCheck, X, Siren, Palette } from 'lucide-react';
 import { ShieldSettings } from '../types';
 import { telecomBridge } from '../services/telephony/telecomBridge';
@@ -10,7 +10,6 @@ interface HeaderProps {
   isDefaultDialer: boolean;
   onRequestDefaultDialer: () => void;
   onOpenPermissionCenter?: () => void;
-  [key: string]: unknown;
 }
 
 type PrivacySettings = {
@@ -90,7 +89,6 @@ export default function Header({ settings, onToggleShield, isDefaultDialer, onRe
           </div>
         </div>
       </header>
-
       {showSettings && <div className="fixed inset-0 z-[70] bg-black/60 p-0 sm:p-4" onMouseDown={() => setShowSettings(false)}>
         <section className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto border-l border-slate-700 bg-slate-950 shadow-2xl sm:relative sm:mx-auto sm:my-8 sm:h-auto sm:max-h-[calc(100vh-4rem)] sm:rounded-3xl sm:border" onMouseDown={e => e.stopPropagation()}>
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-slate-950/95 p-5 backdrop-blur"><div><h2 className="text-lg font-bold text-white">Settings</h2><p className="mt-0.5 text-xs text-slate-400">Simple by default. Emergency protection is controlled by you.</p></div><button onClick={() => setShowSettings(false)} className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close settings"><X className="h-5 w-5" /></button></div>
@@ -102,7 +100,6 @@ export default function Header({ settings, onToggleShield, isDefaultDialer, onRe
             <SettingRow icon={<Bell className="h-4 w-4" />} title="Detailed caller notifications" description="Show names and risk details in notifications." checked={privacy.showCallerDetailsInNotifications} onChange={v => updatePrivacy('showCallerDetailsInNotifications', v)} />
             <SettingRow icon={<LockKeyhole className="h-4 w-4" />} title="Private notification mode" description="Use generic text instead of exposing caller identity on the lock screen." checked={privacy.privacyMode} onChange={v => updatePrivacy('privacyMode', v)} />
             <SettingRow icon={<Settings className="h-4 w-4" />} title="Copied-number paste helper" description="Offer a copied number as a one-tap Paste action in the dialer." checked={privacy.clipboardPasteDetection} onChange={v => updatePrivacy('clipboardPasteDetection', v)} />
-
             <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
               <div className="flex items-start gap-3"><Siren className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" /><div className="min-w-0"><div className="text-sm font-bold text-white">Repeated-call emergency alert</div><div className="mt-1 text-xs leading-5 text-slate-400">Only saved device contacts qualify. Repeated calls never get blocked; they are escalated as a possible urgent call.</div></div></div>
               <div className="mt-3"><SettingRow icon={<Siren className="h-4 w-4" />} title="Enable repeat-call alert" description="Alert after the selected number of calls inside the selected time window." checked={privacy.emergencyRepeatEnabled} onChange={v => updatePrivacy('emergencyRepeatEnabled', v)} /></div>
@@ -112,7 +109,6 @@ export default function Header({ settings, onToggleShield, isDefaultDialer, onRe
               </div>
               <div className="mt-3 rounded-xl bg-slate-900/70 p-3 text-[11px] leading-5 text-slate-500">When the screen is off and the phone is silent, VigilShield makes a short best-effort audible alert without changing your global ringer setting. When you are actively using the phone, it uses a visible high-priority alert instead.</div>
             </div>
-
             {onOpenPermissionCenter && <button onClick={onOpenPermissionCenter} className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-left text-sm font-semibold text-slate-200 hover:bg-slate-800">Permission Center<span className="mt-1 block text-xs font-normal text-slate-500">Live Android status for Phone role, Contacts, Call Log, Notifications and protection.</span></button>}
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-xs leading-5 text-slate-500">Security principle: no recording by default, no automatic blocking of saved contacts, no silent change to your ringer mode, and settings remain local.</div>
           </div>
@@ -123,6 +119,6 @@ export default function Header({ settings, onToggleShield, isDefaultDialer, onRe
   );
 }
 
-function SettingRow({ icon, title, description, checked, onChange, danger = false }: { icon: React.ReactNode; title: string; description: string; checked: boolean; onChange: (value: boolean) => void; danger?: boolean }) {
+function SettingRow({ icon, title, description, checked, onChange, danger = false }: { icon: ReactNode; title: string; description: string; checked: boolean; onChange: (value: boolean) => void; danger?: boolean }) {
   return <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4"><div className="flex items-start justify-between gap-3"><div className="flex min-w-0 gap-3"><div className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl ${danger ? 'bg-amber-500/10 text-amber-400' : 'bg-slate-800 text-slate-300'}`}>{icon}</div><div className="min-w-0"><div className="text-sm font-semibold text-white">{title}</div><div className="mt-1 text-xs leading-5 text-slate-400">{description}</div></div></div><button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)} className={`relative h-7 w-12 shrink-0 rounded-full transition ${checked ? (danger ? 'bg-amber-500' : 'bg-blue-600') : 'bg-slate-700'}`}><span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition ${checked ? 'left-6' : 'left-1'}`} /></button></div></div>;
 }
