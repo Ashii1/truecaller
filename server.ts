@@ -766,6 +766,12 @@ Return ONLY a JSON object with this exact schema:
   }
 });
 
+// Explicit Codebase ZIP Download Endpoint
+app.get('/vigilshield_app.zip', (req, res) => {
+  const zipFile = path.join(process.cwd(), 'public', 'vigilshield_app.zip');
+  res.download(zipFile, 'vigilshield_app.zip');
+});
+
 // Vite Middleware for Dev and Static Serving for Production
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
