@@ -1,14 +1,15 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Bell, LockKeyhole, MicOff, PhoneCall, Settings, ShieldAlert, ShieldCheck, X, Siren, Palette } from 'lucide-react';
 import { ShieldSettings } from '../types';
+import { INITIAL_SETTINGS } from '../data/defaultData';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 import ThemeCustomizerModal from './ThemeCustomizerModal';
 
 interface HeaderProps {
-  settings: ShieldSettings;
-  onToggleShield: () => void;
-  isDefaultDialer: boolean;
-  onRequestDefaultDialer: () => void;
+  settings?: ShieldSettings;
+  onToggleShield?: () => void;
+  isDefaultDialer?: boolean;
+  onRequestDefaultDialer?: () => void;
   onOpenPermissionCenter?: () => void;
   onSyncDatabase?: () => void;
   isSyncing?: boolean;
@@ -24,7 +25,7 @@ type PrivacySettings = { callRecordingEnabled: boolean; showCallerDetailsInNotif
 const PRIVACY_DEFAULTS: PrivacySettings = { callRecordingEnabled: false, showCallerDetailsInNotifications: false, privacyMode: true, clipboardPasteDetection: true, emergencyRepeatEnabled: true, emergencyRepeatThreshold: 3, emergencyRepeatWindow: 5 };
 function readPrivacySettings(): PrivacySettings { try { const raw = localStorage.getItem('vigilshield_privacy_settings'); const parsed = raw ? JSON.parse(raw) : {}; return { ...PRIVACY_DEFAULTS, ...parsed }; } catch { return PRIVACY_DEFAULTS; } }
 
-export default function Header({ settings, onToggleShield, isDefaultDialer, onRequestDefaultDialer, onOpenPermissionCenter }: HeaderProps) {
+export default function Header({ settings = INITIAL_SETTINGS, onToggleShield = () => {}, isDefaultDialer = false, onRequestDefaultDialer = () => {}, onOpenPermissionCenter }: HeaderProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [showTheme, setShowTheme] = useState(false);
   const [privacy, setPrivacy] = useState<PrivacySettings>(readPrivacySettings);
