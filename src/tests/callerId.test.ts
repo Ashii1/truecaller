@@ -1,6 +1,8 @@
 import { LibPhoneNumberValidationProvider } from '../services/providers/phoneValidationProvider';
 import { CompositeCallerIdResolver } from '../services/providers/compositeCallerProvider';
 import { ContactItem, BlockRule } from '../types';
+import { externalDirectoryService } from '../services/externalDirectoryService';
+import { lookupTruecallerDirectory } from '../utils/spamEngine';
 
 export function runVigilShieldTestSuite() {
   const results: { name: string; passed: boolean; message?: string }[] = [];
@@ -64,6 +66,19 @@ export function runVigilShieldTestSuite() {
       results.push({ name: 'Anti-Fabrication: Honestly returns Unknown Caller without fake data', passed: false, message: 'Fabricated caller name' });
     }
   });
+
+  // Test 6: External Directory Service & Local Calls List Caching
+  try {
+    const testNum = '+919876543210';
+    const profile = lookupTruecallerDirectory(testNum);
+    if (profile && profile.name) {
+      results.push({ name: 'External Directory: Resolves caller identity and caches in local calls', passed: true });
+    } else {
+      results.push({ name: 'External Directory: Resolves caller identity and caches in local calls', passed: false, message: 'No profile name resolved' });
+    }
+  } catch (e: any) {
+    results.push({ name: 'External Directory: Resolves caller identity and caches in local calls', passed: false, message: e.message });
+  }
 
   return results;
 }

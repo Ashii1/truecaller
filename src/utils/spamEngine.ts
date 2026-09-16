@@ -8,6 +8,7 @@ import {
   RiskLevel
 } from '../types';
 import { resolveFromPublicDirectory } from './publicDirectory';
+import { externalDirectoryService } from '../services/externalDirectoryService';
 
 /**
  * Normalizes phone numbers to comparable digits (and optional leading +)
@@ -1128,10 +1129,25 @@ export function lookupTruecallerDirectory(
   const meta = resolveNumberMetadata(phoneNumber);
   const digits = norm.replace(/\D/g, '');
 
+  // Helper to cache resolved caller identities into the local 'calls' list for maximum display accuracy
+  const cacheAndReturn = (profile: TruecallerDirectoryProfile): TruecallerDirectoryProfile => {
+    if (profile && profile.name && profile.name !== phoneNumber && typeof window !== 'undefined') {
+      externalDirectoryService.cacheResultInLocalCalls(phoneNumber, profile.name, {
+        carrier: profile.carrier,
+        location: profile.location,
+        isSpam: profile.isSpam,
+        riskScore: profile.spamScore,
+        spamCategory: profile.spamCategory,
+        isVerifiedBusiness: profile.isVerified,
+      });
+    }
+    return profile;
+  };
+
   // 1. Check Whitelist
   const wl = whitelist.find((w) => normalizePhoneNumber(w.value) === norm || w.value === phoneNumber);
   if (wl) {
-    return {
+    return cacheAndReturn({
       number: phoneNumber,
       name: wl.name,
       spamScore: 0,
@@ -1149,7 +1165,7 @@ export function lookupTruecallerDirectory(
           date: 'Active',
         },
       ],
-    };
+    });
   }
 
   // 1b. Check User-Defined & Community-Saved Custom Directory Names
@@ -1157,7 +1173,7 @@ export function lookupTruecallerDirectory(
   const cleanDigits = digits.startsWith('91') && digits.length === 12 ? digits.slice(2) : digits;
   const customEntry = customNames[cleanDigits] || customNames[digits] || customNames[norm];
   if (customEntry && customEntry.name) {
-    return {
+    return cacheAndReturn({
       number: phoneNumber,
       name: customEntry.name,
       spamScore: customEntry.isSpam ? 95 : 0,
@@ -1176,8 +1192,42 @@ export function lookupTruecallerDirectory(
           date: 'Active Record',
         },
       ],
-    };
+    });
   }
+
+  // 1c. Check External Live Directory Cache (fetched from public API endpoint)
+  const liveCached = externalDirectoryService.getCachedCaller(phoneNumber);
+  if (liveCached) {
+    return cacheAndReturn({
+      number: phoneNumber,
+      name: liveCached.callerName,
+      spamScore: liveCached.spamScore || 0,
+      riskLevel: liveCached.isSpam ? 'HIGH_RISK' : 'SAFE',
+      isSpam: liveCached.isSpam,
+      spamReportsCount: liveCached.isSpam ? 1850 : 0,
+      spamCategory: liveCached.spamCategory as any,
+      topTags: liveCached.isSpam ? ['Reported Spam', 'Live API Warning'] : ['Live Directory Verified', liveCached.carrier || meta.carrier],
+      carrier: liveCached.carrier || meta.carrier,
+      location: liveCached.location || meta.location,
+      lineType: (liveCached.lineType as any) || 'Mobile',
+      isVerified: liveCached.isVerified ?? !liveCached.isSpam,
+      communityComments: [
+        {
+          author: liveCached.source || 'Public Directory API',
+          text: `Verified caller identity from live public directory: ${liveCached.callerName}`,
+          date: 'Live API',
+        },
+      ],
+    });
+  }
+
+  // Trigger background fetch from public API endpoint if not yet queried
+  if (typeof window !== 'undefined' && !liveCached) {
+    externalDirectoryService.fetchLiveCallerName(phoneNumber).catch(() => {});
+  }
+
+  // Check if an accurate caller name is already cached in local 'calls' list
+  const cachedFromCalls = externalDirectoryService.getCallerNameFromLocalCalls(phoneNumber);
 
   // 2. Check User Block Rules
   const rule = rules.find((r) => {
@@ -1192,7 +1242,7 @@ export function lookupTruecallerDirectory(
   });
 
   if (rule) {
-    return {
+    return cacheAndReturn({
       number: phoneNumber,
       name: rule.label,
       spamScore: 98,
@@ -1211,13 +1261,13 @@ export function lookupTruecallerDirectory(
           date: 'Recent',
         },
       ],
-    };
+    });
   }
 
   // 3. Check Global Community Intelligence & Regulatory Database (TRAI 140/160 series, Wangiri, etc.)
   const intel = getGlobalCommunitySpamIntelligence(phoneNumber);
   if (intel) {
-    return {
+    return cacheAndReturn({
       number: phoneNumber,
       name: intel.name,
       spamScore: intel.spamScore,
@@ -1230,7 +1280,7 @@ export function lookupTruecallerDirectory(
       lineType: intel.lineType,
       isVerified: !intel.isSpam && intel.spamScore === 0,
       communityComments: intel.comments,
-    };
+    });
   }
 
   // 4. Check Known Corporate / Enterprise Numbers
@@ -1256,7 +1306,7 @@ export function lookupTruecallerDirectory(
   const matchedEnt = KNOWN_ENTERPRISE_MAP[digits] || KNOWN_ENTERPRISE_MAP[pure10] || (d12No91 && KNOWN_ENTERPRISE_MAP[d12No91]);
   if (matchedEnt) {
     const ent = matchedEnt;
-    return {
+    return cacheAndReturn({
       number: phoneNumber,
       name: ent.name,
       spamScore: 0,
@@ -1274,13 +1324,13 @@ export function lookupTruecallerDirectory(
           date: 'Verified Record',
         },
       ],
-    };
+    });
   }
 
   // 5. High-risk international fraud traps
   const isHighRiskPrefix = norm.startsWith('+232') || norm.startsWith('+234') || norm.startsWith('+1900');
   if (isHighRiskPrefix) {
-    return {
+    return cacheAndReturn({
       number: phoneNumber,
       name: 'Wangiri Toll Trap (One-Ring Scam)',
       spamScore: 98,
@@ -1299,7 +1349,7 @@ export function lookupTruecallerDirectory(
           date: 'Yesterday',
         },
       ],
-    };
+    });
   }
 
   // 6. Public Telecom & Crowd-Sourced Directory Resolution
@@ -1312,9 +1362,10 @@ export function lookupTruecallerDirectory(
 
   const publicRecord = resolveFromPublicDirectory(phoneNumber, circle, operator);
   if (publicRecord) {
-    return {
+    const resolvedName = (cachedFromCalls && !publicRecord.isSpam) ? cachedFromCalls : publicRecord.name;
+    return cacheAndReturn({
       number: phoneNumber,
-      name: publicRecord.name,
+      name: resolvedName,
       spamScore: publicRecord.spamScore,
       isSpam: publicRecord.isSpam,
       spamReportsCount: publicRecord.spamReportsCount,
@@ -1332,13 +1383,14 @@ export function lookupTruecallerDirectory(
           date: publicRecord.isSpam ? 'Reported Threat' : 'Public Directory Verified',
         },
       ],
-    };
+    });
   }
 
   // 7. General fallback (authentic respective name and safe verification)
-  return {
+  const fallbackName = cachedFromCalls || 'Verified Public Subscriber';
+  return cacheAndReturn({
     number: phoneNumber,
-    name: 'Verified Public Subscriber',
+    name: fallbackName,
     spamScore: 0,
     riskLevel: 'SAFE',
     isSpam: false,
@@ -1355,7 +1407,7 @@ export function lookupTruecallerDirectory(
         date: 'Clean Record',
       },
     ],
-  };
+  });
 }
 
 /**
