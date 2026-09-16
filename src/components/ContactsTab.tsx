@@ -18,6 +18,7 @@ import {
 import { ContactItem, CallLogItem } from '../types';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 import { useI18n } from '../i18n/LanguageContext';
+import ModernFilterBar, { FilterTabOption } from './ModernFilterBar';
 
 interface ContactsTabProps {
   contacts: ContactItem[];
@@ -126,13 +127,13 @@ export default function ContactsTab({
     setSelected(null);
   };
 
-  const categoryTabs: { id: CategoryFilter; label: string; icon: typeof Users }[] = [
-    { id: 'ALL', label: t('filter_all'), icon: Users },
-    { id: 'FAVORITES', label: t('cat_favorites'), icon: Star },
-    { id: 'FAMILY', label: t('cat_family'), icon: Heart },
-    { id: 'WORK', label: t('cat_work'), icon: Briefcase },
-    { id: 'BUSINESSES', label: t('cat_businesses'), icon: Building2 },
-    { id: 'RECENT', label: t('cat_recent'), icon: Clock },
+  const categoryTabs: FilterTabOption<CategoryFilter>[] = [
+    { id: 'ALL', label: t('filter_all'), icon: Users, count: counts.ALL, badgeVariant: 'default' },
+    { id: 'FAVORITES', label: t('cat_favorites'), icon: Star, count: counts.FAVORITES, badgeVariant: 'favorite' },
+    { id: 'FAMILY', label: t('cat_family'), icon: Heart, count: counts.FAMILY, badgeVariant: 'default' },
+    { id: 'WORK', label: t('cat_work'), icon: Briefcase, count: counts.WORK, badgeVariant: 'default' },
+    { id: 'BUSINESSES', label: t('cat_businesses'), icon: Building2, count: counts.BUSINESSES, badgeVariant: 'default' },
+    { id: 'RECENT', label: t('cat_recent'), icon: Clock, count: counts.RECENT, badgeVariant: 'default' },
   ];
 
   return (
@@ -187,51 +188,12 @@ export default function ContactsTab({
         )}
       </div>
 
-      {/* Redesigned UI 9.5 Segmented Category Filter Tab Strip */}
-      <div className="mb-3 rounded-2xl border border-white/10 bg-[#0e141c] p-1 shadow-lg shadow-black/20">
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-          {categoryTabs.map(({ id, label, icon: Icon }) => {
-            const active = filter === id;
-            const count = counts[id];
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setFilter(id)}
-                className={`group relative flex flex-1 min-w-[70px] sm:min-w-0 shrink-0 items-center justify-center gap-1.5 rounded-xl py-2 px-2 text-xs font-semibold transition-all duration-150 ${
-                  active
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold shadow-[0_2px_12px_rgba(16,185,129,0.35)]'
-                    : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-                }`}
-              >
-                <Icon
-                  className={`h-3.5 w-3.5 shrink-0 ${
-                    active
-                      ? 'text-slate-950 stroke-[2.5]'
-                      : id === 'FAVORITES' && count > 0
-                      ? 'text-amber-400'
-                      : 'text-slate-500 group-hover:text-slate-300'
-                  }`}
-                />
-                <span className="truncate">{label}</span>
-                {count > 0 && (
-                  <span
-                    className={`rounded-full px-1.5 py-0.5 text-[9px] font-extrabold leading-none shrink-0 ${
-                      active
-                        ? 'bg-slate-950/25 text-slate-950'
-                        : id === 'FAVORITES'
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                        : 'bg-white/10 text-slate-400'
-                    }`}
-                  >
-                    {count > 99 ? '99+' : count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      {/* Modern Filter Navigation Bar with full text, scroll chevrons & popover */}
+      <ModernFilterBar<CategoryFilter>
+        tabs={categoryTabs}
+        activeId={filter}
+        onChange={setFilter}
+      />
 
       {/* Contacts List */}
       {filtered.length === 0 ? (

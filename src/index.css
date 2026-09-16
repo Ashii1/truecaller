@@ -130,3 +130,12 @@ main > * { animation: vs-rise .18s ease-out both; }
 @media (max-width: 640px) {
   main { padding-bottom: 78px; }
 }
+
+/* Modern no-scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

@@ -19,6 +19,7 @@ import { CallLogItem, CallDirection, BlockRule, WhitelistEntry, ShieldSettings, 
 import { formatPhoneNumber } from '../utils/spamEngine';
 import { groupCallsByNumber, CallGroup } from '../utils/callHistory';
 import { useI18n } from '../i18n/LanguageContext';
+import ModernFilterBar, { FilterTabOption } from './ModernFilterBar';
 
 interface RecentsTabProps {
   calls: CallLogItem[];
@@ -117,13 +118,13 @@ export default function RecentsTab({
   );
   const dayEntries = useMemo(() => Object.entries(days), [days]);
 
-  const filterTabs: { id: Filter; label: string; icon: typeof ListFilter }[] = [
-    { id: 'ALL', label: t('filter_all'), icon: ListFilter },
-    { id: 'MISSED', label: t('filter_missed'), icon: PhoneMissed },
-    { id: 'INCOMING', label: t('filter_incoming'), icon: PhoneIncoming },
-    { id: 'OUTGOING', label: t('filter_outgoing'), icon: PhoneOutgoing },
-    { id: 'RECORDED', label: 'Recorded', icon: Disc },
-    { id: 'BLOCKED', label: t('filter_blocked'), icon: PhoneOff },
+  const filterTabs: FilterTabOption<Filter>[] = [
+    { id: 'ALL', label: t('filter_all'), icon: ListFilter, count: counts.ALL, badgeVariant: 'default' },
+    { id: 'MISSED', label: t('filter_missed'), icon: PhoneMissed, count: counts.MISSED, badgeVariant: 'missed' },
+    { id: 'INCOMING', label: t('filter_incoming'), icon: PhoneIncoming, count: counts.INCOMING, badgeVariant: 'default' },
+    { id: 'OUTGOING', label: t('filter_outgoing'), icon: PhoneOutgoing, count: counts.OUTGOING, badgeVariant: 'default' },
+    { id: 'RECORDED', label: 'Recorded', icon: Disc, count: counts.RECORDED, badgeVariant: 'recorded' },
+    { id: 'BLOCKED', label: t('filter_blocked'), icon: PhoneOff, count: counts.BLOCKED, badgeVariant: 'blocked' },
   ];
 
   return (
@@ -163,55 +164,12 @@ export default function RecentsTab({
         )}
       </div>
 
-      {/* Redesigned UI 9.5 Segmented Filter Tab Strip */}
-      <div className="mb-3 rounded-2xl border border-white/10 bg-[#0e141c] p-1 shadow-lg shadow-black/20">
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-          {filterTabs.map(({ id, label, icon: Icon }) => {
-            const active = filter === id;
-            const count = counts[id];
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setFilter(id)}
-                className={`group relative flex flex-1 min-w-[68px] sm:min-w-0 shrink-0 items-center justify-center gap-1.5 rounded-xl py-2 px-2 text-xs font-semibold transition-all duration-150 ${
-                  active
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold shadow-[0_2px_12px_rgba(16,185,129,0.35)]'
-                    : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-                }`}
-              >
-                <Icon
-                  className={`h-3.5 w-3.5 shrink-0 ${
-                    active
-                      ? 'text-slate-950 stroke-[2.5]'
-                      : id === 'MISSED' && count > 0
-                      ? 'text-amber-400'
-                      : id === 'BLOCKED' && count > 0
-                      ? 'text-rose-400'
-                      : 'text-slate-500 group-hover:text-slate-300'
-                  }`}
-                />
-                <span className="truncate">{label}</span>
-                {count > 0 && (
-                  <span
-                    className={`rounded-full px-1.5 py-0.5 text-[9px] font-extrabold leading-none shrink-0 ${
-                      active
-                        ? 'bg-slate-950/25 text-slate-950'
-                        : id === 'MISSED'
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                        : id === 'BLOCKED'
-                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                        : 'bg-white/10 text-slate-400'
-                    }`}
-                  >
-                    {count > 99 ? '99+' : count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      {/* Modern Filter Navigation Bar with full text, scroll chevrons & popover */}
+      <ModernFilterBar<Filter>
+        tabs={filterTabs}
+        activeId={filter}
+        onChange={setFilter}
+      />
 
       {onSyncDeviceCalls && (
         <button
