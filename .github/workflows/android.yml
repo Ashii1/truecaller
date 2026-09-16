@@ -28,8 +28,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
+      - name: Require persistent release signing
+        if: ${{ env.VIGILSHIELD_HAS_RELEASE_KEY != 'true' }}
+        run: |
+          echo "ERROR: persistent release signing is not configured. Refusing to publish an APK that cannot update an existing installation."
+          exit 1
       - name: Configure persistent release signing
-        if: ${{ env.VIGILSHIELD_HAS_RELEASE_KEY == 'true' }}
         env:
           KEYSTORE_BASE64: ${{ secrets.VIGILSHIELD_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.VIGILSHIELD_KEYSTORE_PASSWORD }}
@@ -53,7 +57,10 @@ jobs:
           echo "Built $APK"
           if command -v apksigner >/dev/null 2>&1; then
             apksigner verify --verbose "$APK"
+            apksigner verify --print-certs "$APK"
           fi
+          echo "Expected applicationId: com.vigilshield.telecom"
+          echo "Expected CI versionCode: ${GITHUB_RUN_NUMBER}"
       - uses: actions/upload-artifact@v4
         with:
           name: vigilshield-release-apk
