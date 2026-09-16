@@ -13,9 +13,9 @@ const duration=(s:number)=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`
 export default function CallerDetailModal({call,calls=[],profile,isOpen,onClose,onBlockNumber,onMarkSafe,onOpenReportModal,onOpenDisputeModal,onUpdateCallerName,onOpenSmartBlock,onInitiateCall,onSaveNote}:CallerDetailModalProps){
  const [expanded,setExpanded]=useState(true),[editing,setEditing]=useState(false),[name,setName]=useState(''),[note,setNote]=useState('');
  useEffect(()=>{if(isOpen){setExpanded(true);setEditing(false);setName(call?.callerName||profile?.name||'');setNote(call?.notes||'')}},[isOpen,call,profile]);
- if(!isOpen||(!call&&!profile))return null;
  const number=call?.number||profile?.number||'', key=normalize(number);
  const history=useMemo(()=>calls.filter(c=>normalize(c.number)===key).sort((a,b)=>b.timestamp-a.timestamp),[calls,key]);
+ if(!isOpen||(!call&&!profile))return null;
  const entries=history.length?history:(call?[call]:[]);
  const spamEvidence=entries.filter(c=>c.isSpam||c.classification==='SPAM'||c.classification==='SCAM'||c.riskScore>=60);
  const classification:CallClassification=spamEvidence.some(c=>c.classification==='SCAM')||profile?.riskLevel==='HIGH_RISK'?'SCAM':spamEvidence.length?'SPAM':call?.classification||(profile?.isVerified?'VERIFIED':profile?.isSpam?'SPAM':'UNKNOWN');
