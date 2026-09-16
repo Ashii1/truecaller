@@ -1,13 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { Check, X, UserPlus, ShieldBan, AlertTriangle, FileText, Clock, Phone, Star, ShieldCheck, HelpCircle, Flag } from 'lucide-react';
-import { PostCallState, SpamCategory } from '../types';
+import { PostCallState, SpamCategory, ContactItem } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import CallContextCard from './CallContextCard';
 
 interface PostCallModalProps {
   postCall: PostCallState | null;
   onDismiss: () => void;
-  onAddContact: (number: string, name?: string) => void;
+  onAddContact: (contact: Omit<ContactItem, 'id'>) => void;
   onBlockNumber: (number: string, label: string) => void;
   onReportSpam: (number: string, category: SpamCategory, reason: string) => void;
   onSaveNote: (number: string, note: string) => void;
@@ -79,7 +79,7 @@ export default function PostCallModal({ postCall, onDismiss, onAddContact, onBlo
           </form>
         ) : (
           <div className="grid grid-cols-2 gap-2 text-xs">
-            <button onClick={() => { onAddContact(postCall.number, postCall.name); onDismiss(); }} className="p-3 rounded-2xl bg-slate-800 border border-slate-700 flex items-center space-x-2.5 font-semibold text-slate-200"><UserPlus className="w-4 h-4 text-indigo-400" /><span>Add to Contacts</span></button>
+            <button onClick={() => { onAddContact({name: postCall.name || '', number: postCall.number, category: 'GENERAL', trusted: true, isFavorite: false, notes: ''}); onDismiss(); }} className="p-3 rounded-2xl bg-slate-800 border border-slate-700 flex items-center space-x-2.5 font-semibold text-slate-200"><UserPlus className="w-4 h-4 text-indigo-400" /><span>Add to Contacts</span></button>
             <button onClick={handleBlock} className="p-3 rounded-2xl bg-slate-800 border border-slate-700 flex items-center space-x-2.5 font-semibold text-rose-300"><ShieldBan className="w-4 h-4 text-rose-400" /><span>Block Caller</span></button>
             <button onClick={() => setShowSpamReport(true)} className="p-3 rounded-2xl bg-slate-800 border border-slate-700 flex items-center space-x-2.5 font-semibold text-amber-300"><Flag className="w-4 h-4 text-amber-400" /><span>Report as Spam</span></button>
             <button onClick={() => setShowNoteEditor(true)} className="p-3 rounded-2xl bg-slate-800 border border-slate-700 flex items-center space-x-2.5 font-semibold text-slate-200"><FileText className="w-4 h-4 text-slate-400" /><span>Add Note</span></button>
