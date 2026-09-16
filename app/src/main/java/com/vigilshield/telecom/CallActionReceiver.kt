@@ -8,6 +8,7 @@ class CallActionReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_ANSWER = "com.vigilshield.telecom.ANSWER"
         const val ACTION_DECLINE = "com.vigilshield.telecom.DECLINE"
+        const val ACTION_END = "com.vigilshield.telecom.END"
         const val EXTRA_CALL_ID = "call_id"
     }
 
@@ -17,7 +18,10 @@ class CallActionReceiver : BroadcastReceiver() {
         when (intent.action) {
             ACTION_ANSWER -> call.answer(0)
             ACTION_DECLINE -> call.reject(false, "Declined from notification")
+            ACTION_END -> call.disconnect()
         }
-        CallNotificationHelper.clearCall(context, id)
+        if (intent.action == ACTION_ANSWER || intent.action == ACTION_DECLINE) {
+            CallNotificationHelper.clearCall(context, id)
+        }
     }
 }
