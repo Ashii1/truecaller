@@ -91,6 +91,48 @@ object CallNotificationHelper {
         context.getSystemService(NotificationManager::class.java).notify(callId.hashCode(), builder.build())
     }
 
+    fun showOngoingCall(context: Context, callId: String, name: String, number: String, state: String, connectTimeMillis: Long, riskLevel: String? = null) {
+        if (!callAlertsEnabled(context)) return
+        ensureChannel(context)
+        val display = identity(context, name, number)
+        val openIntent = PendingIntent.getActivity(context, callId.hashCode(), Intent(context, MainActivity::class.java).apply {
+            putExtra("open_call_id", callId)
+            putExtra("open_call_number", number)
+            putExtra("open_call_name", name)
+        }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val end = PendingIntent.getBroadcast(context, callId.hashCode() + 3, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_END).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val status = when (state) {
+            "ACTIVE" -> "Ongoing call"
+            "HOLDING" -> "Call on hold"
+            "DIALING" -> "Calling…"
+            "CONNECTING" -> "Connecting…"
+            else -> "Call in progress"
+        }
+        val riskText = when (riskLevel) {
+            "HIGH_RISK" -> " · High risk"
+            "SUSPICIOUS" -> " · Suspicious"
+            else -> ""
+        }
+        val detail = if (privacyMode(context)) "$status$riskText · Tap to return to call" else "$display$riskText · $status · Tap to return to call"
+        val person = Person.Builder().setName(display).setImportant(true).build()
+        val builder = applyPrivacy(NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield)
+            .setContentTitle(display)
+            .setContentText(detail)
+            .setSubText(status)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(openIntent)
+            .setWhen(if (connectTimeMillis > 0L) connectTimeMillis else System.currentTimeMillis())
+            .setUsesChronometer(state == "ACTIVE" || state == "HOLDING")
+            .setStyle(NotificationCompat.BigTextStyle().bigText(detail + if (state == "ACTIVE" || state == "HOLDING") "\nCall controls are available when you return to VigilShield." else ""))
+            .addAction(0, "End call", end), context)
+        if (Build.VERSION.SDK_INT >= 31) builder.setStyle(NotificationCompat.CallStyle.forOngoingCall(person, end))
+        context.getSystemService(NotificationManager::class.java).notify(callId.hashCode(), builder.build())
+    }
+
     fun showCallEnded(context: Context) {
         if (!callAlertsEnabled(context)) return
         ensureChannel(context)
