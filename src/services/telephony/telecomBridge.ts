@@ -38,7 +38,6 @@ class TelecomBridgeService {
   private initEvents(){if(typeof window==='undefined')return;window.__onAndroidTelecomEvent=(type,payload)=>{if(type==='ROLE_STATUS_CHANGED'){this.defaultDialerConfirmed=!!payload?.isDefaultDialer;this.diagnosticsCache=null;}this.listeners.forEach(l=>{try{l(type,payload);}catch(e){console.error(e);}});};window.__onAndroidDialIntent=n=>this.notifyDialIntent(n);}
   public notifyDialIntent(n:string){const v=(n||'').trim();if(v)this.dialListeners.forEach(l=>l(v));}
   public onDialIntent(l:DialListener){this.dialListeners.add(l);return()=>this.dialListeners.delete(l);}
-  public onDialIntent(l:DialListener){this.dialListeners.add(l);return()=>this.dialListeners.delete(l);}
   public subscribe(l:Listener){this.listeners.add(l);return()=>this.listeners.delete(l);}
   public dispatchCallEvent(t:string,p:any){this.diagnosticsCache=null;this.listeners.forEach(l=>{try{l(t,p);}catch(e){console.error(e);}});}
   public isAndroidEnvironment(){return this.native();}
