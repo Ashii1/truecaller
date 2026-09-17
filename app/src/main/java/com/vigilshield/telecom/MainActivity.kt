@@ -43,34 +43,18 @@ class MainActivity : AppCompatActivity() {
     private var startupCheckAttempts = 0
     private var lastConsoleError: String? = null
     private var lastPermissionSignature: String? = null
-
-    companion object {
-        private const val PERMISSION_REQ = 7002
-        private const val DIALER_ROLE_REQ = 7001
-        private const val SCREENING_ROLE_REQ = 7003
-        private const val APP_ASSET_URL = "https://appassets.androidplatform.net/index.html"
-    }
+    companion object { private const val PERMISSION_REQ = 7002; private const val DIALER_ROLE_REQ = 7001; private const val SCREENING_ROLE_REQ = 7003; private const val APP_ASSET_URL = "https://appassets.androidplatform.net/index.html" }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         configureLockscreenWindow(hasCallLaunchIntent(intent))
         val root = FrameLayout(this)
-        webView = WebView(this)
-        root.addView(webView, FrameLayout.LayoutParams(-1, -1))
-        loadingView = createLoadingView()
-        root.addView(loadingView, FrameLayout.LayoutParams(-1, -1))
-        errorView = createErrorView()
-        errorView.visibility = View.GONE
-        root.addView(errorView, FrameLayout.LayoutParams(-1, -1))
-        setContentView(root)
-        bridge = AndroidTelephonyBridge(this, webView)
-        lastPermissionSignature = permissionSignature()
+        webView = WebView(this); root.addView(webView, FrameLayout.LayoutParams(-1, -1))
+        loadingView = createLoadingView(); root.addView(loadingView, FrameLayout.LayoutParams(-1, -1))
+        errorView = createErrorView(); errorView.visibility = View.GONE; root.addView(errorView, FrameLayout.LayoutParams(-1, -1)); setContentView(root)
+        bridge = AndroidTelephonyBridge(this, webView); lastPermissionSignature = permissionSignature()
         assetLoader = WebViewAssetLoader.Builder().addPathHandler("/", WebViewAssetLoader.AssetsPathHandler(this)).build()
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
-        webView.settings.allowFileAccess = false
-        webView.settings.allowContentAccess = false
-        webView.settings.mediaPlaybackRequiresUserGesture = false
+        webView.settings.javaScriptEnabled = true; webView.settings.domStorageEnabled = true; webView.settings.allowFileAccess = false; webView.settings.allowContentAccess = false; webView.settings.mediaPlaybackRequiresUserGesture = false
         webView.addJavascriptInterface(bridge, AndroidTelephonyBridge.INTERFACE_NAME)
         webView.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? = request?.url?.let { assetLoader.shouldInterceptRequest(it) }
@@ -81,32 +65,24 @@ class MainActivity : AppCompatActivity() {
             @Suppress("DEPRECATION") override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) { showError("The VigilShield screen could not load.\n\n${description ?: "WebView error $errorCode"}") }
         }
         webView.webChromeClient = object : WebChromeClient() { override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean { if (consoleMessage.messageLevel() == ConsoleMessage.MessageLevel.ERROR) lastConsoleError = "${consoleMessage.message()} (line ${consoleMessage.lineNumber()})"; return true } }
-        webView.loadUrl(APP_ASSET_URL)
-        requestDefaultDialerIfAvailable()
+        webView.loadUrl(APP_ASSET_URL); requestDefaultDialerIfAvailable()
     }
 
     private fun hasCallLaunchIntent(value: Intent?): Boolean = value?.hasExtra("open_call_id") == true || value?.hasExtra("open_call_number") == true || value?.getStringExtra("open_tab") == "recents"
-    private fun configureLockscreenWindow(callLaunch: Boolean) { val keyguard = getSystemService(KeyguardManager::class.java); if (callLaunch) { if (Build.VERSION.SDK_INT >= 27) setShowWhenLocked(true); if (Build.VERSION.SDK_INT >= 27) setTurnScreenOn(true); window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); if (keyguard.isKeyguardLocked && Build.VERSION.SDK_INT >= 26) runCatching { keyguard.requestDismissKeyguard(this, null) } } else { if (Build.VERSION.SDK_INT >= 27) setShowWhenLocked(false); if (Build.VERSION.SDK_INT >= 27) setTurnScreenOn(false); window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) } }
+    private fun configureLockscreenWindow(callLaunch: Boolean) {
+        if (callLaunch) { if (Build.VERSION.SDK_INT >= 27) setShowWhenLocked(true); if (Build.VERSION.SDK_INT >= 27) setTurnScreenOn(true); window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+        else { if (Build.VERSION.SDK_INT >= 27) setShowWhenLocked(false); if (Build.VERSION.SDK_INT >= 27) setTurnScreenOn(false); window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
     private fun permissionSignature(): String = listOf(Manifest.permission.READ_CONTACTS, Manifest.permission.READ_CALL_LOG, Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE, Manifest.permission.ANSWER_PHONE_CALLS).joinToString("|") { "$it:${ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED}" }
     private fun syncWebSettingsToNative() { webView.evaluateJavascript("localStorage.getItem('vigilshield_settings')") { raw -> runCatching { val value = raw?.trim()?.let { if (it == "null") null else org.json.JSONTokener(it).nextValue() as? String } ?: return@runCatching; val settings = org.json.JSONObject(value); bridge.setSecuritySetting("masterEnabled", settings.optBoolean("masterEnabled", true)); bridge.setSecuritySetting("phase2_risk_detection_enabled", settings.optBoolean("scamShieldEnabled", true)); bridge.setSecuritySetting("phase2_financial_warnings_enabled", settings.optBoolean("financialWarningsEnabled", true)); bridge.setSecuritySetting("phase2_spoof_warnings_enabled", settings.optBoolean("spoofWarningsEnabled", true)); bridge.setSecuritySetting("smart_spam_reject_high_risk", settings.optBoolean("autoCancelSpamCalls", false)); bridge.setSecuritySetting("block_private_hidden", settings.optBoolean("blockPrivateHidden", false)); bridge.setSecuritySetting("block_international", settings.optBoolean("blockInternational", false)); bridge.setSecuritySetting("unknown_caller_silence", settings.optBoolean("unknownCallerSilence", false)); bridge.setSecuritySetting("unknown_caller_reject", settings.optBoolean("unknownCallerReject", false)) } } }
     private fun dispatchLaunchIntent() { val current = intent; val callId = current.getStringExtra("open_call_id"); val number = current.getStringExtra("open_call_number") ?: current.getStringExtra("search_number"); val name = current.getStringExtra("open_call_name"); val tab = current.getStringExtra("open_tab"); if (!callId.isNullOrBlank() || !number.isNullOrBlank() || !tab.isNullOrBlank()) { val payload = JSONObject().put("callId", callId ?: "").put("number", number ?: "").put("name", name ?: "").put("tab", tab ?: "recents"); bridge.dispatchWebEvent("OPEN_CALL_FROM_NOTIFICATION", payload); if (!number.isNullOrBlank()) { val quoted = JSONObject.quote(number); webView.post { webView.evaluateJavascript("if(window.__onAndroidDialIntent){window.__onAndroidDialIntent($quoted);}", null) } } } }
     private fun scheduleReactMountCheck(view: WebView?) { if (view == null || isFinishing || isDestroyed || uiReportedReady) return; startupCheckAttempts = 0; mainHandler.removeCallbacksAndMessages("react-startup"); val check = object : Runnable { override fun run() { if (uiReportedReady || isFinishing || isDestroyed) return; startupCheckAttempts++; verifyReactMounted(view); if (!uiReportedReady && startupCheckAttempts < 10) mainHandler.postDelayed(this, 500L) } }; mainHandler.postDelayed(check, 500L) }
-    private fun verifyReactMounted(view: WebView) { if (uiReportedReady || isFinishing || isDestroyed) return; view.evaluateJavascript("(function(){var r=document.getElementById('root');return r&&r.children.length>0?'READY':'EMPTY';})()") { result -> if (result?.contains("READY") == true) { uiReportedReady = true; mainHandler.removeCallbacksAndMessages("react-startup"); hideLoading(); hideError(); syncWebSettingsToNative(); dispatchLaunchIntent() } else if (startupCheckAttempts >= 10) showError("VigilShield UI did not finish starting.\n\n${lastConsoleError ?: "The interface took too long to mount."}") } }
+    private fun verifyReactMounted(view: WebView?) { if (view == null || uiReportedReady || isFinishing || isDestroyed) return; view.evaluateJavascript("(function(){var r=document.getElementById('root');return r&&r.children.length>0?'READY':'EMPTY';})()") { result -> if (result?.contains("READY") == true) { uiReportedReady = true; mainHandler.removeCallbacksAndMessages("react-startup"); hideLoading(); hideError(); syncWebSettingsToNative(); dispatchLaunchIntent() } else if (startupCheckAttempts >= 10) showError("VigilShield UI did not finish starting.\n\n${lastConsoleError ?: "The interface took too long to mount."}") } }
     private fun createLoadingView(): View = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setBackgroundColor(Color.rgb(2, 6, 23)); setPadding(48, 48, 48, 48); addView(ProgressBar(this@MainActivity), LinearLayout.LayoutParams(64, 64)); addView(TextView(this@MainActivity).apply { text = "Starting VigilShield"; textSize = 18f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setPadding(0, 24, 0, 0) }); addView(TextView(this@MainActivity).apply { text = "Preparing your call protection…"; textSize = 13f; setTextColor(Color.LTGRAY); gravity = Gravity.CENTER; setPadding(0, 8, 0, 0) }) }
     private fun createErrorView(): View { val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setBackgroundColor(Color.rgb(2, 6, 23)); setPadding(32, 32, 32, 32) }; box.addView(TextView(this).apply { text = "VigilShield couldn't start"; textSize = 24f; setTextColor(Color.WHITE); gravity = Gravity.CENTER }); errorText = TextView(this).apply { textSize = 15f; setTextColor(Color.LTGRAY); gravity = Gravity.CENTER; setPadding(0, 20, 0, 24) }; box.addView(errorText); box.addView(Button(this).apply { text = "Retry"; setOnClickListener { hideError(); showLoading(); webView.reload() } }); return box }
-    private fun showLoading() { loadingView.visibility = View.VISIBLE; errorView.visibility = View.GONE }
-    private fun hideLoading() { loadingView.visibility = View.GONE }
-    private fun showError(message: String) { loadingView.visibility = View.GONE; errorText.text = message; errorView.visibility = View.VISIBLE }
-    private fun hideError() { errorView.visibility = View.GONE }
+    private fun showLoading() { loadingView.visibility = View.VISIBLE; errorView.visibility = View.GONE }; private fun hideLoading() { loadingView.visibility = View.GONE }; private fun showError(message: String) { loadingView.visibility = View.GONE; errorText.text = message; errorView.visibility = View.VISIBLE }; private fun hideError() { errorView.visibility = View.GONE }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if ((keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == KeyEvent.KEYCODE_VOLUME_UP) && NativeInCallService.activeCalls.values.any { it.state == android.telecom.Call.STATE_RINGING }) {
-            NativeInCallService.stopRinging()
-            return true
-        }
-        return super.onKeyDown(keyCode, event)
-    }
-
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean { if ((keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == KeyEvent.KEYCODE_VOLUME_UP) && NativeInCallService.activeCalls.values.any { it.state == android.telecom.Call.STATE_RINGING }) { NativeInCallService.stopRinging(); return true }; return super.onKeyDown(keyCode, event) }
     override fun onResume() { super.onResume(); if (NativeInCallService.activeCalls.isEmpty()) { CallNotificationHelper.clearAllCallNotifications(this); NativeInCallService.stopRinging() }; if (::bridge.isInitialized) { bridge.dispatchWebEvent("ROLE_STATUS_CHANGED", bridge.roleStatus()); bridge.dispatchWebEvent("PERMISSIONS_CHANGED", bridge.permissionStatus()); syncWebSettingsToNative(); val current = permissionSignature(); if (lastPermissionSignature != current) lastPermissionSignature = current }; configureLockscreenWindow(hasCallLaunchIntent(intent) && NativeInCallService.activeCalls.isNotEmpty()) }
     override fun onNewIntent(intent: Intent?) { super.onNewIntent(intent); if (intent != null) { setIntent(intent); configureLockscreenWindow(hasCallLaunchIntent(intent)); dispatchLaunchIntent() } }
     @Deprecated("Deprecated in Android API 31; kept for API 29/30 role flow compatibility") override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) { super.onActivityResult(requestCode, resultCode, data); when (requestCode) { DIALER_ROLE_REQ -> { bridge.dispatchWebEvent("ROLE_STATUS_CHANGED", bridge.roleStatus()); requestPermissionsIfNeeded() }; SCREENING_ROLE_REQ -> bridge.dispatchWebEvent("ROLE_STATUS_CHANGED", bridge.roleStatus()) } }
