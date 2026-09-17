@@ -15,14 +15,7 @@ class ProductionCallScreeningService : CallScreeningService() {
         val normalized = normalize(number)
         val prefs = getSharedPreferences("vigilshield", Context.MODE_PRIVATE)
 
-        // The web setting is mirrored into native preferences. When protection is
-        // disabled, the screening service must become a transparent pass-through.
-        if (!prefs.getBoolean("masterEnabled", true)) {
-            respondToCall(details, allowResponse())
-            return
-        }
-
-        if (details.callDirection != Call.Details.DIRECTION_INCOMING) {
+        if (!prefs.getBoolean("masterEnabled", true) || details.callDirection != Call.Details.DIRECTION_INCOMING) {
             respondToCall(details, allowResponse())
             return
         }
@@ -30,14 +23,8 @@ class ProductionCallScreeningService : CallScreeningService() {
         val emergencyContact = EmergencySafetyPolicy.isEmergencyContact(applicationContext, number)
         val emergencyMode = EmergencySafetyPolicy.emergencyModeEnabled(applicationContext)
         val deviceContact = isDeviceContact(number)
-        if (emergencyContact || emergencyMode) {
+        if (emergencyContact || emergencyMode || deviceContact) {
             if (deviceContact) EmergencyRepeatCallPolicy.onTrustedIncomingCall(applicationContext, number)
-            respondToCall(details, allowResponse())
-            return
-        }
-
-        if (deviceContact) {
-            EmergencyRepeatCallPolicy.onTrustedIncomingCall(applicationContext, number)
             respondToCall(details, allowResponse())
             return
         }
@@ -50,6 +37,21 @@ class ProductionCallScreeningService : CallScreeningService() {
 
         val callerName = details.callerDisplayName.orEmpty()
         RepeatedCallAttentionPolicy.onIncomingCall(applicationContext, number, callerName, trusted = false)
+
+        val reported = ScamNumberRepository.isReported(applicationContext, normalized)
+        if (reported && prefs.getBoolean("reported_scam_auto_block", true)) {
+            CallNotificationHelper.showSecurityWarning(
+                applicationContext,
+                callerName.ifBlank { number.ifBlank { "Unknown caller" } },
+                "REPORTED_SCAM",
+                "HIGH",
+                "This number has been reported as a scam. The call was blocked by your protection settings."
+            )
+            respondToCall(details, CallResponse.Builder()
+                .setDisallowCall(true).setRejectCall(true).setSilenceCall(false)
+                .setSkipCallLog(false).setSkipNotification(false).build())
+            return
+        }
 
         val risk = CallRiskAnalyzer.analyze(number, callerName)
         val riskEnabled = prefs.getBoolean("phase2_risk_detection_enabled", true)
@@ -91,14 +93,9 @@ class ProductionCallScreeningService : CallScreeningService() {
             prefs.getBoolean("smart_silent_unknown_and_spam", false)
         val shouldSilenceUnknown = drivingMode || silenceUnknown || smartSilentUnknown
         val shouldRejectUnknown = !drivingMode && rejectUnknown
-        val response = CallResponse.Builder()
-            .setDisallowCall(shouldRejectUnknown)
-            .setRejectCall(shouldRejectUnknown)
-            .setSilenceCall(shouldSilenceUnknown)
-            .setSkipCallLog(false)
-            .setSkipNotification(false)
-            .build()
-        respondToCall(details, response)
+        respondToCall(details, CallResponse.Builder()
+            .setDisallowCall(shouldRejectUnknown).setRejectCall(shouldRejectUnknown)
+            .setSilenceCall(shouldSilenceUnknown).setSkipCallLog(false).setSkipNotification(false).build())
     }
 
     private fun allowResponse(): CallResponse = CallResponse.Builder()
