@@ -64,8 +64,15 @@ export default function PermissionCenterModal({ isOpen, onClose, settings, onUpd
       if (typeof phase2.financialWarnings === 'boolean') setFinancialWarnings(phase2.financialWarnings);
       if (typeof phase2.spoofWarnings === 'boolean') setSpoofWarnings(phase2.spoofWarnings);
     } catch { /* keep safe defaults */ }
-    const timer = window.setInterval(refresh, 1000);
-    return () => window.clearInterval(timer);
+    const refreshWhenVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    const timer = window.setInterval(refreshWhenVisible, 3000);
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
   }, [isOpen, isDefaultDialer]);
 
   useEffect(() => {
