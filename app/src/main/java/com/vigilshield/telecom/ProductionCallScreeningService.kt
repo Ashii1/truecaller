@@ -38,8 +38,6 @@ class ProductionCallScreeningService : CallScreeningService() {
         val callerName = details.callerDisplayName.orEmpty()
         RepeatedCallAttentionPolicy.onIncomingCall(applicationContext, number, callerName, trusted = false)
 
-        // Numbers explicitly reported by the user/community are blocked before
-        // heuristic warnings, while still preserving the normal call log.
         val reported = ScamNumberRepository.isReported(applicationContext, normalized)
         if (reported && prefs.getBoolean("reported_scam_auto_block", true)) {
             CallNotificationHelper.showSecurityWarning(
@@ -50,12 +48,8 @@ class ProductionCallScreeningService : CallScreeningService() {
                 "This number has been reported as a scam. The call was blocked by your protection settings."
             )
             respondToCall(details, CallResponse.Builder()
-                .setDisallowCall(true)
-                .setRejectCall(true)
-                .setSilenceCall(false)
-                .setSkipCallLog(false)
-                .setSkipNotification(false)
-                .build())
+                .setDisallowCall(true).setRejectCall(true).setSilenceCall(false)
+                .setSkipCallLog(false).setSkipNotification(false).build())
             return
         }
 
@@ -71,7 +65,7 @@ class ProductionCallScreeningService : CallScreeningService() {
                 applicationContext,
                 callerName.ifBlank { number.ifBlank { "Unknown caller" } },
                 risk.optString("risk", "UNKNOWN"),
-                spoofWarning.toString(),
+                risk.optString("spoofRisk", "LOW"),
                 risk.optString("explanation", "Caller identity could not be verified locally.")
             )
         }
@@ -100,12 +94,8 @@ class ProductionCallScreeningService : CallScreeningService() {
         val shouldSilenceUnknown = drivingMode || silenceUnknown || smartSilentUnknown
         val shouldRejectUnknown = !drivingMode && rejectUnknown
         respondToCall(details, CallResponse.Builder()
-            .setDisallowCall(shouldRejectUnknown)
-            .setRejectCall(shouldRejectUnknown)
-            .setSilenceCall(shouldSilenceUnknown)
-            .setSkipCallLog(false)
-            .setSkipNotification(false)
-            .build())
+            .setDisallowCall(shouldRejectUnknown).setRejectCall(shouldRejectUnknown)
+            .setSilenceCall(shouldSilenceUnknown).setSkipCallLog(false).setSkipNotification(false).build())
     }
 
     private fun allowResponse(): CallResponse = CallResponse.Builder()
