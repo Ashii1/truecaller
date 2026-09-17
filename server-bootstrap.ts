@@ -50,4 +50,7 @@ express.application.get = function patchedGet(this: any, pathOrSetting: any, ...
   return originalGet.call(this, pathOrSetting, ...handlers);
 };
 
-await import('./server');
+import('./server').catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exitCode = 1;
+});
