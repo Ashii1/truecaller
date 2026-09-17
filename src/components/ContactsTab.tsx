@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, memo, useMemo, useState } from 'react';
 import {
   Briefcase,
   Building2,
@@ -33,7 +33,7 @@ interface ContactsTabProps {
 type CategoryFilter = 'ALL' | 'FAVORITES' | 'FAMILY' | 'WORK' | 'BUSINESSES' | 'RECENT';
 const clean = (v: string) => v.replace(/\D/g, '');
 
-export default function ContactsTab({
+function ContactsTab({
   contacts,
   onInitiateCall,
   onAddContact,
@@ -384,3 +384,5 @@ export default function ContactsTab({
     </div>
   );
 }
+
+export default memo(ContactsTab);

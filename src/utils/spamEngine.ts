@@ -65,9 +65,9 @@ export function formatPhoneNumber(num: string): string {
     return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
   }
 
-  // 5. Shortcodes
+  // 5. Shortcodes (4-6 digits, return as-is without prepending text)
   if (digits.length >= 4 && digits.length <= 6) {
-    return `Shortcode ${digits}`;
+    return digits;
   }
 
   if (num.startsWith('+')) {
@@ -156,8 +156,14 @@ export const INDIAN_CIRCLE_PREFIXES: Record<string, string> = {
   '9837': 'UP (West) Circle', '9897': 'UP (West) Circle', '9927': 'UP (West) Circle',
   // Bihar & Jharkhand
   '9835': 'Bihar & Jharkhand', '9852': 'Bihar & Jharkhand', '9931': 'Bihar & Jharkhand',
-  // Madhya Pradesh
+  // Madhya Pradesh & Chhattisgarh
   '9826': 'Madhya Pradesh', '9827': 'Madhya Pradesh', '9893': 'Madhya Pradesh',
+  '9981': 'Madhya Pradesh', '9926': 'Madhya Pradesh', '9977': 'Madhya Pradesh',
+  '9425': 'Madhya Pradesh', '9424': 'Madhya Pradesh', '9179': 'Madhya Pradesh',
+  '9755': 'Madhya Pradesh', '9752': 'Madhya Pradesh', '9753': 'Madhya Pradesh',
+  '9754': 'Madhya Pradesh', '9630': 'Madhya Pradesh', '9685': 'Madhya Pradesh',
+  '9669': 'Madhya Pradesh', '9098': 'Madhya Pradesh', '8109': 'Madhya Pradesh',
+  '8989': 'Madhya Pradesh', '8889': 'Madhya Pradesh', '8982': 'Madhya Pradesh',
 };
 
 export function resolveIndianOperator(d10: string): string {
@@ -248,10 +254,11 @@ export function resolveNumberMetadata(rawNumber: string): { location: string; ca
   if (isIndianPattern) {
     const d10 = digits.length >= 10 ? digits.slice(-10) : digits;
     const pfx4 = d10.slice(0, 4);
-    const circle = INDIAN_CIRCLE_PREFIXES[pfx4] || 'Tamil Nadu';
+    const circle = INDIAN_CIRCLE_PREFIXES[pfx4] || 'India (Cellular)';
     const carrier = resolveIndianOperator(d10);
+    const loc = circle.endsWith('India') ? circle : `${circle}, India`;
     return {
-      location: `${circle}, India`,
+      location: loc,
       carrier,
     };
   }
@@ -1116,6 +1123,10 @@ export function screenEvent({
   };
 }
 
+// High-performance bounded in-memory cache for directory profile resolutions
+const LOOKUP_MEMORY_CACHE = new Map<string, TruecallerDirectoryProfile>();
+const MAX_LOOKUP_CACHE_SIZE = 500;
+
 /**
  * Truecaller global directory search engine.
  * Computes deterministic or queried reputation, community comments, tags, and score.
@@ -1126,21 +1137,20 @@ export function lookupTruecallerDirectory(
   whitelist: WhitelistEntry[] = []
 ): TruecallerDirectoryProfile {
   const norm = normalizePhoneNumber(phoneNumber);
+  const cacheKey = `${norm}::${rules.length}::${whitelist.length}`;
+  const cachedHit = LOOKUP_MEMORY_CACHE.get(cacheKey);
+  if (cachedHit) return cachedHit;
+
   const meta = resolveNumberMetadata(phoneNumber);
   const digits = norm.replace(/\D/g, '');
 
-  // Helper to cache resolved caller identities into the local 'calls' list for maximum display accuracy
+  // Helper to store resolved caller identity in bounded in-memory cache
   const cacheAndReturn = (profile: TruecallerDirectoryProfile): TruecallerDirectoryProfile => {
-    if (profile && profile.name && profile.name !== phoneNumber && typeof window !== 'undefined') {
-      externalDirectoryService.cacheResultInLocalCalls(phoneNumber, profile.name, {
-        carrier: profile.carrier,
-        location: profile.location,
-        isSpam: profile.isSpam,
-        riskScore: profile.spamScore,
-        spamCategory: profile.spamCategory,
-        isVerifiedBusiness: profile.isVerified,
-      });
+    if (LOOKUP_MEMORY_CACHE.size >= MAX_LOOKUP_CACHE_SIZE) {
+      const firstKey = LOOKUP_MEMORY_CACHE.keys().next().value;
+      if (firstKey) LOOKUP_MEMORY_CACHE.delete(firstKey);
     }
+    LOOKUP_MEMORY_CACHE.set(cacheKey, profile);
     return profile;
   };
 
@@ -1357,12 +1367,13 @@ export function lookupTruecallerDirectory(
   // accompanied by an explicit Spam or Safe reputation status.
   const d10 = digits.length >= 10 ? digits.slice(-10) : digits;
   const pfx4 = d10.slice(0, 4);
-  const circle = INDIAN_CIRCLE_PREFIXES[pfx4] || (meta.location && meta.location !== 'Cellular / Landline' ? meta.location.split(',')[0] : 'Tamil Nadu');
+  const circle = INDIAN_CIRCLE_PREFIXES[pfx4] || (meta.location && meta.location !== 'Cellular / Landline' ? meta.location.split(',')[0].trim() : 'India (Cellular)');
   const operator = resolveIndianOperator(d10) || meta.carrier;
 
   const publicRecord = resolveFromPublicDirectory(phoneNumber, circle, operator);
   if (publicRecord) {
     const resolvedName = (cachedFromCalls && !publicRecord.isSpam) ? cachedFromCalls : publicRecord.name;
+    const cleanLoc = publicRecord.location || (circle.endsWith('India') ? circle : `${circle}, India`);
     return cacheAndReturn({
       number: phoneNumber,
       name: resolvedName,
@@ -1372,7 +1383,7 @@ export function lookupTruecallerDirectory(
       spamCategory: publicRecord.spamCategory,
       topTags: publicRecord.tags,
       carrier: publicRecord.carrier || operator,
-      location: publicRecord.location || `${circle}, India`,
+      location: cleanLoc,
       lineType: publicRecord.lineType,
       isVerified: publicRecord.isVerified,
       riskLevel: publicRecord.isSpam ? 'HIGH_RISK' : publicRecord.isVerified ? 'SAFE' : 'SAFE',
@@ -1386,27 +1397,21 @@ export function lookupTruecallerDirectory(
     });
   }
 
-  // 7. General fallback (authentic respective name and safe verification)
-  const fallbackName = cachedFromCalls || 'Verified Public Subscriber';
+  // 7. General fallback for unlisted / unknown numbers (no fake names or false verifications)
+  const fallbackName = cachedFromCalls || formatPhoneNumber(phoneNumber) || phoneNumber;
   return cacheAndReturn({
     number: phoneNumber,
     name: fallbackName,
     spamScore: 0,
-    riskLevel: 'SAFE',
+    riskLevel: 'UNKNOWN',
     isSpam: false,
     spamReportsCount: 0,
-    topTags: ['Public Subscriber', meta.location, 'Clean Record', '0 Spam Reports'],
+    topTags: [meta.location, meta.carrier].filter(Boolean) as string[],
     carrier: meta.carrier,
     location: meta.location,
     lineType: 'Mobile',
-    isVerified: true,
-    communityComments: [
-      {
-        author: 'Public Telecom Registry',
-        text: `Active subscriber in ${meta.location}. Clean record with 0 spam complaints.`,
-        date: 'Clean Record',
-      },
-    ],
+    isVerified: false,
+    communityComments: [],
   });
 }
 

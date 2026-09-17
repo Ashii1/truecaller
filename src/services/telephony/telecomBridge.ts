@@ -18,6 +18,7 @@ declare global {
       setMuted:(muted:boolean)=>boolean; setSpeakerRoute:(enabled:boolean)=>boolean; sendDtmfTone:(callId:string,digit:string)=>boolean;
       holdCall:(callId:string)=>boolean; unholdCall:(callId:string)=>boolean; swapCalls:()=>boolean; mergeCalls:()=>boolean;
       fetchRealCallLogs:(limit:number)=>string; fetchRealContacts:(limit:number)=>string; lookupContactName?:(number:string)=>string;
+      clearStaleCallNotifications?:()=>boolean;
       setSecuritySetting?:(key:string,value:boolean)=>boolean; syncBlockRules?:(json:string)=>boolean; createContact?:(number:string,name?:string)=>boolean;
     };
     __onAndroidTelecomEvent?:(eventType:string,payload:any)=>void;
@@ -35,6 +36,7 @@ class TelecomBridgeService {
   constructor(){
     this.refreshStatus();
     this.initEvents();
+    this.clearStaleCallNotifications();
     // First-launch UX: ask Android for ROLE_DIALER once, immediately after the
     // WebView is ready. If declined, Settings > Permission Center remains the
     // permanent place to request it again.
@@ -93,8 +95,13 @@ class TelecomBridgeService {
     }catch(e:any){return {success:false,message:e?.message||'Android Telecom could not place the call.',dialableNumber:n};}
   }
   public answerCall(id:string){if(!this.native())return false;return window.AndroidTelecomBridge!.answerCall(id);}
-  public rejectCall(id:string,reason?:string){if(!this.native())return false;return window.AndroidTelecomBridge!.rejectCall(id,reason);}
-  public disconnectCall(id:string){if(!this.native())return false;return window.AndroidTelecomBridge!.disconnectCall(id);}
+  public rejectCall(id:string,reason?:string){if(!this.native())return false;const res=window.AndroidTelecomBridge!.rejectCall(id,reason);this.clearStaleCallNotifications();return res;}
+  public disconnectCall(id:string){if(!this.native())return false;const res=window.AndroidTelecomBridge!.disconnectCall(id);this.clearStaleCallNotifications();return res;}
+  public silenceRinger(){
+    if(!this.native() || !(window.AndroidTelecomBridge as any)?.silenceRinger) return false;
+    try{return (window.AndroidTelecomBridge as any).silenceRinger();}catch{return false;}
+  }
+  public clearStaleCallNotifications(){if(!this.native()||!window.AndroidTelecomBridge!.clearStaleCallNotifications)return false;try{return window.AndroidTelecomBridge!.clearStaleCallNotifications();}catch{return false;}}
   public setMuted(v:boolean){return this.native()?window.AndroidTelecomBridge!.setMuted(v):false;}
   public setSpeakerRoute(v:boolean){return this.native()?window.AndroidTelecomBridge!.setSpeakerRoute(v):false;}
   public sendDtmfTone(id:string,d:string){return this.native()?window.AndroidTelecomBridge!.sendDtmfTone(id,d):false;}

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import DialerTab from './components/DialerTab';
@@ -19,6 +19,7 @@ import PermissionCenterModal from './components/PermissionCenterModal';
 import { BlockRule, WhitelistEntry, ShieldSettings, CallLogItem, IncomingCallState, ActiveCallSession, PostCallState, SecurityTimelineEvent, TruecallerDirectoryProfile, ContactItem, SpamCategory, TabId, CallRecordingItem } from './types';
 import { INITIAL_SETTINGS } from './data/defaultData';
 import { lookupTruecallerDirectory } from './utils/spamEngine';
+import { detectNeighborSpoof, detectPingBackScam, formatPrivateCallNumber } from './utils/spoofEngine';
 import { telecomBridge } from './services/telephony/telecomBridge';
 import { externalDirectoryService } from './services/externalDirectoryService';
 
@@ -32,6 +33,7 @@ type Sim='SIM 1 (Personal)'|'SIM 2 (Work)';
 export default function App(){
  const [activeTab,setActiveTab]=useState<TabId>('dialer'); const [selectedSim,setSelectedSim]=useState<Sim>('SIM 1 (Personal)');
  const safeParse=<T,>(key:string,fallback:T):T=>{try{const raw=localStorage.getItem(key);return raw?JSON.parse(raw) as T:fallback}catch{return fallback}};
+ const safeStore=<T,>(key:string,value:T):void=>{try{localStorage.setItem(key,JSON.stringify(value))}catch(err){console.warn(`Storage quota or write failed for ${key}:`,err)}};
  const [settings,setSettings]=useState<ShieldSettings>(()=>safeParse('vigilshield_settings',INITIAL_SETTINGS));
  const [rules,setRules]=useState<BlockRule[]>(()=>safeParse('vigilshield_rules',BASELINE_RULES));
  const [whitelist,setWhitelist]=useState<WhitelistEntry[]>(()=>safeParse('vigilshield_whitelist',[]));
@@ -154,80 +156,267 @@ export default function App(){
  useEffect(()=>{const handler=(e:any)=>{e.preventDefault();setDeferredPrompt(e)};window.addEventListener('beforeinstallprompt',handler);return()=>window.removeEventListener('beforeinstallprompt',handler)},[]);
  useEffect(()=>{const unsub=telecomBridge.onDialIntent(n=>{setActiveTab('dialer');setDialerInitialNumber(n)});return unsub},[]);
  useEffect(()=>{const handleCallsUpdate=(e:any)=>{if(e.detail&&Array.isArray(e.detail)){setCalls(e.detail)}else{const fresh=safeParse<CallLogItem[]>('vigilshield_calls',[]);if(fresh?.length)setCalls(fresh)}};window.addEventListener('vigilshield_calls_updated',handleCallsUpdate as EventListener);externalDirectoryService.batchEnrichLocalCalls();return()=>window.removeEventListener('vigilshield_calls_updated',handleCallsUpdate as EventListener)},[]);
- useEffect(()=>{localStorage.setItem('vigilshield_settings',JSON.stringify(settings))},[settings]); useEffect(()=>{localStorage.setItem('vigilshield_rules',JSON.stringify(rules))},[rules]); useEffect(()=>{localStorage.setItem('vigilshield_whitelist',JSON.stringify(whitelist))},[whitelist]); useEffect(()=>{localStorage.setItem('vigilshield_contacts',JSON.stringify(contacts))},[contacts]); useEffect(()=>{localStorage.setItem('vigilshield_calls',JSON.stringify(calls))},[calls]); useEffect(()=>{localStorage.setItem('vigilshield_timeline',JSON.stringify(timelineEvents))},[timelineEvents]); useEffect(()=>{localStorage.setItem('vigilshield_autocancel',JSON.stringify(autoCancelEnabled))},[autoCancelEnabled]);
- useEffect(()=>{setIsDefaultDialer(telecomBridge.isDefaultDialer());if(telecomBridge.isAndroidEnvironment()){try{const d=telecomBridge.fetchDeviceCallLogs(100);if(d?.length)setCalls(d);const c=telecomBridge.fetchDeviceContacts(300);if(c?.length)setContacts(c)}catch(e){console.warn('Initial device data sync failed',e)}}const unsub=telecomBridge.subscribe((eventType,payload)=>{const callId=payload?.callId||`call-${Date.now()}`,details=payload?.details,number=details?.number||'',state=details?.state||'RINGING',incoming=details?.isIncoming??(state==='RINGING');if(eventType==='ROLE_STATUS_CHANGED'){setIsDefaultDialer(Boolean(payload?.isDefaultDialer));return}if(eventType==='CALL_ADDED'||eventType==='CALL_STATE_CHANGED'){const p=lookupTruecallerDirectory(number,rules,whitelist);if(incoming&&(state==='RINGING'||state==='CONNECTING'))setActiveIncomingCall({callId,number,callerName:details?.callerDisplayName||p.name||number,carrier:p.carrier||'Cellular',location:p.location||'Incoming Cellular Call',riskScore:p.spamScore,reportsCount:p.spamReportsCount,isSpam:p.isSpam,spamCategory:p.spamCategory,spamReason:p.spamReason,isVerifiedBusiness:p.isVerified,status:'RINGING',countdown:p.isSpam&&autoCancelEnabled?3:0});else if(state==='ACTIVE'||state==='DIALING'||state==='HOLDING'){setActiveIncomingCall(null);setActiveCallSession({id:callId,number,name:details?.callerDisplayName||p.name||number,isSpam:p.isSpam,spamCategory:p.spamCategory,riskScore:p.spamScore,riskLevel:p.riskLevel||'UNKNOWN',durationSeconds:details?.durationSeconds||0,status:state==='HOLDING'?'HELD':'CONNECTED',isMuted:false,isSpeaker:false,isHeld:Boolean(details?.isHolding),isKeypadOpen:false,selectedSim,sim:selectedSim,isVerifiedBusiness:p.isVerified})}}else if(eventType==='CALL_REMOVED'||eventType==='CALL_DISCONNECTED'){setActiveIncomingCall(null);setActiveCallSession(prev=>{if(!prev||prev.id!==callId)return prev;setPostCallState({isOpen:true,callId:prev.id,number:prev.number,name:prev.name,durationSeconds:prev.durationSeconds||1,durationStr:`${prev.durationSeconds||1}s`,sim:prev.sim,isSpam:prev.isSpam,wasSpam:prev.isSpam});return null});if(telecomBridge.isAndroidEnvironment())try{const fresh=telecomBridge.fetchDeviceCallLogs(100);if(fresh?.length)setCalls(fresh)}catch(e){console.warn(e)}}});return()=>unsub},[rules,whitelist,selectedSim,autoCancelEnabled]);
+  useEffect(() => { safeStore('vigilshield_settings', settings); }, [settings]);
+  useEffect(() => { safeStore('vigilshield_rules', rules); }, [rules]);
+  useEffect(() => { safeStore('vigilshield_whitelist', whitelist); }, [whitelist]);
+  useEffect(() => { safeStore('vigilshield_contacts', contacts); }, [contacts]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      safeStore('vigilshield_calls', calls);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [calls]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      safeStore('vigilshield_timeline', timelineEvents);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [timelineEvents]);
+  useEffect(() => { safeStore('vigilshield_autocancel', autoCancelEnabled); }, [autoCancelEnabled]);
+  useEffect(()=>{setIsDefaultDialer(telecomBridge.isDefaultDialer());if(telecomBridge.isAndroidEnvironment()){try{const d=telecomBridge.fetchDeviceCallLogs(100);if(d?.length)setCalls(d);const c=telecomBridge.fetchDeviceContacts(300);if(c?.length)setContacts(c)}catch(e){console.warn('Initial device data sync failed',e)}}const unsub=telecomBridge.subscribe((eventType,payload)=>{const callId=payload?.callId||`call-${Date.now()}`,details=payload?.details,number=details?.number||'',state=details?.state||'RINGING',incoming=details?.isIncoming??(state==='RINGING');if(eventType==='ROLE_STATUS_CHANGED'){setIsDefaultDialer(Boolean(payload?.isDefaultDialer));return}if(eventType==='CALL_ADDED'||eventType==='CALL_STATE_CHANGED'){const p=lookupTruecallerDirectory(number,rules,whitelist);if(incoming&&(state==='RINGING'||state==='CONNECTING')){const contactNums=contacts.map(c=>c.number);const spoofCheck=settings.neighborSpoofEnabled!==false?detectNeighborSpoof(number,settings.userPhoneNumber,contactNums):{isNeighborSpoof:false,warningMessage:''};const pingBackCheck=settings.pingBackShieldEnabled!==false?detectPingBackScam(number,details?.durationSeconds||0,state==='MISSED'?1:0):{isPingBackScam:false,warningMessage:''};if(pingBackCheck.isPingBackScam){telecomBridge.silenceRinger()}setActiveIncomingCall({callId,number,callerName:details?.callerDisplayName||p.name||number,carrier:p.carrier||'Cellular',location:p.location||'Incoming Cellular Call',riskScore:Math.max(p.spamScore,spoofCheck.isNeighborSpoof?80:0,pingBackCheck.isPingBackScam?95:0),reportsCount:p.spamReportsCount,isSpam:p.isSpam||spoofCheck.isNeighborSpoof||pingBackCheck.isPingBackScam,spamCategory:p.spamCategory||(spoofCheck.isNeighborSpoof?'NEIGHBOR_SPOOF':pingBackCheck.isPingBackScam?'PING_BACK':undefined),spamReason:spoofCheck.isNeighborSpoof?spoofCheck.warningMessage:pingBackCheck.isPingBackScam?pingBackCheck.warningMessage:p.spamReason,isVerifiedBusiness:p.isVerified,isNeighborSpoof:spoofCheck.isNeighborSpoof,isPingBackScam:pingBackCheck.isPingBackScam,spoofWarning:spoofCheck.warningMessage||pingBackCheck.warningMessage,isPingBackMuted:pingBackCheck.isPingBackScam,status:'RINGING',countdown:(p.isSpam||pingBackCheck.isPingBackScam)&&autoCancelEnabled?3:0})}else if(state==='ACTIVE'||state==='DIALING'||state==='HOLDING'){setActiveIncomingCall(null);setActiveCallSession({id:callId,number,name:details?.callerDisplayName||p.name||number,isSpam:p.isSpam,spamCategory:p.spamCategory,riskScore:p.spamScore,riskLevel:p.riskLevel||'UNKNOWN',durationSeconds:details?.durationSeconds||0,status:state==='HOLDING'?'HELD':'CONNECTED',isMuted:false,isSpeaker:false,isHeld:Boolean(details?.isHolding),isKeypadOpen:false,selectedSim,sim:selectedSim,isVerifiedBusiness:p.isVerified})}}else if(eventType==='CALL_REMOVED'||eventType==='CALL_DISCONNECTED'){setActiveIncomingCall(null);setActiveCallSession(prev=>{if(!prev||prev.id!==callId)return prev;setPostCallState({isOpen:true,callId:prev.id,number:prev.number,name:prev.name,durationSeconds:prev.durationSeconds||1,durationStr:`${prev.durationSeconds||1}s`,sim:prev.sim,isSpam:prev.isSpam,wasSpam:prev.isSpam});return null});if(telecomBridge.isAndroidEnvironment())try{const fresh=telecomBridge.fetchDeviceCallLogs(100);if(fresh?.length)setCalls(fresh)}catch(e){console.warn(e)}}});return()=>unsub},[rules,whitelist,selectedSim,autoCancelEnabled,contacts,settings]);
 
- const handleLookupProfile=(n:string)=>lookupTruecallerDirectory(n,rules,whitelist);
- const handleRequestDefaultDialer=()=>{const r=telecomBridge.requestDefaultDialerRole();if(!r.success)showToast(r.message,'error');else showToast(r.message,'info')};
- const handleSyncDeviceData=()=>{setIsSyncing(true);try{if(telecomBridge.isAndroidEnvironment()){const d=telecomBridge.fetchDeviceCallLogs(200);const c=telecomBridge.fetchDeviceContacts(500);if(d.length)setCalls(d);if(c.length)setContacts(c);showToast(`Synced ${d.length} calls and ${c.length} contacts`,'success')}else showToast('Android device sync is available in the native app','info')}catch(e){showToast('Device sync failed','error')}finally{setIsSyncing(false)}};
- const handleSaveNote=(callId:string,note:string)=>{setCalls(prev=>{const target=prev.find(c=>c.id===callId);if(!target)return prev;const key=target.number.replace(/\D/g,'');return prev.map(c=>c.number.replace(/\D/g,'')===key?{...c,notes:note}:c)});showToast(note?'Caller note saved':'Caller note cleared','success')};
- const handleUpdateCallerName=(number:string,newName:string)=>{setCalls(prev=>prev.map(c=>c.number.replace(/\D/g,'')===number.replace(/\D/g,'')?{...c,callerName:newName}:c));setContacts(prev=>prev.map(c=>c.number.replace(/\D/g,'')===number.replace(/\D/g,'')?{...c,name:newName}:c));};
- const handleClearAllCalls=()=>{if(window.confirm('Clear your entire call log history?'))setCalls([])};
-  const handleInitiateCall=(number:string,name?:string,sim?:Sim)=>{const clean=number.trim(),digits=clean.replace(/[^\d+*#]/g,''),target=sim||selectedSim,p=lookupTruecallerDirectory(clean,rules,whitelist),matched=contacts.find(c=>c.number.replace(/\D/g,'')===clean.replace(/\D/g,'')),resolved=name||matched?.name||p.name||clean;const result=telecomBridge.placeRealCall(digits,target);if(!result.success){showToast(result.message,'error');return}setActiveCallSession({id:result.callId||`call-${Date.now()}`,number:clean,name:resolved,isSpam:p.isSpam,spamCategory:p.spamCategory,riskScore:p.spamScore,riskLevel:p.riskLevel||'UNKNOWN',durationSeconds:0,status:'DIALING',isMuted:false,isSpeaker:false,isHeld:false,isKeypadOpen:false,selectedSim:target,sim:target,isVerifiedBusiness:p.isVerified});setCalls(prev=>[{id:`call-${Date.now()}`,number:clean,callerName:resolved,type:'OUTGOING',timestamp:Date.now(),durationSeconds:0,isSpam:p.isSpam,spamCategory:p.spamCategory,riskScore:p.spamScore,reportsCount:p.spamReportsCount,carrier:p.carrier,location:p.location,isVerifiedBusiness:p.isVerified,isContact:!!matched},...prev])};
- const handleBlockNumber=(number:string,label:string)=>{const rule={id:`rule-${Date.now()}`,value:number,matchType:'EXACT' as const,targetType:'BOTH' as const,category:'SPAM' as SpamCategory,label:label||`Blocked ${number}`,enabled:true,hitCount:1,createdAt:Date.now()};setRules(p=>[rule,...p]);telecomBridge.syncBlockRules?.([rule]);setCalls(p=>p.map(c=>c.number===number?{...c,isSpam:true,classification:'SPAM' as const,riskLevel:'HIGH_RISK' as const,riskScore:Math.max(c.riskScore,90),spamReason:'Blocked in firewall rules'}:c));showToast('Number blocked','success')};
- const handleWhitelistNumber=(number:string,name:string)=>{setWhitelist(p=>[{id:`wl-${Date.now()}`,value:number,name:name||'Trusted Caller',notes:'Manually verified as safe',createdAt:Date.now()},...p]);setCalls(p=>p.map(c=>c.number===number?{...c,isSpam:false,classification:'SAFE' as const,riskLevel:'SAFE' as const,riskScore:0,userAction:'MARKED_SAFE' as const}:c));showToast('Number marked safe','success')};
- const handleAddContact=(contact:Omit<ContactItem,'id'>)=>{const n=contact.number.trim(),nm=contact.name.trim();if(!n)return;const existing=contacts.find(c=>c.number.replace(/\D/g,'')===n.replace(/\D/g,''));if(existing){showToast('Contact already exists','info');return}const c:ContactItem={id:`cnt-${Date.now()}`,...contact,name:nm,number:n};setContacts(p=>[c,...p]);telecomBridge.createContact(n,nm);showToast('Contact added','success')};
- const handleUpdateContact=(id:string,updates:Partial<ContactItem>)=>setContacts(p=>p.map(c=>c.id===id?{...c,...updates}:c));
- const handleDeleteContact=(id:string)=>setContacts(p=>p.filter(c=>c.id!==id));
- const handleToggleFavorite=(id:string)=>setContacts(p=>p.map(c=>c.id===id?{...c,isFavorite:!c.isFavorite}:c));
- const handleReportSpam=(number:string,category:SpamCategory,reason:string)=>{const rule={id:`rule-${Date.now()}`,value:number,matchType:'EXACT' as const,targetType:'BOTH' as const,category,label:`Reported ${category}`,notes:reason,enabled:true,hitCount:1,createdAt:Date.now()};setRules(p=>[rule,...p]);setCalls(p=>p.map(c=>c.number===number?{...c,isSpam:true,spamCategory:category,spamReason:reason,riskScore:Math.max(c.riskScore,85)}:c));setTimelineEvents(p=>[{id:`tl-${Date.now()}`,timestamp:Date.now(),type:'REPORT',number,description:`Reported as ${category}`,...({} as any)},...p]);showToast('Spam report saved locally','success')};
- const handleClearAllData=()=>{['vigilshield_settings','vigilshield_rules','vigilshield_whitelist','vigilshield_contacts','vigilshield_calls','vigilshield_timeline','vigilshield_autocancel','vigilshield_privacy_settings'].forEach(k=>localStorage.removeItem(k));setSettings(INITIAL_SETTINGS);setRules(BASELINE_RULES);setWhitelist([]);setContacts([]);setCalls([]);setTimelineEvents([]);setAutoCancelEnabled(true);showToast('Local app state reset','success')};
- const handleImportAllData=(data:any)=>{if(data?.settings)setSettings(data.settings);if(Array.isArray(data?.rules))setRules(data.rules);if(Array.isArray(data?.whitelist))setWhitelist(data.whitelist);if(Array.isArray(data?.contacts))setContacts(data.contacts);if(Array.isArray(data?.calls))setCalls(data.calls);if(Array.isArray(data?.timelineEvents))setTimelineEvents(data.timelineEvents);showToast('Backup restored','success')};
- const handleTriggerInstall=async()=>{if(deferredPrompt){await deferredPrompt.prompt();setDeferredPrompt(null);return}showToast('Use your browser menu to install the app','info')};
- const handleEndCall=(recordingItem?: CallRecordingItem | null, callDuration?: number, callerNotes?: string)=>{
-   if(activeCallSession?.id)telecomBridge.disconnectCall(activeCallSession.id);
-   if(activeCallSession){
-     const dur=callDuration||activeCallSession.durationSeconds||1;
-     const note=callerNotes||activeCallSession.notes;
-     const newCallLog:CallLogItem={
-       id:`call-${Date.now()}`,
-       number:activeCallSession.number,
-       callerName:activeCallSession.name||activeCallSession.number,
-       type:'OUTGOING',
-       timestamp:Date.now(),
-       durationSeconds:dur,
-       isSpam:Boolean(activeCallSession.isSpam),
-       spamCategory:activeCallSession.spamCategory,
-       riskScore:activeCallSession.riskScore||0,
-       riskLevel:activeCallSession.riskLevel||'SAFE',
-       reportsCount:0,
-       recordingUri:recordingItem?recordingItem.dataUri:undefined,
-       notes:note
-     };
-     setCalls(p=>[newCallLog,...p]);
-     if(recordingItem){
-       showToast(`Saved to ${recordingItem.folderPath}${recordingItem.fileName}`,'success');
+ const handleLookupProfile = useCallback((n: string) => lookupTruecallerDirectory(n, rules, whitelist), [rules, whitelist]);
+ const handleRequestDefaultDialer = useCallback(() => { const r = telecomBridge.requestDefaultDialerRole(); if (!r.success) showToast(r.message, 'error'); else showToast(r.message, 'info'); }, []);
+ const handleSyncDeviceData = useCallback(() => {
+   setIsSyncing(true);
+   try {
+     if (telecomBridge.isAndroidEnvironment()) {
+       const d = telecomBridge.fetchDeviceCallLogs(200);
+       const c = telecomBridge.fetchDeviceContacts(500);
+       if (d.length) setCalls(d);
+       if (c.length) setContacts(c);
+       showToast(`Synced ${d.length} calls and ${c.length} contacts`, 'success');
+     } else {
+       showToast('Android device sync is available in the native app', 'info');
      }
-     setPostCallState({
-       isOpen:true,
-       callId:activeCallSession.id,
-       number:activeCallSession.number,
-       name:activeCallSession.name,
-       durationSeconds:dur,
-       durationStr:`${dur}s`,
-       sim:activeCallSession.sim,
-       isSpam:activeCallSession.isSpam,
-       wasSpam:activeCallSession.isSpam,
-       notes:note
-     });
+   } catch {
+     showToast('Device sync failed', 'error');
+   } finally {
+     setIsSyncing(false);
    }
-   setActiveCallSession(null);
- };
- const openCaller=(call:CallLogItem)=>{setSelectedProfile(handleLookupProfile(call.number));setSelectedCall(call);setIsCallerModalOpen(true)};
+ }, []);
+ const handleSaveNote = useCallback((callId: string, note: string) => {
+   setCalls(prev => {
+     const target = prev.find(c => c.id === callId);
+     if (!target) return prev;
+     const key = target.number.replace(/\D/g, '');
+     return prev.map(c => c.number.replace(/\D/g, '') === key ? { ...c, notes: note } : c);
+   });
+   showToast(note ? 'Caller note saved' : 'Caller note cleared', 'success');
+ }, []);
+ const handleUpdateCallerName = useCallback((number: string, newName: string) => {
+   setCalls(prev => prev.map(c => c.number.replace(/\D/g, '') === number.replace(/\D/g, '') ? { ...c, callerName: newName } : c));
+   setContacts(prev => prev.map(c => c.number.replace(/\D/g, '') === number.replace(/\D/g, '') ? { ...c, name: newName } : c));
+ }, []);
+ const handleClearAllCalls = useCallback(() => { if (window.confirm('Clear your entire call log history?')) setCalls([]); }, []);
+  const handleInitiateCall = useCallback((number: string, name?: string, sim?: Sim, isPrivate?: boolean) => {
+    const clean = number.trim(), digits = clean.replace(/[^\d+*#]/g, ''), target = sim || selectedSim, p = lookupTruecallerDirectory(clean, rules, whitelist), matched = contacts.find(c => c.number.replace(/\D/g, '') === clean.replace(/\D/g, '')), resolved = name || matched?.name || p.name || clean;
+    const dialedNumber = isPrivate ? formatPrivateCallNumber(digits, settings.privateCallPrefix || '*67') : digits;
+    const result = telecomBridge.placeRealCall(dialedNumber, target);
+    if (!result.success) { showToast(result.message, 'error'); return; }
+    if (isPrivate) { showToast(`Calling with caller ID masked (${settings.privateCallPrefix || '*67'})`, 'info'); }
+    setActiveCallSession({
+      id: result.callId || `call-${Date.now()}`,
+      number: clean,
+      name: isPrivate ? `${resolved} (Private)` : resolved,
+      isSpam: p.isSpam,
+      spamCategory: p.spamCategory,
+      riskScore: p.spamScore,
+      riskLevel: p.riskLevel || 'UNKNOWN',
+      durationSeconds: 0,
+      status: 'DIALING',
+      isMuted: false,
+      isSpeaker: false,
+      isHeld: false,
+      isKeypadOpen: false,
+      selectedSim: target,
+      sim: target,
+      isVerifiedBusiness: p.isVerified
+    });
+    setCalls(prev => [{
+      id: `call-${Date.now()}`,
+      number: clean,
+      callerName: resolved,
+      type: 'OUTGOING',
+      timestamp: Date.now(),
+      durationSeconds: 0,
+      isSpam: p.isSpam,
+      spamCategory: p.spamCategory,
+      riskScore: p.spamScore,
+      reportsCount: p.spamReportsCount,
+      carrier: p.carrier,
+      location: p.location,
+      isVerifiedBusiness: p.isVerified,
+      isContact: !!matched,
+      isPrivate: Boolean(isPrivate)
+    }, ...prev]);
+  }, [selectedSim, rules, whitelist, contacts, settings]);
 
- return <div className="min-h-screen bg-[#070b10] text-white">
-  <Header settings={settings} isDefaultDialer={isDefaultDialer} onRequestDefaultDialer={handleRequestDefaultDialer} onOpenPermissionCenter={()=>setIsPermissionCenterOpen(true)} onSyncDatabase={handleSyncDeviceData} isSyncing={isSyncing} autoCancelEnabled={autoCancelEnabled} onToggleAutoCancel={()=>setAutoCancelEnabled(v=>!v)} onOpenInstallModal={()=>setIsInstallModalOpen(true)} onOpenDataSources={()=>setIsDataSourcesModalOpen(true)} onOpenDiagnostics={()=>setIsDiagnosticsModalOpen(true)} recentSpamCalls={calls.filter(c=>c.isSpam)} onSelectCall={openCaller} onOpenRecents={()=>setActiveTab('recents')} onOpenProtection={()=>setActiveTab('protection')}/>
-  <Navigation activeTab={activeTab} onChangeTab={setActiveTab} spamCallsCount={calls.filter(c=>c.isSpam).length} activeRulesCount={rules.filter(r=>r.enabled).length} assistantAlertsCount={3}/>
-  <main className="mx-auto w-full max-w-4xl px-3 py-3 pb-28 sm:pb-32">
-   {activeTab==='dialer'&&<DialerTab contacts={contacts} recentCalls={calls} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onOpenCallerDetail={item=>{const n='number'in item?item.number:'';setSelectedProfile(handleLookupProfile(n));setSelectedCall(calls.find(c=>c.number===n)||null);setIsCallerModalOpen(true)}} onSaveContact={(n,nm)=>handleUpdateCallerName(n,nm)} selectedSim={selectedSim} onChangeSim={setSelectedSim} initialNumber={dialerInitialNumber}/>} 
-   {activeTab==='recents'&&<RecentsTab calls={calls} rules={rules} whitelist={whitelist} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onSelectCall={openCaller} onBlockNumber={handleBlockNumber} onWhitelistNumber={handleWhitelistNumber} onDeleteCall={id=>setCalls(p=>p.filter(c=>c.id!==id))} onClearAllCalls={handleClearAllCalls} onSyncDeviceCalls={handleSyncDeviceData}/>} 
-   {activeTab==='contacts'&&<ContactsTab contacts={contacts} onInitiateCall={handleInitiateCall} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} onDeleteContact={handleDeleteContact} onToggleFavorite={handleToggleFavorite} recentCalls={calls}/>} 
-   {activeTab==='protection'&&<ProtectionTab settings={settings} onUpdateSettings={setSettings} rules={rules} onToggleRule={id=>setRules(p=>p.map(r=>r.id===id?{...r,enabled:!r.enabled}:r))} onDeleteRule={id=>setRules(p=>p.filter(r=>r.id!==id))} onAddRule={d=>setRules(p=>[{...d,id:`rule-${Date.now()}`,hitCount:0,createdAt:Date.now()},...p])} whitelist={whitelist} onRemoveWhitelist={id=>setWhitelist(p=>p.filter(w=>w.id!==id))} timelineEvents={timelineEvents}/>} 
-   {activeTab==='assistant'&&<AssistantTab calls={calls} contacts={contacts} rules={rules} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onAddRule={d=>setRules(p=>[{...d,id:`rule-${Date.now()}`,hitCount:0,createdAt:Date.now()},...p])}/>} 
-  </main>
+  const handleTriggerScreeningDemo = useCallback((customNumber?: string, customName?: string) => {
+    const demoNumber = customNumber || '+91 98765 01928';
+    const demoName = customName || 'Unknown Energy Services (Suspicious)';
+    setActiveIncomingCall({
+      callId: `demo-screen-${Date.now()}`,
+      number: demoNumber,
+      callerName: demoName,
+      carrier: 'Cellular India',
+      location: 'Mumbai, Maharashtra',
+      riskScore: 74,
+      reportsCount: 19,
+      isSpam: true,
+      spamCategory: 'TELEMARKETING',
+      spamReason: 'Reported commercial robocall / unknown offer',
+      isVerifiedBusiness: false,
+      status: 'RINGING',
+      countdown: 0
+    });
+    showToast('Incoming call: Tap "Screen Call" to test the AI Voice Assistant!', 'info');
+  }, []);
 
-  <CallerDetailModal call={selectedCall} calls={calls} profile={selectedProfile} isOpen={isCallerModalOpen} onClose={()=>setIsCallerModalOpen(false)} onBlockNumber={handleBlockNumber} onMarkSafe={handleWhitelistNumber} onInitiateCall={handleInitiateCall} onOpenReportModal={n=>{setFastReportNumber(n);setIsFastReportOpen(true)}} onOpenDisputeModal={(n,nm)=>{setDisputeNumber(n);setDisputeName(nm);setIsDisputeOpen(true)}} onUpdateCallerName={handleUpdateCallerName} onSaveNote={handleSaveNote}/>
-  <IncomingCallOverlay call={activeIncomingCall} autoCancelEnabled={autoCancelEnabled} onCancelCall={(reason,block)=>{if(activeIncomingCall?.callId){if(block)handleBlockNumber(activeIncomingCall.number,activeIncomingCall.callerName||activeIncomingCall.number);telecomBridge.rejectCall(activeIncomingCall.callId,reason)}setActiveIncomingCall(null)}} onAnswerCall={()=>{if(activeIncomingCall?.callId)telecomBridge.answerCall(activeIncomingCall.callId)}} onDismiss={()=>setActiveIncomingCall(null)}/>
+  const handleBlockNumber = useCallback((number: string, label: string) => {
+    const rule = { id: `rule-${Date.now()}`, value: number, matchType: 'EXACT' as const, targetType: 'BOTH' as const, category: 'SPAM' as SpamCategory, label: label || `Blocked ${number}`, enabled: true, hitCount: 1, createdAt: Date.now() };
+    setRules(p => [rule, ...p]);
+    telecomBridge.syncBlockRules?.([rule]);
+    setCalls(p => p.map(c => c.number === number ? { ...c, isSpam: true, classification: 'SPAM' as const, riskLevel: 'HIGH_RISK' as const, riskScore: Math.max(c.riskScore, 90), spamReason: 'Blocked in firewall rules' } : c));
+    showToast('Number blocked', 'success');
+  }, []);
+
+  const handleWhitelistNumber = useCallback((number: string, name: string) => {
+    setWhitelist(p => [{ id: `wl-${Date.now()}`, value: number, name: name || 'Trusted Caller', notes: 'Manually verified as safe', createdAt: Date.now() }, ...p]);
+    setCalls(p => p.map(c => c.number === number ? { ...c, isSpam: false, classification: 'SAFE' as const, riskLevel: 'SAFE' as const, riskScore: 0, userAction: 'MARKED_SAFE' as const } : c));
+    showToast('Number marked safe', 'success');
+  }, []);
+
+  const handleAddContact = useCallback((contact: Omit<ContactItem, 'id'>) => {
+    const n = contact.number.trim(), nm = contact.name.trim();
+    if (!n) return;
+    const existing = contacts.find(c => c.number.replace(/\D/g, '') === n.replace(/\D/g, ''));
+    if (existing) { showToast('Contact already exists', 'info'); return; }
+    const c: ContactItem = { id: `cnt-${Date.now()}`, ...contact, name: nm, number: n };
+    setContacts(p => [c, ...p]);
+    telecomBridge.createContact(n, nm);
+    showToast('Contact added', 'success');
+  }, [contacts]);
+
+  const handleUpdateContact = useCallback((id: string, updates: Partial<ContactItem>) => setContacts(p => p.map(c => c.id === id ? { ...c, ...updates } : c)), []);
+  const handleDeleteContact = useCallback((id: string) => setContacts(p => p.filter(c => c.id !== id)), []);
+  const handleToggleFavorite = useCallback((id: string) => setContacts(p => p.map(c => c.id === id ? { ...c, isFavorite: !c.isFavorite } : c)), []);
+
+  const handleReportSpam = useCallback((number: string, category: SpamCategory, reason: string) => {
+    const rule = { id: `rule-${Date.now()}`, value: number, matchType: 'EXACT' as const, targetType: 'BOTH' as const, category, label: `Reported ${category}`, notes: reason, enabled: true, hitCount: 1, createdAt: Date.now() };
+    setRules(p => [rule, ...p]);
+    setCalls(p => p.map(c => c.number === number ? { ...c, isSpam: true, spamCategory: category, spamReason: reason, riskScore: Math.max(c.riskScore, 85) } : c));
+    setTimelineEvents(p => [{ id: `tl-${Date.now()}`, timestamp: Date.now(), type: 'REPORT', number, description: `Reported as ${category}`, ...({} as any) }, ...p]);
+    showToast('Spam report saved locally', 'success');
+  }, []);
+
+  const handleClearAllData = useCallback(() => {
+    ['vigilshield_settings', 'vigilshield_rules', 'vigilshield_whitelist', 'vigilshield_contacts', 'vigilshield_calls', 'vigilshield_timeline', 'vigilshield_autocancel', 'vigilshield_privacy_settings'].forEach(k => localStorage.removeItem(k));
+    setSettings(INITIAL_SETTINGS);
+    setRules(BASELINE_RULES);
+    setWhitelist([]);
+    setContacts([]);
+    setCalls([]);
+    setTimelineEvents([]);
+    setAutoCancelEnabled(true);
+    showToast('Local app state reset', 'success');
+  }, []);
+
+  const handleImportAllData = useCallback((data: any) => {
+    if (data?.settings) setSettings(data.settings);
+    if (Array.isArray(data?.rules)) setRules(data.rules);
+    if (Array.isArray(data?.whitelist)) setWhitelist(data.whitelist);
+    if (Array.isArray(data?.contacts)) setContacts(data.contacts);
+    if (Array.isArray(data?.calls)) setCalls(data.calls);
+    if (Array.isArray(data?.timelineEvents)) setTimelineEvents(data.timelineEvents);
+    showToast('Backup restored', 'success');
+  }, []);
+
+  const handleTriggerInstall = useCallback(async () => {
+    if (deferredPrompt) {
+      await deferredPrompt.prompt();
+      setDeferredPrompt(null);
+      return;
+    }
+    showToast('Use your browser menu to install the app', 'info');
+  }, [deferredPrompt]);
+
+  const handleEndCall = useCallback((recordingItem?: CallRecordingItem | null, callDuration?: number, callerNotes?: string) => {
+    if (activeCallSession?.id) telecomBridge.disconnectCall(activeCallSession.id);
+    else telecomBridge.clearStaleCallNotifications();
+    if (activeCallSession) {
+      const dur = callDuration || activeCallSession.durationSeconds || 1;
+      const note = callerNotes || activeCallSession.notes;
+      const newCallLog: CallLogItem = {
+        id: `call-${Date.now()}`,
+        number: activeCallSession.number,
+        callerName: activeCallSession.name || activeCallSession.number,
+        type: 'OUTGOING',
+        timestamp: Date.now(),
+        durationSeconds: dur,
+        isSpam: Boolean(activeCallSession.isSpam),
+        spamCategory: activeCallSession.spamCategory,
+        riskScore: activeCallSession.riskScore || 0,
+        riskLevel: activeCallSession.riskLevel || 'SAFE',
+        reportsCount: 0,
+        recordingUri: recordingItem ? recordingItem.dataUri : undefined,
+        notes: note
+      };
+      setCalls(p => [newCallLog, ...p]);
+      if (recordingItem) {
+        showToast(`Saved to ${recordingItem.folderPath}${recordingItem.fileName}`, 'success');
+      }
+      setPostCallState({
+        isOpen: true,
+        callId: activeCallSession.id,
+        number: activeCallSession.number,
+        name: activeCallSession.name,
+        durationSeconds: dur,
+        durationStr: `${dur}s`,
+        sim: activeCallSession.sim,
+        isSpam: activeCallSession.isSpam,
+        wasSpam: activeCallSession.isSpam,
+        notes: note
+      });
+    }
+    setActiveCallSession(null);
+  }, [activeCallSession]);
+
+  const openCaller = useCallback((call: CallLogItem) => {
+    setSelectedProfile(lookupTruecallerDirectory(call.number, rules, whitelist));
+    setSelectedCall(call);
+    setIsCallerModalOpen(true);
+  }, [rules, whitelist]);
+
+  const handleDeleteCall = useCallback((id: string) => setCalls(p => p.filter(c => c.id !== id)), []);
+  const handleToggleRule = useCallback((id: string) => setRules(p => p.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r)), []);
+  const handleDeleteRule = useCallback((id: string) => setRules(p => p.filter(r => r.id !== id)), []);
+  const handleAddRule = useCallback((d: any) => setRules(p => [{ ...d, id: `rule-${Date.now()}`, hitCount: 0, createdAt: Date.now() }, ...p]), []);
+  const handleRemoveWhitelist = useCallback((id: string) => setWhitelist(p => p.filter(w => w.id !== id)), []);
+  const handleOpenCallerDetail = useCallback((item: any) => {
+    const n = 'number' in item ? item.number : '';
+    setSelectedProfile(lookupTruecallerDirectory(n, rules, whitelist));
+    setSelectedCall(calls.find(c => c.number === n) || null);
+    setIsCallerModalOpen(true);
+  }, [rules, whitelist, calls]);
+
+  const recentSpamCalls = useMemo(() => calls.filter(c => c.isSpam), [calls]);
+  const spamCallsCount = useMemo(() => recentSpamCalls.length, [recentSpamCalls]);
+  const activeRulesCount = useMemo(() => rules.filter(r => r.enabled).length, [rules]);
+
+  return <div className="min-h-screen bg-[#070b10] text-white">
+   <Header settings={settings} isDefaultDialer={isDefaultDialer} onRequestDefaultDialer={handleRequestDefaultDialer} onOpenPermissionCenter={()=>setIsPermissionCenterOpen(true)} onSyncDatabase={handleSyncDeviceData} isSyncing={isSyncing} autoCancelEnabled={autoCancelEnabled} onToggleAutoCancel={()=>setAutoCancelEnabled(v=>!v)} onOpenInstallModal={()=>setIsInstallModalOpen(true)} onOpenDataSources={()=>setIsDataSourcesModalOpen(true)} onOpenDiagnostics={()=>setIsDiagnosticsModalOpen(true)} recentSpamCalls={recentSpamCalls} onSelectCall={openCaller} onOpenRecents={()=>setActiveTab('recents')} onOpenProtection={()=>setActiveTab('protection')}/>
+   <Navigation activeTab={activeTab} onChangeTab={setActiveTab} spamCallsCount={spamCallsCount} activeRulesCount={activeRulesCount} assistantAlertsCount={3}/>
+   <main className="mx-auto w-full max-w-4xl px-3 py-3 pb-28 sm:pb-32">
+    {activeTab==='dialer'&&<DialerTab contacts={contacts} recentCalls={calls} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onOpenCallerDetail={handleOpenCallerDetail} onSaveContact={(n,nm)=>handleUpdateCallerName(n,nm)} selectedSim={selectedSim} onChangeSim={setSelectedSim} initialNumber={dialerInitialNumber}/>} 
+    {activeTab==='recents'&&<RecentsTab calls={calls} rules={rules} whitelist={whitelist} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onSelectCall={openCaller} onBlockNumber={handleBlockNumber} onWhitelistNumber={handleWhitelistNumber} onDeleteCall={handleDeleteCall} onClearAllCalls={handleClearAllCalls} onSyncDeviceCalls={handleSyncDeviceData}/>} 
+    {activeTab==='contacts'&&<ContactsTab contacts={contacts} onInitiateCall={handleInitiateCall} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} onDeleteContact={handleDeleteContact} onToggleFavorite={handleToggleFavorite} recentCalls={calls}/>} 
+    {activeTab==='protection'&&<ProtectionTab settings={settings} onUpdateSettings={setSettings} rules={rules} onToggleRule={handleToggleRule} onDeleteRule={handleDeleteRule} onAddRule={handleAddRule} whitelist={whitelist} onRemoveWhitelist={handleRemoveWhitelist} timelineEvents={timelineEvents} onTriggerScreeningDemo={handleTriggerScreeningDemo}/>} 
+    {activeTab==='assistant'&&<AssistantTab calls={calls} contacts={contacts} rules={rules} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onAddRule={handleAddRule}/>} 
+   </main>
+
+  <CallerDetailModal call={selectedCall} calls={calls} contacts={contacts} profile={selectedProfile} isOpen={isCallerModalOpen} onClose={()=>setIsCallerModalOpen(false)} onBlockNumber={handleBlockNumber} onMarkSafe={handleWhitelistNumber} onInitiateCall={handleInitiateCall} onOpenReportModal={n=>{setFastReportNumber(n);setIsFastReportOpen(true)}} onOpenDisputeModal={(n,nm)=>{setDisputeNumber(n);setDisputeName(nm);setIsDisputeOpen(true)}} onUpdateCallerName={handleUpdateCallerName} onAddContact={handleAddContact} onSaveNote={handleSaveNote}/>
+  <IncomingCallOverlay call={activeIncomingCall} autoCancelEnabled={autoCancelEnabled} onCancelCall={(reason,block)=>{if(activeIncomingCall?.callId){if(block)handleBlockNumber(activeIncomingCall.number,activeIncomingCall.callerName||activeIncomingCall.number);telecomBridge.rejectCall(activeIncomingCall.callId,reason)}else{telecomBridge.clearStaleCallNotifications()}setActiveIncomingCall(null)}} onAnswerCall={()=>{if(activeIncomingCall?.callId)telecomBridge.answerCall(activeIncomingCall.callId)}} onScreenCall={(call)=>{telecomBridge.silenceRinger();setActiveIncomingCall(prev=>prev?{...prev,status:'SCREENING'}:null)}} onDismiss={()=>{if(activeIncomingCall?.callId){telecomBridge.rejectCall(activeIncomingCall.callId,'Dismissed')}telecomBridge.clearStaleCallNotifications();setActiveIncomingCall(null)}}/>
   <ActiveCallModal session={activeCallSession} onEndCall={handleEndCall} lookupProfile={handleLookupProfile} onAddCall={n=>handleInitiateCall(n)}/>
   <PostCallModal postCall={postCallState} onDismiss={()=>setPostCallState(null)} onAddContact={handleAddContact} onBlockNumber={handleBlockNumber} onReportSpam={handleReportSpam} onSaveNote={(number,note)=>{const c=calls.find(x=>x.number.replace(/\D/g,'')===number.replace(/\D/g,''));if(c)handleSaveNote(c.id,note)}}/>
   <FastReportModal isOpen={isFastReportOpen} initialNumber={fastReportNumber} onClose={()=>setIsFastReportOpen(false)} onSubmitReport={handleReportSpam}/>

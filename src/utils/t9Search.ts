@@ -100,11 +100,18 @@ export function smartDialerSearch(
     }
   }
 
-  // 3. Possible Caller Lookup (if user typed 4+ digits and it's not a known contact)
+  // 3. Possible Caller Lookup (only if it's a verified directory profile or known spam, not random unlisted numbers)
   let possibleCaller: TruecallerDirectoryProfile | null = null;
   if (digitsOnly.length >= 4) {
     const profile = lookupProfileFn(cleanInput);
-    if (profile && profile.name && profile.name !== 'Unknown Caller') {
+    if (
+      profile &&
+      profile.name &&
+      profile.name !== 'Unknown Caller' &&
+      profile.name !== cleanInput &&
+      profile.name !== digitsOnly &&
+      (profile.isSpam || profile.isVerified)
+    ) {
       possibleCaller = profile;
     }
   }

@@ -5,10 +5,10 @@ import org.gradle.api.tasks.Exec
 // 1. Android strictly blocks APK updates if the new versionCode <= installed versionCode (INSTALL_FAILED_VERSION_DOWNGRADE).
 // 2. Base version code is set to 200 so it comfortably supersedes all previous test/CI builds (1..6).
 // 3. In CI, GITHUB_RUN_NUMBER is added to ensure every subsequent commit/action run is monotonically higher.
-val baseVersionCode = 200
+val baseVersionCode = 202
 val ciRunNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
 val finalVersionCode = baseVersionCode + ciRunNumber
-val finalVersionName = "1.5.1"
+val finalVersionName = "1.5.2"
 
 // Signing configuration for seamless in-place updates:
 // Android REQUIRES every update to be signed by the exact same cryptographic key as the installed version.

@@ -298,6 +298,7 @@ export const TRANSLATIONS = {
     notification_panel_empty: 'No new notifications',
 
     // Keypad & Dialer
+    smart_dialer_ready: 'Smart search ready',
     dialer_keypad: 'Keypad',
     dialer_name_or_number: 'Name or phone number',
     protected_calls: 'Calls are protected by VigilShield',
@@ -326,7 +327,7 @@ export const TRANSLATIONS = {
 
   ta: {
     // App & Header
-    app_title: 'விஜிஷீல்ட் (VigilShield)',
+    app_title: 'VigilShield',
     default_phone_app: 'இயல்புநிலை அழைப்பு செயலி',
     phone_setup_required: 'அழைப்பு அமைப்பு தேவை',
     set_as_phone_app: 'அழைப்பு செயலியாக அமை',
@@ -364,7 +365,7 @@ export const TRANSLATIONS = {
     detailed_notifications_title: 'விரிவான அழைப்பாளர் அறிவிப்புகள்',
     detailed_notifications_desc: 'அறிவிப்புகளில் பெயர்கள் மற்றும் ஆபத்து விவரங்களைக் காட்டு.',
     call_recording_title: 'அழைப்புப் பதிவு',
-    call_recording_desc: 'இயல்பாக முடக்கப்பட்டுள்ளது. விஜிஷீல்ட் ஒருபோதும் அமைதியாகப் பதிவு செய்வதில்லை.',
+    call_recording_desc: 'இயல்பாக முடக்கப்பட்டுள்ளது. VigilShield ஒருபோதும் அமைதியாகப் பதிவு செய்வதில்லை.',
     clipboard_paste_title: 'நகலெடுத்த எண் ஒட்டுதல் உதவி',
     clipboard_paste_desc: 'டயலரில் ஒரே தொடுதலில் ஒட்டுவதற்கான உதவி பொத்தானை வழங்குங்கள்.',
     autocancel_spam_title: 'அதிக ஆபத்துள்ள ஸ்பேமை தானாக ரத்து செய்',
@@ -381,7 +382,7 @@ export const TRANSLATIONS = {
     time_window_3: '3 நிமிடங்கள்',
     time_window_5: '5 நிமிடங்கள்',
     time_window_10: '10 நிமிடங்கள்',
-    emergency_footer_note: 'தொலைபேசி அமைதி முறையில் இருக்கும் போது கூட, விஜிஷீல்ட் ஒரு குறுகிய அவசர ஒலி எச்சரிக்கையை எழுப்புகிறது.',
+    emergency_footer_note: 'தொலைபேசி அமைதி முறையில் இருக்கும் போது கூட, VigilShield ஒரு குறுகிய அவசர ஒலி எச்சரிக்கையை எழுப்புகிறது.',
     default_phone_status_active: 'இயல்புநிலை அழைப்பு செயலி செயலில் உள்ளது',
     default_phone_role_desc: 'ஆண்ட்ராய்டு தொலைத்தொடர்பு மற்றும் நேரடி அழைப்பு கையாளுதல்.',
     permission_center: 'அனுமதி மையம்',
@@ -404,7 +405,7 @@ export const TRANSLATIONS = {
     search_placeholder_dialer: 'பெயர் அல்லது தொலைபேசி எண்',
     paste: 'ஒட்டு',
     copied_number_ready: 'நகலெடுத்த எண் தயாராக உள்ளது',
-    protected_by_vigilshield: 'அழைப்புகள் விஜிஷீல்ட் மூலம் பாதுகாக்கப்படுகின்றன',
+    protected_by_vigilshield: 'அழைப்புகள் VigilShield மூலம் பாதுகாக்கப்படுகின்றன',
     choose_line: 'சிம்மைத் தேர்ந்தெடுக்கவும்',
     call_using: 'இதைப் பயன்படுத்தி அழைக்கவும்',
     sim1_label: 'சிம் 1 (தனிப்பட்ட)',
@@ -621,9 +622,10 @@ export const TRANSLATIONS = {
     notification_panel_empty: 'புதிய அறிவிப்புகள் இல்லை',
 
     // Keypad & Dialer
+    smart_dialer_ready: 'ஸ்மார்ட் தேடல் தயார்',
     dialer_keypad: 'விசைப்பலகை',
     dialer_name_or_number: 'பெயர் அல்லது தொலைபேசி எண்',
-    protected_calls: 'அழைப்புகள் விஜிஷீல்ட் மூலம் பாதுகாக்கப்படுகின்றன',
+    protected_calls: 'அழைப்புகள் VigilShield மூலம் பாதுகாக்கப்படுகின்றன',
     sim_1: 'சிம் 1 (தனிப்பட்ட)',
     sim_2: 'சிம் 2 (பணி)',
 

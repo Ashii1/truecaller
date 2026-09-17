@@ -450,6 +450,50 @@ export const PUBLIC_DIRECTORY_DATABASE: Record<string, PublicDirectoryRecord> = 
     tags: ['TNEB Impersonator', 'Bill Payment Scam', 'Malicious APK Link', 'Extortion'],
     reputationText: 'Dangerous: Threatens power cut tonight unless fake payment app is installed.',
   },
+
+  // High-Risk Spammers Reported by Community & Truecaller
+  '9981024217': {
+    number: '+91 99810 24217',
+    name: 'Fake Investment Spam Call',
+    isSpam: true,
+    isVerified: false,
+    spamCategory: 'SCAM',
+    spamScore: 98,
+    spamReportsCount: 66,
+    carrier: 'India · Airtel',
+    location: 'Madhya Pradesh, India',
+    lineType: 'Mobile',
+    tags: ['Fake Investment', 'Trading Scam', 'High Spam Risk', 'Spammer', 'Airtel MP'],
+    reputationText: 'Reported by 66+ users as fake investment spam (↑500%). 1,997 calls logged in 60 days. Peak calling hours 11am-2pm. User report by Jai Singh: "fake call".',
+  },
+  '09981024217': {
+    number: '+91 99810 24217',
+    name: 'Fake Investment Spam Call',
+    isSpam: true,
+    isVerified: false,
+    spamCategory: 'SCAM',
+    spamScore: 98,
+    spamReportsCount: 66,
+    carrier: 'India · Airtel',
+    location: 'Madhya Pradesh, India',
+    lineType: 'Mobile',
+    tags: ['Fake Investment', 'Trading Scam', 'High Spam Risk', 'Spammer', 'Airtel MP'],
+    reputationText: 'Reported by 66+ users as fake investment spam (↑500%). 1,997 calls logged in 60 days. Peak calling hours 11am-2pm. User report by Jai Singh: "fake call".',
+  },
+  '+919981024217': {
+    number: '+91 99810 24217',
+    name: 'Fake Investment Spam Call',
+    isSpam: true,
+    isVerified: false,
+    spamCategory: 'SCAM',
+    spamScore: 98,
+    spamReportsCount: 66,
+    carrier: 'India · Airtel',
+    location: 'Madhya Pradesh, India',
+    lineType: 'Mobile',
+    tags: ['Fake Investment', 'Trading Scam', 'High Spam Risk', 'Spammer', 'Airtel MP'],
+    reputationText: 'Reported by 66+ users as fake investment spam (↑500%). 1,997 calls logged in 60 days. Peak calling hours 11am-2pm. User report by Jai Singh: "fake call".',
+  },
 };
 
 /**
@@ -500,6 +544,16 @@ function hashString(str: string): number {
 }
 
 /**
+ * Helper to ensure location never duplicates ", India"
+ */
+function formatLocation(circle: string): string {
+  if (!circle) return 'India';
+  const trimmed = circle.trim();
+  if (trimmed.endsWith('India')) return trimmed;
+  return `${trimmed}, India`;
+}
+
+/**
  * Resolves caller profile from public directories.
  * Guarantees that EVERY caller is assigned their respective identity from public directories,
  * with zero generic placeholders like "Mobile Subscriber" or "Caller (Cellular)".
@@ -508,109 +562,17 @@ export function resolveFromPublicDirectory(
   rawNumber: string,
   circle: string = 'Tamil Nadu',
   operator: string = 'Airtel'
-): PublicDirectoryRecord {
+): PublicDirectoryRecord | null {
   const digits = rawNumber.replace(/\D/g, '');
   const clean10 = digits.length >= 10 ? digits.slice(-10) : digits;
 
-  // 1. Direct match in curated public database
+  // 1. Direct match in curated public database (Emergency, Helplines, Utilities, Known Corporate/Spam)
   if (PUBLIC_DIRECTORY_DATABASE[rawNumber]) return PUBLIC_DIRECTORY_DATABASE[rawNumber];
   if (PUBLIC_DIRECTORY_DATABASE[digits]) return PUBLIC_DIRECTORY_DATABASE[digits];
   if (PUBLIC_DIRECTORY_DATABASE[clean10]) return PUBLIC_DIRECTORY_DATABASE[clean10];
+  if (PUBLIC_DIRECTORY_DATABASE[`+91${clean10}`]) return PUBLIC_DIRECTORY_DATABASE[`+91${clean10}`];
+  if (PUBLIC_DIRECTORY_DATABASE[`0${clean10}`]) return PUBLIC_DIRECTORY_DATABASE[`0${clean10}`];
 
-  // 2. Deterministic public directory resolution based on public telephone listings
-  const hash = hashString(clean10 || rawNumber);
-  const isSouthIndianCircle =
-    circle.includes('Tamil Nadu') ||
-    circle.includes('Chennai') ||
-    circle.includes('Karnataka') ||
-    circle.includes('Kerala') ||
-    circle.includes('Andhra');
-
-  // Probability model reflecting real crowd-sourced public directories:
-  // ~16% public business, ~72% registered citizen subscriber, ~12% flagged spam/telemarketing
-  const entityType = hash % 100;
-
-  if (entityType < 12) {
-    // Flagged Spam / Telemarketer in public directory
-    const spamCategories: { cat: SpamCategory; name: string; tag: string }[] = [
-      { cat: 'TELEMARKETING', name: 'Real Estate Property Promotions', tag: 'Property Sales' },
-      { cat: 'TELEMARKETING', name: 'Pre-Approved Credit Card Desk', tag: 'Credit Card Pitch' },
-      { cat: 'TELEMARKETING', name: 'Instant Personal Loan Direct Seller', tag: 'Loan Telemarketing' },
-      { cat: 'ROBOCALL', name: 'Automated Stock Market Advisory', tag: 'Stock Trading Robocall' },
-      { cat: 'TELEMARKETING', name: 'Health Insurance Policy Sales', tag: 'Insurance Telemarketing' },
-      { cat: 'SCAM', name: 'Fake Lucky Draw Lottery Department', tag: 'Lottery Fraud' },
-      { cat: 'IMPERSONATOR', name: 'Bank KYC Verification Executive', tag: 'Fake KYC Update' },
-    ];
-    const pickedSpam = spamCategories[hash % spamCategories.length];
-    const reports = 350 + (hash % 4800);
-    const score = 85 + (hash % 14);
-
-    return {
-      number: rawNumber,
-      name: pickedSpam.name,
-      isSpam: true,
-      isVerified: false,
-      spamCategory: pickedSpam.cat,
-      spamScore: score,
-      spamReportsCount: reports,
-      carrier: operator,
-      location: `${circle}, India`,
-      lineType: 'Mobile',
-      tags: [pickedSpam.tag, 'Reported in Public Directory', 'Unsolicited Caller'],
-      reputationText: `Reported by ${reports.toLocaleString()} users in community public directory. Unsolicited caller.`,
-    };
-  }
-
-  if (entityType < 28) {
-    // Verified Local Business / Commercial Establishment in Public Directory
-    const bType = LOCAL_BUSINESS_TYPES[hash % LOCAL_BUSINESS_TYPES.length];
-    const prefix = isSouthIndianCircle
-      ? ['Sri', 'Kannan', 'Lakshmi', 'Murugan', 'Venkateswara', 'Sundar', 'Saravana', 'Anbu', 'Guru', 'Annai'][hash % 10]
-      : ['Shree', 'Krishna', 'Balaji', 'Apex', 'Royal', 'Premier', 'Classic', 'National', 'Star', 'Om'][hash % 10];
-    const bizName = `${prefix} ${bType}`;
-
-    return {
-      number: rawNumber,
-      name: bizName,
-      isSpam: false,
-      isVerified: true,
-      spamScore: 0,
-      spamReportsCount: 0,
-      carrier: operator,
-      location: `${circle}, India`,
-      lineType: 'Mobile',
-      tags: ['Verified Business', 'Local Commercial Registry', 'Clean Record'],
-      reputationText: `Verified local business registered in ${circle} directory. Zero spam reports.`,
-    };
-  }
-
-  // Registered Public Citizen / Personal Subscriber
-  let fullName = '';
-  if (isSouthIndianCircle) {
-    const fName = TAMIL_FIRST_NAMES[hash % TAMIL_FIRST_NAMES.length];
-    const lName = TAMIL_LAST_NAMES[(hash >> 2) % TAMIL_LAST_NAMES.length];
-    const initial = String.fromCharCode(65 + ((hash >> 4) % 26));
-    const style = hash % 3;
-    if (style === 0) fullName = `${fName} ${lName}`;
-    else if (style === 1) fullName = `${initial}. ${fName}`;
-    else fullName = `${fName} ${initial}.`;
-  } else {
-    const fName = GENERAL_INDIAN_FIRST_NAMES[hash % GENERAL_INDIAN_FIRST_NAMES.length];
-    const lName = GENERAL_INDIAN_LAST_NAMES[(hash >> 2) % GENERAL_INDIAN_LAST_NAMES.length];
-    fullName = `${fName} ${lName}`;
-  }
-
-  return {
-    number: rawNumber,
-    name: fullName,
-    isSpam: false,
-    isVerified: false,
-    spamScore: 0,
-    spamReportsCount: 0,
-    carrier: operator,
-    location: `${circle}, India`,
-    lineType: 'Mobile',
-    tags: ['Personal Subscriber', circle, operator, 'Clean Reputation', 'Public Directory Verified'],
-    reputationText: `Active subscriber in ${circle} on ${operator}. Clean record in public directory with 0 spam complaints.`,
-  };
+  // For unlisted personal or random numbers, return null so fake names are not invented
+  return null;
 }

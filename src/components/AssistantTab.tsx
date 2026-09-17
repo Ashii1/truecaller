@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, memo } from 'react';
 import { 
   Sparkles, 
   ShieldCheck, 
@@ -31,7 +31,7 @@ interface AssistantTabProps {
   onAddRule: (rule: Omit<BlockRule, 'id' | 'hitCount' | 'createdAt'>) => void;
 }
 
-export default function AssistantTab({
+function AssistantTab({
   calls,
   contacts,
   rules,
@@ -436,3 +436,5 @@ export default function AssistantTab({
     </div>
   );
 }
+
+export default memo(AssistantTab);

@@ -1,4 +1,4 @@
-import { useState, useMemo, type FormEvent } from 'react';
+import { useState, useMemo, memo, type FormEvent } from 'react';
 import { 
   ShieldCheck, 
   ShieldAlert, 
@@ -20,7 +20,10 @@ import {
   Activity,
   Globe,
   UserX,
-  PhoneOff
+  PhoneOff,
+  Bot,
+  EyeOff,
+  Radio
 } from 'lucide-react';
 import { 
   BlockRule, 
@@ -42,12 +45,13 @@ interface ProtectionTabProps {
   whitelist: WhitelistEntry[];
   onRemoveWhitelist: (id: string) => void;
   timelineEvents: SecurityTimelineEvent[];
+  onTriggerScreeningDemo?: () => void;
 }
 
 type BlockSubTab = 'NUMBERS' | 'PATTERNS' | 'PRIVATE' | 'SPAM';
 type RuleTypeOption = 'EXACT' | 'PREFIX' | 'SUFFIX' | 'RANGE' | 'INTERNATIONAL' | 'PRIVATE';
 
-export default function ProtectionTab({
+function ProtectionTab({
   settings,
   onUpdateSettings,
   rules,
@@ -57,6 +61,7 @@ export default function ProtectionTab({
   whitelist,
   onRemoveWhitelist,
   timelineEvents,
+  onTriggerScreeningDemo,
 }: ProtectionTabProps) {
   const { t } = useI18n();
   const [activeSubTab, setActiveSubTab] = useState<BlockSubTab>('PATTERNS');
@@ -334,6 +339,135 @@ export default function ProtectionTab({
         </div>
       </div>
 
+      {/* NEW: INTELLIGENT CALL SCREENING & SPOOF SHIELD CARD */}
+      <div className="rounded-3xl border border-indigo-500/20 bg-gradient-to-b from-indigo-950/30 to-[#0e141c] p-4 sm:p-5 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-indigo-500/20">
+          <div className="flex items-center space-x-2.5">
+            <div className="p-2 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 text-indigo-400">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white tracking-tight">
+                AI Screener & Advanced Spoof Shields
+              </h3>
+              <p className="text-xs text-indigo-200/80">
+                Automated voice assistant, Wangiri ping-back protection, and masked private callbacks.
+              </p>
+            </div>
+          </div>
+
+          {onTriggerScreeningDemo && (
+            <button
+              type="button"
+              onClick={onTriggerScreeningDemo}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-600/30 px-3.5 py-1.5 text-xs font-bold text-indigo-200 hover:bg-indigo-600 hover:text-white transition active:scale-95 shadow-sm"
+            >
+              <Bot className="w-3.5 h-3.5" />
+              <span>Test AI Call Screener Demo</span>
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          {/* Feature 1: AI Call Screener */}
+          <div className="rounded-2xl border border-white/5 bg-[#121822] p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Bot className="w-4 h-4 text-indigo-400" />
+                <span className="text-xs font-bold text-white">AI Call Screener (Screen Before Answering)</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.smartCallScreeningEnabled}
+                onChange={(e) => onUpdateSettings({ ...settings, smartCallScreeningEnabled: e.target.checked })}
+                className="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+              />
+            </div>
+            <p className="text-[11px] leading-relaxed text-slate-400">
+              When unknown or suspicious numbers ring, tap "Screen Call" to let the voice assistant answer, ask the caller who is calling and why, and transcribe their response live on-screen.
+            </p>
+          </div>
+
+          {/* Feature 2: Neighbor Spoof Shield */}
+          <div className="rounded-2xl border border-white/5 bg-[#121822] p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400" />
+                <span className="text-xs font-bold text-white">Neighbor Spoof Shield</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.neighborSpoofEnabled !== false}
+                onChange={(e) => onUpdateSettings({ ...settings, neighborSpoofEnabled: e.target.checked })}
+                className="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+              />
+            </div>
+            <p className="text-[11px] leading-relaxed text-slate-400">
+              Flags incoming numbers that share your local area prefix but are not in your contacts. Scammers spoof local prefixes to trick you into picking up.
+            </p>
+            <div className="pt-1">
+              <label className="text-[10px] font-semibold text-slate-400 block mb-1">
+                Your Mobile Number / Local Prefix (Optional):
+              </label>
+              <input
+                type="text"
+                value={settings.userPhoneNumber || ''}
+                onChange={(e) => onUpdateSettings({ ...settings, userPhoneNumber: e.target.value })}
+                placeholder="e.g. +91 98765 00000"
+                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Feature 3: Ping-Back & Wangiri Scam Shield */}
+          <div className="rounded-2xl border border-white/5 bg-[#121822] p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Radio className="w-4 h-4 text-rose-400" />
+                <span className="text-xs font-bold text-white">Ping-Back & Wangiri Shield</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={settings.pingBackShieldEnabled !== false}
+                onChange={(e) => onUpdateSettings({ ...settings, pingBackShieldEnabled: e.target.checked })}
+                className="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+              />
+            </div>
+            <p className="text-[11px] leading-relaxed text-slate-400">
+              Detects suspicious 1-ring dropped calls from unknown or high-rate international lines. Automatically mutes ringers and flags calls with "1-Ring Callback Scam" alert.
+            </p>
+          </div>
+
+          {/* Feature 4: 1-Tap Private / Masked Callback */}
+          <div className="rounded-2xl border border-white/5 bg-[#121822] p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <EyeOff className="w-4 h-4 text-blue-400" />
+                <span className="text-xs font-bold text-white">1-Tap Private / Masked Callback</span>
+              </div>
+              <span className="rounded bg-blue-500/20 px-2 py-0.5 text-[9px] font-bold text-blue-300">
+                Active
+              </span>
+            </div>
+            <p className="text-[11px] leading-relaxed text-slate-400">
+              Suppresses your caller ID when returning calls to unknown callers, online sellers, or delivery drivers.
+            </p>
+            <div className="pt-1 flex items-center gap-2">
+              <label className="text-[10px] font-semibold text-slate-400 shrink-0">Carrier Code:</label>
+              <select
+                value={settings.privateCallPrefix || '*67'}
+                onChange={(e) => onUpdateSettings({ ...settings, privateCallPrefix: e.target.value })}
+                className="rounded-xl border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white focus:border-indigo-500 focus:outline-none"
+              >
+                <option value="*67">*67 (North America)</option>
+                <option value="#31#">#31# (Worldwide GSM / India)</option>
+                <option value="141">141 (United Kingdom)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* 2. DEDICATED BLOCKING UI & RULE BUILDER */}
       <div className="space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -594,3 +728,5 @@ export default function ProtectionTab({
     </div>
   );
 }
+
+export default memo(ProtectionTab);

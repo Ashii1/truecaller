@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
@@ -13,10 +14,12 @@ import androidx.core.app.Person
 object CallNotificationHelper {
     private const val CHANNEL_ID = "calls"
     private const val SECURITY_CHANNEL_ID = "security"
+    const val INCOMING_CALL_ID = 4100
     private const val MISSED_ID = 4101
     private const val REPEATED_ID = 4102
     private const val ENDED_ID = 4103
     private const val PREFS = "vigilshield"
+    private val activeNotificationIds = java.util.Collections.synchronizedSet(mutableSetOf<Int>())
 
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < 26) return
@@ -54,22 +57,33 @@ object CallNotificationHelper {
         ensureChannel(context)
         val openIntent = PendingIntent.getActivity(context, MISSED_ID, Intent(context, MainActivity::class.java).apply { putExtra("open_tab", "recents"); putExtra("search_number", number) }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val display = identityWithNumber(context, name, number)
-        val detail = if (privacyMode(context)) "You missed a call. Tap to open Recents." else "You missed a call from $display. Tap to open Recents."
-        val notification = applyPrivacy(NotificationCompat.Builder(context, CHANNEL_ID)
+        val detail = if (privacyMode(context)) "Missed call: $number" else "Missed call from $display"
+
+        val callBackIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(number)}"))
+        val callBackPendingIntent = PendingIntent.getActivity(context, (number + "callback").hashCode(), callBackIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield)
             .setContentTitle("Missed call")
-            .setContentText(display)
+            .setContentText(if (name.isNotBlank() && name != number) "$name · $number" else number)
             .setCategory(NotificationCompat.CATEGORY_MISSED_CALL)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(openIntent)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(detail)), context).build()
+            .addAction(0, "Call back", callBackPendingIntent)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(detail))
+
+        val notification = applyPrivacy(builder, context).build()
         context.getSystemService(NotificationManager::class.java).notify(MISSED_ID, notification)
     }
 
     fun showIncomingCall(context: Context, callId: String, name: String, number: String) {
         if (!callAlertsEnabled(context)) return
         ensureChannel(context)
+        val notifId = INCOMING_CALL_ID
+        activeNotificationIds.add(notifId)
+        activeNotificationIds.add(callId.hashCode())
+
         val openIntent = PendingIntent.getActivity(context, callId.hashCode(), Intent(context, MainActivity::class.java).apply {
             putExtra("open_call_id", callId)
             putExtra("open_call_number", number)
@@ -77,23 +91,34 @@ object CallNotificationHelper {
         }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val answer = PendingIntent.getBroadcast(context, callId.hashCode() + 1, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_ANSWER).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val decline = PendingIntent.getBroadcast(context, callId.hashCode() + 2, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_DECLINE).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val dismiss = PendingIntent.getBroadcast(context, callId.hashCode() + 4, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_DISMISS).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val display = identity(context, name, number)
         val person = Person.Builder().setName(display).setImportant(true).build()
         val builder = applyPrivacy(NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield)
             .setContentIntent(openIntent)
-            .setOngoing(true)
+            .setDeleteIntent(dismiss)
+            .setAutoCancel(true)
+            .setTimeoutAfter(60_000L)
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setFullScreenIntent(openIntent, true), context)
         if (Build.VERSION.SDK_INT >= 31) builder.setStyle(NotificationCompat.CallStyle.forIncomingCall(person, decline, answer))
         else builder.setContentTitle(display).setContentText("Incoming call").addAction(0, "Decline", decline).addAction(0, "Answer", answer)
-        context.getSystemService(NotificationManager::class.java).notify(callId.hashCode(), builder.build())
+        val notif = builder.build()
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.notify(notifId, notif)
+        manager.notify(callId.hashCode(), notif)
     }
 
     fun showOngoingCall(context: Context, callId: String, name: String, number: String, state: String, connectTimeMillis: Long, riskLevel: String? = null) {
         if (!callAlertsEnabled(context)) return
         ensureChannel(context)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.cancel(INCOMING_CALL_ID)
+        activeNotificationIds.remove(INCOMING_CALL_ID)
+        activeNotificationIds.add(callId.hashCode())
+
         val display = identity(context, name, number)
         val openIntent = PendingIntent.getActivity(context, callId.hashCode(), Intent(context, MainActivity::class.java).apply {
             putExtra("open_call_id", callId)
@@ -130,22 +155,11 @@ object CallNotificationHelper {
             .setStyle(NotificationCompat.BigTextStyle().bigText(detail + if (state == "ACTIVE" || state == "HOLDING") "\nCall controls are available when you return to VigilShield." else ""))
             .addAction(0, "End call", end), context)
         if (Build.VERSION.SDK_INT >= 31) builder.setStyle(NotificationCompat.CallStyle.forOngoingCall(person, end))
-        context.getSystemService(NotificationManager::class.java).notify(callId.hashCode(), builder.build())
+        manager.notify(callId.hashCode(), builder.build())
     }
 
     fun showCallEnded(context: Context) {
-        if (!callAlertsEnabled(context)) return
-        ensureChannel(context)
-        val openIntent = PendingIntent.getActivity(context, ENDED_ID, Intent(context, MainActivity::class.java).putExtra("open_tab", "recents"), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val notification = applyPrivacy(NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield)
-            .setContentTitle("Call ended")
-            .setContentText("Call details were saved to Recents.")
-            .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
-            .setContentIntent(openIntent), context).build()
-        context.getSystemService(NotificationManager::class.java).notify(ENDED_ID, notification)
+        // Disabled per user preference: routine call endings do not display a lingering notification
     }
 
     fun showSecurityWarning(context: Context, name: String, risk: String, spoofRisk: String, explanation: String) {
@@ -189,7 +203,21 @@ object CallNotificationHelper {
     }
 
     fun clearCall(context: Context, callId: String) {
-        context.getSystemService(NotificationManager::class.java).cancel(callId.hashCode())
-        showCallEnded(context)
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.cancel(INCOMING_CALL_ID)
+        manager.cancel(callId.hashCode())
+        activeNotificationIds.remove(callId.hashCode())
+        activeNotificationIds.remove(INCOMING_CALL_ID)
+    }
+
+    fun clearAllCallNotifications(context: Context) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.cancel(INCOMING_CALL_ID)
+        manager.cancel(ENDED_ID)
+        val copy = synchronized(activeNotificationIds) { activeNotificationIds.toList() }
+        for (id in copy) {
+            manager.cancel(id)
+        }
+        activeNotificationIds.clear()
     }
 }

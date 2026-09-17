@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from 'react';
-import { Check, Delete, Layers, Phone, ShieldAlert, ShieldCheck, User, UserPlus, X, Sparkles } from 'lucide-react';
+import { Check, Delete, EyeOff, Layers, Phone, ShieldAlert, ShieldCheck, User, UserPlus, X, Sparkles } from 'lucide-react';
 import { ContactItem, CallLogItem, TruecallerDirectoryProfile, ShieldSettings } from '../types';
 import { smartDialerSearch } from '../utils/t9Search';
 import { formatPhoneNumber } from '../utils/spamEngine';
@@ -10,7 +10,7 @@ interface DialerTabProps {
   recentCalls: CallLogItem[];
   settings: ShieldSettings;
   lookupProfile: (num: string) => TruecallerDirectoryProfile;
-  onInitiateCall: (number: string, name?: string, sim?: 'SIM 1 (Personal)' | 'SIM 2 (Work)') => void;
+  onInitiateCall: (number: string, name?: string, sim?: 'SIM 1 (Personal)' | 'SIM 2 (Work)', isPrivate?: boolean) => void;
   onOpenCallerDetail: (item: CallLogItem | TruecallerDirectoryProfile) => void;
   onSaveContact: (number: string, name?: string) => void;
   selectedSim: 'SIM 1 (Personal)' | 'SIM 2 (Work)';
@@ -45,6 +45,7 @@ function sanitizePastedText(raw: string): string {
 const DialerTab = memo(function DialerTab({
   contacts,
   recentCalls,
+  settings,
   lookupProfile,
   onInitiateCall,
   onOpenCallerDetail,
@@ -119,15 +120,9 @@ const DialerTab = memo(function DialerTab({
     setValue((v) => v + d);
   };
 
-  const callWithSim = (sim: 'SIM 1 (Personal)' | 'SIM 2 (Work)') => {
-    if (!value.trim()) return;
-    onChangeSim(sim);
-    onInitiateCall(value.trim(), matchedContact?.name || profile?.name || undefined, sim);
-  };
-
-  const call = () => {
+  const call = (isPrivate = false) => {
     if (value.trim()) {
-      onInitiateCall(value.trim(), matchedContact?.name || profile?.name || undefined, selectedSim);
+      onInitiateCall(value.trim(), matchedContact?.name || profile?.name || undefined, selectedSim, isPrivate);
     }
   };
 
@@ -135,7 +130,9 @@ const DialerTab = memo(function DialerTab({
 
   // Quick fallback chips when no search query has been typed yet
   const defaultSuggestions = useMemo(() => {
-    return contacts.filter((c) => c.isFavorite).slice(0, 3);
+    const favs = contacts.filter((c) => c.isFavorite).slice(0, 3);
+    if (favs.length > 0) return favs;
+    return contacts.slice(0, 3);
   }, [contacts]);
 
   return (
@@ -244,11 +241,7 @@ const DialerTab = memo(function DialerTab({
               </button>
             ))}
           </>
-        ) : (
-          <div className="flex items-center px-1 text-[11px] text-slate-600">
-            <span>{t('smart_dialer_ready')}</span>
-          </div>
-        )}
+        ) : null}
       </div>
 
       {/* STRICT FIXED-HEIGHT Hero Display Card (h-[102px]) - Never expands or shrinks */}
@@ -308,7 +301,7 @@ const DialerTab = memo(function DialerTab({
               <User className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{matchedContact.name}</span>
             </div>
-          ) : profile?.name && profile.name !== value ? (
+          ) : (profile?.isSpam || profile?.isVerified) && profile?.name && profile.name !== value && profile.name !== formatPhoneNumber(value) ? (
             <div className="flex items-center justify-center gap-1.5 text-xs truncate">
               <span className={`font-semibold truncate max-w-[150px] ${profile.isSpam ? 'text-rose-400' : 'text-slate-200'}`}>
                 {profile.name}
@@ -328,7 +321,7 @@ const DialerTab = memo(function DialerTab({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                onSaveContact(value, profile?.name);
+                onSaveContact(value);
               }}
               className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] font-semibold text-slate-300 hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-300 transition"
             >
@@ -364,37 +357,42 @@ const DialerTab = memo(function DialerTab({
         </div>
 
         {/* Fixed 5th Row:
-            Col 1: SIM 2 Quick Call
-            Col 2: Primary Call button with active SIM
+            Col 1: Quick SIM toggle button (No phone icon)
+            Col 2: Single Primary Call button (Adapts dynamically to SIM 1 / SIM 2)
             Col 3: Backspace / Delete button
         */}
         <div className="mt-3 grid grid-cols-3 items-center gap-2.5 sm:gap-3 shrink-0">
-          {/* Column 1: Call using SIM 2 */}
+          {/* Column 1: Quick SIM Toggle Button (No call icon) */}
           <div className="flex justify-center">
             <button
               type="button"
-              onClick={() => callWithSim('SIM 2 (Work)')}
-              disabled={!value.trim()}
-              className={`flex h-[46px] w-[46px] flex-col items-center justify-center rounded-full border transition active:scale-95 disabled:pointer-events-none disabled:opacity-30 sm:h-[50px] sm:w-[50px] shrink-0 ${
+              onClick={() => onChangeSim(isSim1 ? 'SIM 2 (Work)' : 'SIM 1 (Personal)')}
+              className={`flex h-[46px] w-[46px] flex-col items-center justify-center rounded-full border transition active:scale-95 sm:h-[50px] sm:w-[50px] shrink-0 ${
                 !isSim1
-                  ? 'border-blue-500/40 bg-blue-500/20 text-blue-300'
-                  : 'border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
+                  ? 'border-blue-500/40 bg-blue-500/15 text-blue-300 hover:bg-blue-500/25'
+                  : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
               }`}
-              title={`${t('call_action')} - ${t('sim_2')}`}
-              aria-label={`${t('call_action')} - ${t('sim_2')}`}
+              title={`Switch line to ${isSim1 ? 'SIM 2' : 'SIM 1'}`}
+              aria-label={`Switch line to ${isSim1 ? 'SIM 2' : 'SIM 1'}`}
             >
-              <Phone className="h-3.5 w-3.5 fill-current" />
-              <span className="mt-0.5 text-[8px] font-bold leading-none">SIM 2</span>
+              <Layers className="h-4 w-4" />
+              <span className="mt-0.5 text-[8px] font-bold leading-none">
+                {isSim1 ? 'SIM 1' : 'SIM 2'}
+              </span>
             </button>
           </div>
 
-          {/* Column 2 (Center): Primary Call Button with Active SIM */}
+          {/* Column 2 (Center): Single Primary Call Button with Active SIM styling */}
           <div className="flex justify-center">
             <button
               type="button"
-              onClick={call}
+              onClick={() => call()}
               disabled={!value.trim()}
-              className="flex h-[56px] w-[56px] flex-col items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 transition active:scale-95 disabled:bg-slate-800 disabled:text-slate-600 disabled:shadow-none sm:h-[60px] sm:w-[60px] shrink-0"
+              className={`flex h-[56px] w-[56px] flex-col items-center justify-center rounded-full text-white shadow-lg transition active:scale-95 disabled:bg-slate-800 disabled:text-slate-600 disabled:shadow-none sm:h-[60px] sm:w-[60px] shrink-0 ${
+                isSim1
+                  ? 'bg-emerald-500 hover:bg-emerald-400 shadow-emerald-500/25'
+                  : 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/25'
+              }`}
               aria-label={`${t('call_action')} (${isSim1 ? t('sim_1') : t('sim_2')})`}
             >
               <Phone className="h-5 w-5 fill-current" />
@@ -424,6 +422,20 @@ const DialerTab = memo(function DialerTab({
               <div className="h-[46px] w-[46px] sm:h-[50px] sm:w-[50px] shrink-0" />
             )}
           </div>
+        </div>
+
+        {/* 1-Tap Private / Masked Callback Quick Action */}
+        <div className="mt-2.5 flex items-center justify-center">
+          <button
+            type="button"
+            onClick={() => call(true)}
+            disabled={!value.trim()}
+            className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/40 bg-indigo-950/50 px-3.5 py-1.5 text-[11px] font-semibold text-indigo-200 transition hover:bg-indigo-900/70 active:scale-95 disabled:pointer-events-none disabled:opacity-30 shadow-sm"
+            title={`Dial with ${settings?.privateCallPrefix || '*67'} Caller ID Suppression`}
+          >
+            <EyeOff className="h-3.5 w-3.5 text-indigo-400" />
+            <span>Private Call ({settings?.privateCallPrefix || '*67'} Masked)</span>
+          </button>
         </div>
 
         {/* Protection Footer Note */}

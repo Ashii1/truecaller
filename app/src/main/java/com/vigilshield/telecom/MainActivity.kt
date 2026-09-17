@@ -262,6 +262,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (NativeInCallService.activeCalls.isEmpty()) {
+            CallNotificationHelper.clearAllCallNotifications(this)
+            NativeInCallService.stopRinging()
+        }
         if (::bridge.isInitialized) {
             bridge.dispatchWebEvent("ROLE_STATUS_CHANGED", bridge.roleStatus())
             bridge.dispatchWebEvent("PERMISSIONS_CHANGED", bridge.permissionStatus())

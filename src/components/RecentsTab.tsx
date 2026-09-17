@@ -1,14 +1,17 @@
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   Ban,
   ChevronRight,
   Disc,
+  EyeOff,
   ListFilter,
   Phone,
   PhoneIncoming,
   PhoneMissed,
   PhoneOff,
   PhoneOutgoing,
+  RefreshCw,
   Search,
   ShieldAlert,
   ShieldCheck,
@@ -27,7 +30,7 @@ interface RecentsTabProps {
   whitelist: WhitelistEntry[];
   settings: ShieldSettings;
   lookupProfile: (num: string) => TruecallerDirectoryProfile;
-  onInitiateCall: (number: string, name?: string) => void;
+  onInitiateCall: (number: string, name?: string, sim?: 'SIM 1 (Personal)' | 'SIM 2 (Work)', isPrivate?: boolean) => void;
   onSelectCall: (call: CallLogItem) => void;
   onBlockNumber: (number: string, label: string) => void;
   onWhitelistNumber: (number: string, name: string) => void;
@@ -50,8 +53,9 @@ const iconFor = (type: CallDirection) =>
     <PhoneIncoming className="h-4 w-4" />
   );
 
-export default function RecentsTab({
+function RecentsTab({
   calls,
+  settings,
   lookupProfile,
   onInitiateCall,
   onSelectCall,
@@ -134,18 +138,30 @@ export default function RecentsTab({
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[.18em] text-slate-500">{t('recents_history')}</p>
           <h1 className="text-xl font-bold tracking-tight text-white">{t('recents_title')}</h1>
-          <p className="text-xs text-slate-500">{t('recents_subtitle')}</p>
         </div>
-        {calls.length > 0 && (
-          <button
-            type="button"
-            onClick={onClearAllCalls}
-            className="rounded-full border border-white/10 bg-white/5 p-2 text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 transition"
-            title={t('clear_all')}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        )}
+        <div className="flex items-center gap-1.5">
+          {onSyncDeviceCalls && (
+            <button
+              type="button"
+              onClick={onSyncDeviceCalls}
+              className="rounded-full border border-white/10 bg-white/5 p-2 text-slate-400 hover:bg-blue-500/15 hover:text-blue-300 active:scale-95 transition"
+              title={t('sync_device_calls')}
+              aria-label={t('sync_device_calls')}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {calls.length > 0 && (
+            <button
+              type="button"
+              onClick={onClearAllCalls}
+              className="rounded-full border border-white/10 bg-white/5 p-2 text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 active:scale-95 transition"
+              title={t('clear_all')}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </header>
 
       {/* Search Input */}
@@ -170,16 +186,6 @@ export default function RecentsTab({
         activeId={filter}
         onChange={setFilter}
       />
-
-      {onSyncDeviceCalls && (
-        <button
-          type="button"
-          onClick={onSyncDeviceCalls}
-          className="mb-3 text-xs font-medium text-blue-400 hover:text-blue-300 transition"
-        >
-          {t('sync_device_calls')}
-        </button>
-      )}
 
       {/* Call History List */}
       {groups.length === 0 ? (
@@ -251,6 +257,18 @@ export default function RecentsTab({
                               {t('safe_badge')}
                             </span>
                           )}
+                          {g.calls.some((c) => c.isNeighborSpoof) && (
+                            <span className="inline-flex items-center gap-1 rounded bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.5 text-[9px] font-bold text-amber-300">
+                              <AlertTriangle className="h-2.5 w-2.5 text-amber-400" />
+                              Neighbor Spoof
+                            </span>
+                          )}
+                          {g.calls.some((c) => c.isPingBackScam) && (
+                            <span className="inline-flex items-center gap-1 rounded bg-rose-500/20 border border-rose-500/30 px-1.5 py-0.5 text-[9px] font-bold text-rose-300">
+                              <ShieldAlert className="h-2.5 w-2.5 text-rose-400" />
+                              1-Ring Trap
+                            </span>
+                          )}
                           {g.calls.some((c) => Boolean(c.recordingUri)) && (
                             <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">
                               <Disc className="h-2.5 w-2.5 text-emerald-400 animate-pulse" />
@@ -280,8 +298,18 @@ export default function RecentsTab({
                         onClick={() => onInitiateCall(g.number, name)}
                         className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition"
                         aria-label={t('nav_phone')}
+                        title="Call"
                       >
                         <Phone className="h-3.5 w-3.5 fill-current" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onInitiateCall(g.number, name, undefined, true)}
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 transition"
+                        aria-label="Call Privately (*67 Masked)"
+                        title={`Call Privately (${settings?.privateCallPrefix || '*67'} Masked)`}
+                      >
+                        <EyeOff className="h-3.5 w-3.5" />
                       </button>
                       <button
                         type="button"
@@ -310,3 +338,5 @@ export default function RecentsTab({
     </div>
   );
 }
+
+export default memo(RecentsTab);

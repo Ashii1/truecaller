@@ -27,6 +27,10 @@ export const INITIAL_SETTINGS: ShieldSettings = {
   lastSyncedTimestamp: Date.now(),
   sensitivity: 'STRICT',
   communityDatabaseVersion: 'v2026.09-telecom-engine',
+  neighborSpoofEnabled: true,
+  pingBackShieldEnabled: true,
+  userPhoneNumber: '',
+  privateCallPrefix: '*67',
 };
 
 export const INITIAL_PERMISSIONS: PermissionStatus = {

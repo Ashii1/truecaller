@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, type ReactNode } from 'react';
+import { useEffect, useState, useMemo, memo, type ReactNode } from 'react';
 import {
   Bell,
   BellRing,
@@ -76,7 +76,7 @@ function readPrivacySettings(): PrivacySettings {
   }
 }
 
-export default function Header({
+function Header({
   settings,
   onToggleShield,
   isDefaultDialer,
@@ -701,3 +701,5 @@ function SettingRow({
     </div>
   );
 }
+
+export default memo(Header);
