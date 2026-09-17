@@ -42,11 +42,11 @@ export default function PermissionCenterModal({ isOpen, onClose, settings, onUpd
   const [spoofWarnings, setSpoofWarnings] = useState(true);
 
   const refresh = () => {
-    if (typeof window !== 'undefined' && 'Notification' in window) setNotificationStatus(Notification.permission === 'granted' ? 'ON' : 'OFF');
     const diag = telecomBridge.getDiagnostics();
+    setNotificationStatus(diag.notificationsPermission ? 'ON' : 'OFF');
     setContactsStatus(diag.contactsPermission ? 'ON' : 'OFF');
-    setCallLogStatus(diag.callLogPermission || diag.isDefaultDialer ? 'AVAILABLE' : 'UNAVAILABLE');
-    setScreeningStatus(diag.isDefaultDialer ? 'AVAILABLE' : 'UNAVAILABLE');
+    setCallLogStatus(diag.callLogPermission ? 'ON' : 'OFF');
+    setScreeningStatus(diag.isCallScreeningRoleHeld ? 'ON' : 'OFF');
   };
 
   useEffect(() => {
@@ -64,7 +64,7 @@ export default function PermissionCenterModal({ isOpen, onClose, settings, onUpd
       if (typeof phase2.financialWarnings === 'boolean') setFinancialWarnings(phase2.financialWarnings);
       if (typeof phase2.spoofWarnings === 'boolean') setSpoofWarnings(phase2.spoofWarnings);
     } catch { /* keep safe defaults */ }
-    const timer = window.setInterval(refresh, 1500);
+    const timer = window.setInterval(refresh, 1000);
     return () => window.clearInterval(timer);
   }, [isOpen, isDefaultDialer]);
 
@@ -84,9 +84,18 @@ export default function PermissionCenterModal({ isOpen, onClose, settings, onUpd
     telecomBridge.setSecuritySetting('phase2_spoof_warnings_enabled', spoofWarnings);
   }, [isOpen, silentMode, spamQuietMode, unknownMode, trustedNumbers, reminders, riskDetection, financialWarnings, spoofWarnings]);
 
-  const handleRequestNotifications = async () => {
-    if (typeof window === 'undefined' || !('Notification' in window)) return;
-    try { await Notification.requestPermission(); refresh(); } catch (err) { console.warn('Notification permission request failed:', err); }
+  const handleRequestPermissions = () => {
+    const result = telecomBridge.requestDevicePermissions();
+    window.setTimeout(refresh, result.success ? 800 : 300);
+  };
+
+  const handleRequestScreening = () => {
+    telecomBridge.requestCallScreeningRole();
+    window.setTimeout(refresh, 800);
+  };
+
+  const handleOpenAppSettings = () => {
+    telecomBridge.openAppSettings();
   };
 
   const addTrusted = () => {
@@ -122,12 +131,12 @@ export default function PermissionCenterModal({ isOpen, onClose, settings, onUpd
         </div>
         <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-5">
           <section className="space-y-3">
-            <div className="flex items-center justify-between"><div><h3 className="text-sm font-bold text-white">Phone & permissions</h3><p className="text-xs text-slate-500">Review live Android status here; no setup wizard.</p></div></div>
+            <div className="flex items-center justify-between"><div><h3 className="text-sm font-bold text-white">Phone & permissions</h3><p className="text-xs text-slate-500">These buttons now open the real Android permission/role controls.</p></div><button onClick={handleOpenAppSettings} className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold text-slate-200 hover:bg-slate-800">Android settings</button></div>
             <StatusRow icon={<PhoneCall className="h-4 w-4" />} title="Default Phone App" description="Routes real cellular calls through VigilShield InCallService." status={isDefaultDialer ? 'ON' : 'OFF'} action={!isDefaultDialer ? <button onClick={onRequestDefaultDialer} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-500">Set as default</button> : undefined} />
-            <StatusRow icon={<Users className="h-4 w-4" />} title="Contacts" description="Reads device contacts for caller names and trusted-contact protection." status={contactsStatus} action={contactsStatus !== 'ON' ? <button onClick={onSyncContacts} className="rounded-xl bg-slate-700 px-3 py-2 text-xs font-bold text-white hover:bg-slate-600">Refresh</button> : undefined} />
-            <StatusRow icon={<Clock className="h-4 w-4" />} title="Call Log" description="Reads real incoming, outgoing and missed call history." status={callLogStatus} />
-            <StatusRow icon={<Bell className="h-4 w-4" />} title="Notifications" description="Missed-call, spam and urgent-call alerts." status={notificationStatus} action={notificationStatus !== 'ON' && typeof Notification !== 'undefined' ? <button onClick={handleRequestNotifications} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-500">Enable</button> : undefined} />
-            <StatusRow icon={<ShieldAlert className="h-4 w-4" />} title="Caller screening" description="Available when VigilShield has the required Android phone role." status={screeningStatus} />
+            <StatusRow icon={<Users className="h-4 w-4" />} title="Contacts" description="Reads device contacts for caller names and trusted-contact protection." status={contactsStatus} action={contactsStatus !== 'ON' ? <button onClick={handleRequestPermissions} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-500">Enable</button> : undefined} />
+            <StatusRow icon={<Clock className="h-4 w-4" />} title="Call Log" description="Reads real incoming, outgoing and missed call history." status={callLogStatus} action={callLogStatus !== 'ON' ? <button onClick={handleRequestPermissions} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-500">Enable</button> : undefined} />
+            <StatusRow icon={<Bell className="h-4 w-4" />} title="Notifications" description="Missed-call, spam and urgent-call alerts." status={notificationStatus} action={notificationStatus !== 'ON' ? <button onClick={handleRequestPermissions} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-500">Enable</button> : undefined} />
+            <StatusRow icon={<ShieldAlert className="h-4 w-4" />} title="Caller screening" description="Android caller-ID and spam-screening role." status={screeningStatus} action={screeningStatus !== 'ON' ? <button onClick={handleRequestScreening} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-500">Enable</button> : undefined} />
           </section>
 
           <section className="space-y-3"><div className="flex items-center gap-2"><Landmark className="h-4 w-4 text-red-400" /><div><h3 className="text-sm font-bold text-white">Scam & Spoof Protection</h3><p className="text-xs text-slate-500">Local-only heuristics flag financial scam patterns, urgency and impersonation signals. Caller ID is never treated as proof of identity.</p></div></div>
