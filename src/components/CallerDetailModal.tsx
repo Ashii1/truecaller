@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Ban,
   BookUser,
+  Bot,
   Building2,
   Check,
   CheckCircle2,
@@ -749,6 +750,40 @@ export default function CallerDetailModal({
                             }}
                             compact
                           />
+                        </div>
+                      )}
+
+                      {/* AI Voice Screener Summary & Spoken Content */}
+                      {(item.usedAiScreener || (item.screeningSummaryBullets && item.screeningSummaryBullets.length > 0) || item.screeningSummary) && (
+                        <div className="mt-2.5 rounded-xl border border-indigo-500/30 bg-[#0d1322] p-3 shadow-sm space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-300">
+                              <Bot className="h-3.5 w-3.5 text-indigo-400" />
+                              <span>AI Screener Spoken Summary</span>
+                              <span className="inline-flex items-center gap-0.5 rounded-full border border-indigo-500/30 bg-indigo-500/20 px-1.5 py-0.2 text-[8.5px] font-bold text-indigo-300">
+                                <Sparkles className="h-2 w-2 text-indigo-400" />
+                                Gemini
+                              </span>
+                            </div>
+                            {item.screeningDetectedIntent && (
+                              <span className="rounded bg-indigo-950/80 px-1.5 py-0.5 text-[9.5px] font-medium text-indigo-300 border border-indigo-500/20">
+                                {item.screeningDetectedIntent}
+                              </span>
+                            )}
+                          </div>
+
+                          {item.screeningSummaryBullets && item.screeningSummaryBullets.length > 0 ? (
+                            <ul className="space-y-1 text-[11.5px] text-slate-200">
+                              {item.screeningSummaryBullets.map((bullet, bIdx) => (
+                                <li key={bIdx} className="flex items-start gap-1.5">
+                                  <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-indigo-400" />
+                                  <span className="leading-snug text-slate-200">{bullet}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : item.screeningSummary ? (
+                            <p className="text-[11.5px] text-slate-300 leading-snug">{item.screeningSummary}</p>
+                          ) : null}
                         </div>
                       )}
 

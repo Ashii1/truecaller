@@ -17,6 +17,11 @@ export const TRANSLATIONS = {
     english_short: 'EN',
     switch_to_tamil: 'Switch to தமிழ்',
     switch_to_english: 'Switch to English',
+    display_density: 'Display density',
+    compact_mode: 'Compact',
+    comfortable_mode: 'Comfortable',
+    compact_mode_desc: 'Compact view for tighter screens',
+    comfortable_mode_desc: 'Comfortable view with standard spacing',
 
     // Navigation Tabs
     tab_phone: 'Phone',
@@ -341,6 +346,11 @@ export const TRANSLATIONS = {
     english_short: 'EN',
     switch_to_tamil: 'தமிழுக்கு மாறவும்',
     switch_to_english: 'Switch to English',
+    display_density: 'காட்சி அடர்த்தி',
+    compact_mode: 'அடர்த்தியான',
+    comfortable_mode: 'வசதியான',
+    compact_mode_desc: 'சிறிய திரைகளுக்கான அடர்த்தியான காட்சி',
+    comfortable_mode_desc: 'இயல்பான இடைவெளியுடன் வசதியான காட்சி',
 
     // Navigation Tabs
     tab_phone: 'அழைப்பாளர்',

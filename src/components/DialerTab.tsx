@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from 'react';
 import { Check, Delete, EyeOff, Layers, Phone, ShieldAlert, ShieldCheck, User, UserPlus, X, Sparkles } from 'lucide-react';
-import { ContactItem, CallLogItem, TruecallerDirectoryProfile, ShieldSettings } from '../types';
+import { ContactItem, CallLogItem, TruecallerDirectoryProfile, ShieldSettings, DisplayDensity } from '../types';
 import { smartDialerSearch } from '../utils/t9Search';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import { useI18n } from '../i18n/LanguageContext';
@@ -16,6 +16,7 @@ interface DialerTabProps {
   selectedSim: 'SIM 1 (Personal)' | 'SIM 2 (Work)';
   onChangeSim: (sim: 'SIM 1 (Personal)' | 'SIM 2 (Work)') => void;
   initialNumber?: string;
+  density?: DisplayDensity;
 }
 
 const KEYPAD = [
@@ -53,6 +54,7 @@ const DialerTab = memo(function DialerTab({
   selectedSim,
   onChangeSim,
   initialNumber,
+  density = 'comfortable',
 }: DialerTabProps) {
   const { t } = useI18n();
   const [value, setValue] = useState(initialNumber || '');
@@ -135,20 +137,24 @@ const DialerTab = memo(function DialerTab({
     return contacts.slice(0, 3);
   }, [contacts]);
 
+  const isCompact = density === 'compact';
+
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col px-3 pb-6 pt-1 sm:px-4 select-none">
+    <div className={`mx-auto flex w-full max-w-md flex-col select-none transition-all ${isCompact ? 'px-2 pb-4 pt-0.5 sm:px-3' : 'px-3 pb-6 pt-1 sm:px-4'}`}>
       {/* Top Header & Selected SIM Pill */}
-      <div className="mb-2.5 flex items-center justify-between">
+      <div className={`flex items-center justify-between transition-all ${isCompact ? 'mb-1.5' : 'mb-2.5'}`}>
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[.18em] text-slate-500">{t('nav_phone')}</p>
-          <h1 className="text-xl font-bold tracking-tight text-white">{t('dialer_keypad')}</h1>
+          <p className={`font-bold uppercase tracking-[.18em] text-slate-500 transition-all ${isCompact ? 'text-[9px]' : 'text-[10px]'}`}>{t('nav_phone')}</p>
+          <h1 className={`font-bold tracking-tight text-white transition-all ${isCompact ? 'text-lg' : 'text-xl'}`}>{t('dialer_keypad')}</h1>
         </div>
 
         {/* Selected SIM Selector Button */}
         <button
           type="button"
           onClick={() => setShowSimPicker(true)}
-          className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+          className={`flex items-center gap-1.5 rounded-full border font-semibold transition-all ${
+            isCompact ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1.5 text-xs'
+          } ${
             isSim1
               ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
               : 'border-blue-500/30 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20'
@@ -161,11 +167,13 @@ const DialerTab = memo(function DialerTab({
       </div>
 
       {/* Dual SIM Switcher Strip */}
-      <div className="mb-2 flex items-center rounded-xl border border-white/10 bg-[#0e141b] p-1 text-xs">
+      <div className={`flex items-center rounded-xl border border-white/10 bg-[#0e141b] transition-all ${isCompact ? 'mb-1.5 p-0.5 text-[11px]' : 'mb-2 p-1 text-xs'}`}>
         <button
           type="button"
           onClick={() => onChangeSim('SIM 1 (Personal)')}
-          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold transition ${
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg font-semibold transition ${
+            isCompact ? 'py-1 text-[11px]' : 'py-1.5 text-xs'
+          } ${
             isSim1 ? 'bg-emerald-500/20 text-emerald-300 shadow-sm' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -175,7 +183,9 @@ const DialerTab = memo(function DialerTab({
         <button
           type="button"
           onClick={() => onChangeSim('SIM 2 (Work)')}
-          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold transition ${
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg font-semibold transition ${
+            isCompact ? 'py-1 text-[11px]' : 'py-1.5 text-xs'
+          } ${
             !isSim1 ? 'bg-blue-500/20 text-blue-300 shadow-sm' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -184,8 +194,8 @@ const DialerTab = memo(function DialerTab({
         </button>
       </div>
 
-      {/* Fixed-Height T9 Matches Strip (h-9) - Never shifts the keypad layout below */}
-      <div className="mb-2 flex h-9 items-center gap-1.5 overflow-x-auto no-scrollbar">
+      {/* Fixed-Height T9 Matches Strip - Never shifts the keypad layout below */}
+      <div className={`flex items-center overflow-x-auto no-scrollbar transition-all ${isCompact ? 'mb-1.5 h-7.5 gap-1' : 'mb-2 h-9 gap-1.5'}`}>
         {results.matchingContacts.length > 0 || results.matchingRecents.length > 0 || results.possibleCaller ? (
           <>
             {results.matchingContacts.slice(0, 3).map((c) => (
@@ -193,7 +203,9 @@ const DialerTab = memo(function DialerTab({
                 type="button"
                 key={c.id}
                 onClick={() => setValue(c.number)}
-                className="flex shrink-0 items-center gap-1 rounded-lg bg-white/10 border border-white/10 px-2.5 py-1 text-xs font-semibold text-white hover:bg-white/20 transition"
+                className={`flex shrink-0 items-center rounded-lg bg-white/10 border border-white/10 font-semibold text-white hover:bg-white/20 transition ${
+                  isCompact ? 'gap-1 px-2 py-0.5 text-[11px]' : 'gap-1 px-2.5 py-1 text-xs'
+                }`}
               >
                 <User className="h-3 w-3 text-emerald-400" />
                 <span>{c.name}</span>
@@ -204,7 +216,9 @@ const DialerTab = memo(function DialerTab({
                 type="button"
                 key={r.id}
                 onClick={() => setValue(r.number)}
-                className="shrink-0 rounded-lg bg-white/5 border border-white/5 px-2.5 py-1 text-xs text-slate-300 hover:bg-white/10 transition"
+                className={`shrink-0 rounded-lg bg-white/5 border border-white/5 text-slate-300 hover:bg-white/10 transition ${
+                  isCompact ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-1 text-xs'
+                }`}
               >
                 {r.callerName || formatPhoneNumber(r.number)}
               </button>
@@ -213,7 +227,9 @@ const DialerTab = memo(function DialerTab({
               <button
                 type="button"
                 onClick={() => onOpenCallerDetail(results.possibleCaller!)}
-                className="flex shrink-0 items-center gap-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20 transition"
+                className={`flex shrink-0 items-center rounded-lg bg-emerald-500/10 border border-emerald-500/20 font-semibold text-emerald-300 hover:bg-emerald-500/20 transition ${
+                  isCompact ? 'gap-1 px-2 py-0.5 text-[11px]' : 'gap-1 px-2.5 py-1 text-xs'
+                }`}
               >
                 {results.possibleCaller.isSpam ? (
                   <ShieldAlert className="h-3 w-3 text-rose-400" />
@@ -235,7 +251,9 @@ const DialerTab = memo(function DialerTab({
                 type="button"
                 key={c.id}
                 onClick={() => setValue(c.number)}
-                className="shrink-0 rounded-lg bg-white/5 border border-white/5 px-2 py-1 text-xs text-slate-300 hover:bg-white/10 hover:text-white transition"
+                className={`shrink-0 rounded-lg bg-white/5 border border-white/5 text-slate-300 hover:bg-white/10 hover:text-white transition ${
+                  isCompact ? 'px-2 py-0.5 text-[11px]' : 'px-2 py-1 text-xs'
+                }`}
               >
                 {c.name}
               </button>
@@ -244,15 +262,17 @@ const DialerTab = memo(function DialerTab({
         ) : null}
       </div>
 
-      {/* STRICT FIXED-HEIGHT Hero Display Card (h-[102px]) - Never expands or shrinks */}
+      {/* STRICT FIXED-HEIGHT Hero Display Card - Never expands or shrinks */}
       <div
         id="dialer-display-card"
         onClick={() => inputRef.current?.focus()}
         onPaste={handlePaste}
-        className="mb-3.5 flex h-[102px] flex-col justify-center rounded-2xl border border-white/10 bg-[#0e141c] px-3 py-1 shadow-lg shadow-black/20 transition-colors focus-within:border-emerald-500/40 focus-within:ring-1 focus-within:ring-emerald-500/20"
+        className={`flex flex-col justify-center rounded-2xl border border-white/10 bg-[#0e141c] shadow-lg shadow-black/20 transition-all focus-within:border-emerald-500/40 focus-within:ring-1 focus-within:ring-emerald-500/20 ${
+          isCompact ? 'mb-2 h-[84px] px-2.5 py-0.5' : 'mb-3.5 h-[102px] px-3 py-1'
+        }`}
       >
-        {/* Row 1: Fixed-Height Number Input (h-11) */}
-        <div className="relative flex h-11 items-center justify-center">
+        {/* Row 1: Fixed-Height Number Input */}
+        <div className={`relative flex items-center justify-center transition-all ${isCompact ? 'h-9' : 'h-11'}`}>
           <input
             ref={inputRef}
             id="dialer-number-input"
@@ -266,7 +286,11 @@ const DialerTab = memo(function DialerTab({
             inputMode="tel"
             autoComplete="off"
             placeholder={t('dialer_name_or_number')}
-            className="w-full bg-transparent px-8 text-center text-2xl sm:text-[28px] font-normal tracking-wide text-white outline-none placeholder:text-sm placeholder:font-normal placeholder:text-slate-600 selection:bg-emerald-500/30"
+            className={`w-full bg-transparent px-8 text-center font-normal tracking-wide text-white outline-none selection:bg-emerald-500/30 transition-all ${
+              isCompact
+                ? 'text-xl sm:text-2xl placeholder:text-xs'
+                : 'text-2xl sm:text-[28px] placeholder:text-sm'
+            }`}
           />
           {value ? (
             <button
@@ -280,13 +304,13 @@ const DialerTab = memo(function DialerTab({
               aria-label="Clear"
               title="Clear"
             >
-              <X className="h-4 w-4" />
+              <X className={isCompact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
             </button>
           ) : null}
         </div>
 
-        {/* Row 2: Fixed-Height Formatted Preview / Sub-line (h-4) */}
-        <div className="flex h-4 items-center justify-center text-[10.5px] font-mono text-slate-400 overflow-hidden">
+        {/* Row 2: Fixed-Height Formatted Preview / Sub-line */}
+        <div className={`flex items-center justify-center font-mono text-slate-400 overflow-hidden transition-all ${isCompact ? 'h-3 text-[9.5px]' : 'h-4 text-[10.5px]'}`}>
           {value && !/[a-zA-Z]/.test(value) ? (
             <span>{formatPhoneNumber(value)}</span>
           ) : (
@@ -294,24 +318,24 @@ const DialerTab = memo(function DialerTab({
           )}
         </div>
 
-        {/* Row 3: Fixed-Height Caller ID & Action Line (h-6) */}
-        <div className="flex h-6 items-center justify-center overflow-hidden">
+        {/* Row 3: Fixed-Height Caller ID & Action Line */}
+        <div className={`flex items-center justify-center overflow-hidden transition-all ${isCompact ? 'h-5 text-[11px]' : 'h-6 text-xs'}`}>
           {matchedContact ? (
-            <div className="flex items-center justify-center gap-1 text-xs font-semibold text-emerald-400 truncate">
-              <User className="h-3.5 w-3.5 shrink-0" />
+            <div className={`flex items-center justify-center gap-1 font-semibold text-emerald-400 truncate ${isCompact ? 'text-[11px]' : 'text-xs'}`}>
+              <User className={`shrink-0 ${isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'}`} />
               <span className="truncate">{matchedContact.name}</span>
             </div>
           ) : (profile?.isSpam || profile?.isVerified) && profile?.name && profile.name !== value && profile.name !== formatPhoneNumber(value) ? (
-            <div className="flex items-center justify-center gap-1.5 text-xs truncate">
+            <div className={`flex items-center justify-center gap-1.5 truncate ${isCompact ? 'text-[11px]' : 'text-xs'}`}>
               <span className={`font-semibold truncate max-w-[150px] ${profile.isSpam ? 'text-rose-400' : 'text-slate-200'}`}>
                 {profile.name}
               </span>
               {profile.isSpam ? (
-                <span className="shrink-0 rounded bg-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold text-rose-300">
+                <span className="shrink-0 rounded bg-rose-500/20 px-1.5 py-0.5 text-[8.5px] font-bold text-rose-300">
                   {t('spam_badge')}
                 </span>
               ) : (
-                <span className="shrink-0 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">
+                <span className="shrink-0 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[8.5px] font-bold text-emerald-300">
                   {t('safe_badge')}
                 </span>
               )}
@@ -323,13 +347,15 @@ const DialerTab = memo(function DialerTab({
                 e.stopPropagation();
                 onSaveContact(value);
               }}
-              className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] font-semibold text-slate-300 hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-300 transition"
+              className={`inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 font-semibold text-slate-300 hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-300 transition ${
+                isCompact ? 'px-2 py-0.5 text-[9.5px]' : 'px-2.5 py-0.5 text-[10px]'
+              }`}
             >
               <UserPlus className="h-3 w-3 text-emerald-400" />
               <span>{t('add_to_contacts')}</span>
             </button>
           ) : (
-            <span className="text-[10px] font-medium text-slate-500 select-none">
+            <span className={`font-medium text-slate-500 select-none ${isCompact ? 'text-[9.5px]' : 'text-[10px]'}`}>
               {t('enter_number_to_call')}
             </span>
           )}
@@ -337,18 +363,22 @@ const DialerTab = memo(function DialerTab({
       </div>
 
       {/* STRICTLY ANCHORED Keypad Grid: 3 columns, stationary coordinates */}
-      <div className="mx-auto w-full max-w-[270px] sm:max-w-[290px] shrink-0">
-        <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
+      <div className={`mx-auto w-full shrink-0 transition-all ${isCompact ? 'max-w-[245px] sm:max-w-[265px]' : 'max-w-[270px] sm:max-w-[290px]'}`}>
+        <div className={`grid grid-cols-3 transition-all ${isCompact ? 'gap-1.5 sm:gap-2' : 'gap-2.5 sm:gap-3'}`}>
           {KEYPAD.map(([digit, letters]) => (
             <button
               type="button"
               key={digit}
               onClick={() => press(digit)}
-              className="mx-auto flex h-[54px] w-[54px] flex-col items-center justify-center rounded-full bg-[#151c24] ring-1 ring-white/5 transition hover:bg-[#1a232e] active:scale-95 sm:h-[58px] sm:w-[58px] shrink-0"
+              className={`mx-auto flex flex-col items-center justify-center rounded-full bg-[#151c24] ring-1 ring-white/5 transition hover:bg-[#1a232e] active:scale-95 shrink-0 ${
+                isCompact
+                  ? 'h-[46px] w-[46px] sm:h-[48px] sm:w-[48px]'
+                  : 'h-[54px] w-[54px] sm:h-[58px] sm:w-[58px]'
+              }`}
             >
-              <span className="text-xl font-normal leading-none text-white sm:text-2xl">{digit}</span>
+              <span className={`font-normal leading-none text-white transition-all ${isCompact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'}`}>{digit}</span>
               {letters && (
-                <span className="-mt-0.5 text-[8px] font-medium tracking-[.18em] text-slate-400 sm:text-[9px]">
+                <span className={`-mt-0.5 font-medium tracking-[.18em] text-slate-400 transition-all ${isCompact ? 'text-[7.5px]' : 'text-[8px] sm:text-[9px]'}`}>
                   {letters}
                 </span>
               )}
@@ -361,13 +391,17 @@ const DialerTab = memo(function DialerTab({
             Col 2: Single Primary Call button (Adapts dynamically to SIM 1 / SIM 2)
             Col 3: Backspace / Delete button
         */}
-        <div className="mt-3 grid grid-cols-3 items-center gap-2.5 sm:gap-3 shrink-0">
+        <div className={`grid grid-cols-3 items-center shrink-0 transition-all ${isCompact ? 'mt-2 gap-1.5 sm:gap-2' : 'mt-3 gap-2.5 sm:gap-3'}`}>
           {/* Column 1: Quick SIM Toggle Button (No call icon) */}
           <div className="flex justify-center">
             <button
               type="button"
               onClick={() => onChangeSim(isSim1 ? 'SIM 2 (Work)' : 'SIM 1 (Personal)')}
-              className={`flex h-[46px] w-[46px] flex-col items-center justify-center rounded-full border transition active:scale-95 sm:h-[50px] sm:w-[50px] shrink-0 ${
+              className={`flex flex-col items-center justify-center rounded-full border transition active:scale-95 shrink-0 ${
+                isCompact
+                  ? 'h-[40px] w-[40px] sm:h-[42px] sm:w-[42px]'
+                  : 'h-[46px] w-[46px] sm:h-[50px] sm:w-[50px]'
+              } ${
                 !isSim1
                   ? 'border-blue-500/40 bg-blue-500/15 text-blue-300 hover:bg-blue-500/25'
                   : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
@@ -375,7 +409,7 @@ const DialerTab = memo(function DialerTab({
               title={`Switch line to ${isSim1 ? 'SIM 2' : 'SIM 1'}`}
               aria-label={`Switch line to ${isSim1 ? 'SIM 2' : 'SIM 1'}`}
             >
-              <Layers className="h-4 w-4" />
+              <Layers className={isCompact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
               <span className="mt-0.5 text-[8px] font-bold leading-none">
                 {isSim1 ? 'SIM 1' : 'SIM 2'}
               </span>
@@ -388,14 +422,18 @@ const DialerTab = memo(function DialerTab({
               type="button"
               onClick={() => call()}
               disabled={!value.trim()}
-              className={`flex h-[56px] w-[56px] flex-col items-center justify-center rounded-full text-white shadow-lg transition active:scale-95 disabled:bg-slate-800 disabled:text-slate-600 disabled:shadow-none sm:h-[60px] sm:w-[60px] shrink-0 ${
+              className={`flex flex-col items-center justify-center rounded-full text-white shadow-lg transition active:scale-95 disabled:bg-slate-800 disabled:text-slate-600 disabled:shadow-none shrink-0 ${
+                isCompact
+                  ? 'h-[48px] w-[48px] sm:h-[50px] sm:w-[50px]'
+                  : 'h-[56px] w-[56px] sm:h-[60px] sm:w-[60px]'
+              } ${
                 isSim1
                   ? 'bg-emerald-500 hover:bg-emerald-400 shadow-emerald-500/25'
                   : 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/25'
               }`}
               aria-label={`${t('call_action')} (${isSim1 ? t('sim_1') : t('sim_2')})`}
             >
-              <Phone className="h-5 w-5 fill-current" />
+              <Phone className={`fill-current ${isCompact ? 'h-4 w-4' : 'h-5 w-5'}`} />
               <span className="mt-0.5 text-[8px] font-extrabold uppercase leading-none tracking-wider">
                 {isSim1 ? 'SIM 1' : 'SIM 2'}
               </span>
@@ -412,25 +450,35 @@ const DialerTab = memo(function DialerTab({
                   e.preventDefault();
                   setValue('');
                 }}
-                className="grid h-[46px] w-[46px] place-items-center rounded-full text-slate-400 transition hover:bg-white/5 hover:text-white active:scale-95 sm:h-[50px] sm:w-[50px] shrink-0"
+                className={`grid place-items-center rounded-full text-slate-400 transition hover:bg-white/5 hover:text-white active:scale-95 shrink-0 ${
+                  isCompact
+                    ? 'h-[40px] w-[40px] sm:h-[42px] sm:w-[42px]'
+                    : 'h-[46px] w-[46px] sm:h-[50px] sm:w-[50px]'
+                }`}
                 aria-label="Delete"
                 title="Backspace (Hold to clear all)"
               >
-                <Delete className="h-5 w-5" />
+                <Delete className={isCompact ? 'h-4 w-4' : 'h-5 w-5'} />
               </button>
             ) : (
-              <div className="h-[46px] w-[46px] sm:h-[50px] sm:w-[50px] shrink-0" />
+              <div className={`shrink-0 ${
+                isCompact
+                  ? 'h-[40px] w-[40px] sm:h-[42px] sm:w-[42px]'
+                  : 'h-[46px] w-[46px] sm:h-[50px] sm:w-[50px]'
+              }`} />
             )}
           </div>
         </div>
 
         {/* 1-Tap Private / Masked Callback Quick Action */}
-        <div className="mt-2.5 flex items-center justify-center">
+        <div className={`flex items-center justify-center transition-all ${isCompact ? 'mt-2' : 'mt-2.5'}`}>
           <button
             type="button"
             onClick={() => call(true)}
             disabled={!value.trim()}
-            className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/40 bg-indigo-950/50 px-3.5 py-1.5 text-[11px] font-semibold text-indigo-200 transition hover:bg-indigo-900/70 active:scale-95 disabled:pointer-events-none disabled:opacity-30 shadow-sm"
+            className={`inline-flex items-center gap-1.5 rounded-full border border-indigo-500/40 bg-indigo-950/50 font-semibold text-indigo-200 transition hover:bg-indigo-900/70 active:scale-95 disabled:pointer-events-none disabled:opacity-30 shadow-sm ${
+              isCompact ? 'px-2.5 py-1 text-[10px]' : 'px-3.5 py-1.5 text-[11px]'
+            }`}
             title={`Dial with ${settings?.privateCallPrefix || '*67'} Caller ID Suppression`}
           >
             <EyeOff className="h-3.5 w-3.5 text-indigo-400" />
@@ -439,7 +487,7 @@ const DialerTab = memo(function DialerTab({
         </div>
 
         {/* Protection Footer Note */}
-        <div className="mt-3.5 flex items-center justify-center gap-1.5 text-[10px] text-slate-500">
+        <div className={`flex items-center justify-center gap-1.5 text-slate-500 transition-all ${isCompact ? 'mt-2 text-[9px]' : 'mt-3.5 text-[10px]'}`}>
           <ShieldCheck className="h-3 w-3 text-emerald-400" />
           <span>{t('protected_calls')}</span>
         </div>

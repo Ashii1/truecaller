@@ -738,7 +738,7 @@ Return ONLY a JSON object with this exact schema:
 }`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
       contents: prompt,
       config: { responseMimeType: 'application/json' },
     });
@@ -764,6 +764,122 @@ Return ONLY a JSON object with this exact schema:
       source: 'on_device_rule_engine',
     });
   }
+});
+
+// Dedicated AI Screener Spoken Content Summarization Endpoint
+app.post('/api/screened-call-summary', async (req, res) => {
+  const { number, callerName, transcript, detectedIntent, durationSeconds, riskScore, spamCategory } = req.body;
+  const transcriptList: Array<{ sender: string; text: string; timestamp?: number }> = Array.isArray(transcript) ? transcript : [];
+
+  const transcriptText = transcriptList
+    .map(t => `${t.sender === 'caller' ? 'Caller' : t.sender === 'user' ? 'User' : 'AI Screener'}: "${t.text}"`)
+    .join('\n');
+
+  try {
+    const ai = getGeminiClient();
+    if (ai && transcriptText.trim()) {
+      const prompt = `You are the AI Voice Screener engine of VigilShield mobile telephony protection.
+An incoming phone call was screened by the automated voice assistant.
+Analyze the following spoken conversation transcript between the caller and the AI screener, and produce a short, high-fidelity, bulleted summary of spoken content.
+
+Caller Details:
+- Number: ${number || 'Unknown'}
+- Caller Name / Organization: ${callerName || 'Unidentified'}
+- Stated or Inferred Intent: ${detectedIntent || 'Unspecified'}
+- Risk Score: ${riskScore || 0}/100 (${spamCategory || 'General'})
+- Screening Duration: ${durationSeconds || 0} seconds
+
+Spoken Transcript:
+${transcriptText}
+
+Requirements:
+1. Provide 2 to 4 concise, clear bullet points summarizing the actual spoken content:
+   - Identify who the caller claimed to be (stated name, company, department).
+   - Detail the primary stated purpose, inquiry, or proposition.
+   - Note any specific details, transaction amounts, reference numbers, or requests for urgent action/verification.
+   - Note the closing state or assistant response.
+2. Provide a single 1-sentence plain-language summary.
+
+Return ONLY a JSON object with this exact schema:
+{
+  "summaryBullets": [
+    "Short bullet 1 summarizing spoken content",
+    "Short bullet 2 summarizing spoken content",
+    "Short bullet 3 summarizing spoken content"
+  ],
+  "fullSummary": "1-sentence plain-language summary of the screening exchange.",
+  "keyIntent": "${detectedIntent || 'Voice Screening Spoken Content'}"
+}`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: { responseMimeType: 'application/json' },
+      });
+
+      const text = response.text;
+      if (text) {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed.summaryBullets) && parsed.summaryBullets.length > 0) {
+          return res.json({
+            summaryBullets: parsed.summaryBullets,
+            fullSummary: parsed.fullSummary || parsed.summaryBullets.join(' '),
+            keyIntent: parsed.keyIntent || detectedIntent,
+            source: 'gemini_ai_screener',
+          });
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn('Gemini screening summary error:', err?.message || err);
+  }
+
+  // Robust server-side fallback
+  const callerLines = transcriptList.filter(t => t.sender === 'caller').map(t => t.text.trim());
+  const assistantLines = transcriptList.filter(t => t.sender === 'assistant' || t.sender === 'user').map(t => t.text.trim());
+  const combinedCaller = callerLines.join(' ');
+  const bullets: string[] = [];
+
+  if (/card fraud|bank|unauthorized transaction/i.test(combinedCaller)) {
+    bullets.push('Caller claimed to represent bank card fraud prevention regarding an urgent transaction alert.');
+  } else if (/courier|delivery|package|parcel|shipment/i.test(combinedCaller)) {
+    bullets.push('Caller identified as courier delivery dispatch regarding a pending package delivery.');
+  } else if (/utility|contractor|maintenance|neighborhood/i.test(combinedCaller)) {
+    bullets.push('Caller presented as a local utility contractor offering unscheduled local service/inspection.');
+  } else if (callerName && !/unknown/i.test(callerName)) {
+    bullets.push(`Caller identified themselves as or on behalf of ${callerName}.`);
+  } else if (callerLines.length > 0) {
+    bullets.push('Unverified caller connected and engaged with the automated AI screener.');
+  } else {
+    bullets.push('Call connected to AI voice screener with minimal audible speech.');
+  }
+
+  const amountMatch = combinedCaller.match(/\$[\d,]+|\b\d+\s?dollars\b/i);
+  if (amountMatch) {
+    bullets.push(`Spoke regarding an unverified transaction amount of ${amountMatch[0]} and requested immediate confirmation.`);
+  } else if (/signature/i.test(combinedCaller)) {
+    bullets.push('Informed recipient that an in-person physical signature is required for parcel delivery.');
+  } else if (/meeting|discussion|follow-up/i.test(combinedCaller)) {
+    bullets.push('Stated they were following up on a previously scheduled agenda discussion.');
+  } else if (callerLines[0]) {
+    const cleanSnippet = callerLines[0].length > 90 ? callerLines[0].slice(0, 87) + '...' : callerLines[0];
+    bullets.push(`Spoken message: "${cleanSnippet}"`);
+  }
+
+  if (assistantLines.some(l => /remove|later|meeting|text message/i.test(l))) {
+    bullets.push('Assistant delivered user reply preference; caller acknowledged and concluded exchange.');
+  } else if ((riskScore || 0) >= 70 || /fraud|scam/i.test(detectedIntent || '')) {
+    bullets.push('AI screener captured high-risk impersonation speech signals and preserved spoken transcript.');
+  } else {
+    bullets.push('Screening completed with transcript preserved alongside call log history.');
+  }
+
+  return res.json({
+    summaryBullets: bullets,
+    fullSummary: bullets.join(' '),
+    keyIntent: detectedIntent || 'Voice Screener Spoken Content',
+    source: 'on_device_heuristic_screener',
+  });
 });
 
 // Explicit Codebase ZIP Download Endpoint

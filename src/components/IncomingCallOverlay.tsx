@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Bot, ChevronDown, Phone, PhoneOff, ShieldAlert, ShieldCheck, Sparkles, VolumeX } from 'lucide-react';
-import { IncomingCallState } from '../types';
+import { IncomingCallState, ScreeningTranscriptEntry } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import { useI18n } from '../i18n/LanguageContext';
 import CallScreeningOverlay from './CallScreeningOverlay';
@@ -8,8 +8,8 @@ import CallScreeningOverlay from './CallScreeningOverlay';
 interface IncomingCallOverlayProps {
   call: IncomingCallState | null;
   autoCancelEnabled: boolean;
-  onCancelCall: (reason: string, block: boolean) => void;
-  onAnswerCall: () => void;
+  onCancelCall: (reason: string, block: boolean, screeningData?: { transcript: ScreeningTranscriptEntry[]; intent: string | null }) => void;
+  onAnswerCall: (screeningData?: { transcript: ScreeningTranscriptEntry[]; intent: string | null }) => void;
   onDismiss: () => void;
   onScreenCall?: (call: IncomingCallState) => void;
 }
@@ -48,20 +48,20 @@ export default function IncomingCallOverlay({ call, autoCancelEnabled, onCancelC
     return (
       <CallScreeningOverlay
         call={call}
-        onPickUp={() => {
+        onPickUp={(transcript, intent) => {
           setIsScreeningInternal(false);
           setSilenced(true);
-          onAnswerCall();
+          onAnswerCall({ transcript, intent });
         }}
-        onHangUp={() => {
+        onHangUp={(transcript, intent) => {
           setIsScreeningInternal(false);
           setSilenced(true);
-          onCancelCall('Screening concluded: user declined', false);
+          onCancelCall('Screening concluded: user declined', false, { transcript, intent });
         }}
-        onBlockSpam={() => {
+        onBlockSpam={(transcript, intent) => {
           setIsScreeningInternal(false);
           setSilenced(true);
-          onCancelCall('Screening concluded: caller blocked as spam', true);
+          onCancelCall('Screening concluded: caller blocked as spam', true, { transcript, intent });
         }}
       />
     );

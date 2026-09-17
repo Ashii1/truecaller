@@ -15,7 +15,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { ContactItem, CallLogItem } from '../types';
+import { ContactItem, CallLogItem, DisplayDensity } from '../types';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 import { useI18n } from '../i18n/LanguageContext';
 import ModernFilterBar, { FilterTabOption } from './ModernFilterBar';
@@ -28,6 +28,7 @@ interface ContactsTabProps {
   onDeleteContact: (id: string) => void;
   onToggleFavorite: (id: string) => void;
   recentCalls: CallLogItem[];
+  density?: DisplayDensity;
 }
 
 type CategoryFilter = 'ALL' | 'FAVORITES' | 'FAMILY' | 'WORK' | 'BUSINESSES' | 'RECENT';
@@ -40,6 +41,7 @@ function ContactsTab({
   onUpdateContact,
   onDeleteContact,
   onToggleFavorite,
+  density = 'comfortable',
 }: ContactsTabProps) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
@@ -136,19 +138,21 @@ function ContactsTab({
     { id: 'RECENT', label: t('cat_recent'), icon: Clock, count: counts.RECENT, badgeVariant: 'default' },
   ];
 
+  const isCompact = density === 'compact';
+
   return (
-    <div className="mx-auto w-full max-w-2xl px-3 pb-8 pt-2 sm:px-4 select-none">
+    <div className={`mx-auto w-full max-w-2xl select-none transition-all ${isCompact ? 'px-2 pb-6 pt-1 sm:px-3' : 'px-3 pb-8 pt-2 sm:px-4'}`}>
       {/* Header */}
-      <header className="mb-3 flex items-end justify-between gap-2">
+      <header className={`flex items-end justify-between gap-2 transition-all ${isCompact ? 'mb-2' : 'mb-3'}`}>
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[.18em] text-slate-500">{t('contacts_people')}</p>
-          <h1 className="text-xl font-bold tracking-tight text-white">{t('contacts_title')}</h1>
+          <p className={`font-bold uppercase tracking-[.18em] text-slate-500 transition-all ${isCompact ? 'text-[9px]' : 'text-[10px]'}`}>{t('contacts_people')}</p>
+          <h1 className={`font-bold tracking-tight text-white transition-all ${isCompact ? 'text-lg' : 'text-xl'}`}>{t('contacts_title')}</h1>
         </div>
         <div className="flex gap-2">
           <button
             type="button"
             onClick={importDevice}
-            className="hidden rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-semibold text-slate-300 sm:block hover:bg-white/10 transition"
+            className={`hidden rounded-lg border border-white/10 bg-white/5 font-semibold text-slate-300 sm:block hover:bg-white/10 transition ${isCompact ? 'px-2 py-1 text-[11px]' : 'px-2.5 py-1.5 text-xs'}`}
           >
             {t('import')}
           </button>
@@ -160,30 +164,30 @@ function ContactsTab({
               setCategory('GENERAL');
               setShowAdd(true);
             }}
-            className="flex items-center gap-1 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-3 py-1.5 text-xs font-bold text-slate-950 shadow-md shadow-emerald-500/20 transition"
+            className={`flex items-center gap-1 rounded-xl bg-emerald-500 hover:bg-emerald-400 font-bold text-slate-950 shadow-md shadow-emerald-500/20 transition-all ${isCompact ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1.5 text-xs'}`}
           >
-            <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
+            <Plus className={`stroke-[2.5] ${isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'}`} />
             <span>{t('add')}</span>
           </button>
         </div>
       </header>
 
       {/* Search Input */}
-      <div className="relative mb-2.5">
-        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+      <div className={`relative transition-all ${isCompact ? 'mb-2' : 'mb-2.5'}`}>
+        <Search className={`absolute top-1/2 -translate-y-1/2 text-slate-500 transition-all ${isCompact ? 'left-2.5 h-3 w-3' : 'left-3 h-3.5 w-3.5'}`} />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t('search_contacts')}
-          className="h-10 w-full rounded-xl border border-white/10 bg-[#0e141c] pl-9 pr-9 text-xs text-white outline-none placeholder:text-slate-600 shadow-inner shadow-black/20 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/20 transition-all"
+          className={`w-full rounded-xl border border-white/10 bg-[#0e141c] text-white outline-none placeholder:text-slate-600 shadow-inner shadow-black/20 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/20 transition-all ${isCompact ? 'h-8.5 pl-8 pr-8 text-[11.5px]' : 'h-10 pl-9 pr-9 text-xs'}`}
         />
         {query && (
           <button
             type="button"
             onClick={() => setQuery('')}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-white"
+            className={`absolute top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-white ${isCompact ? 'right-2' : 'right-2.5'}`}
           >
-            <X className="h-3.5 w-3.5" />
+            <X className={isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
           </button>
         )}
       </div>
@@ -197,26 +201,30 @@ function ContactsTab({
 
       {/* Contacts List */}
       {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-[#0e141c] p-8 text-center">
-          <UserRound className="mx-auto h-7 w-7 text-slate-700" />
-          <p className="mt-2 text-xs font-semibold text-slate-300">
+        <div className={`border border-white/10 bg-[#0e141c] text-center transition-all ${isCompact ? 'rounded-xl p-6' : 'rounded-2xl p-8'}`}>
+          <UserRound className={`mx-auto text-slate-700 ${isCompact ? 'h-6 w-6' : 'h-7 w-7'}`} />
+          <p className={`font-semibold text-slate-300 ${isCompact ? 'mt-1.5 text-[11px]' : 'mt-2 text-xs'}`}>
             {contacts.length ? t('no_matching_contacts') : t('no_contacts_yet')}
           </p>
-          <p className="mt-0.5 text-[11px] text-slate-600">{t('add_contact_or_import')}</p>
+          <p className="mt-0.5 text-[10px] text-slate-600">{t('add_contact_or_import')}</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0e141c]">
+        <div className={`overflow-hidden border border-white/10 bg-[#0e141c] transition-all ${isCompact ? 'rounded-xl' : 'rounded-2xl'}`}>
           {filtered.map((c) => (
             <div
               key={c.id}
-              className="flex items-center gap-2.5 border-b border-white/5 px-3 py-2.5 last:border-0 hover:bg-white/[0.02] transition"
+              className={`flex items-center border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition ${isCompact ? 'gap-2 px-2.5 py-1.5' : 'gap-2.5 px-3 py-2.5'}`}
             >
               <button
                 type="button"
                 onClick={() => setSelected(c)}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-slate-700 to-slate-800 text-xs font-bold text-white"
+                className={`grid shrink-0 place-items-center rounded-full bg-gradient-to-br from-slate-700 to-slate-800 font-bold text-white transition-all ${isCompact ? 'h-7.5 w-7.5 text-[10px]' : 'h-9 w-9 text-xs'}`}
               >
-                {c.isVerifiedBusiness ? <Building2 className="h-4 w-4" /> : c.name.slice(0, 1).toUpperCase()}
+                {c.isVerifiedBusiness ? (
+                  <Building2 className={isCompact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+                ) : (
+                  c.name.slice(0, 1).toUpperCase()
+                )}
               </button>
               <button
                 type="button"
@@ -224,10 +232,10 @@ function ContactsTab({
                 className="min-w-0 flex-1 text-left"
               >
                 <div className="flex items-center gap-1.5">
-                  <span className="truncate text-sm font-semibold text-white">{c.name}</span>
-                  {c.isVerifiedBusiness && <ShieldCheck className="h-3 w-3 text-blue-400 shrink-0" />}
+                  <span className={`truncate font-semibold text-white transition-all ${isCompact ? 'text-xs' : 'text-sm'}`}>{c.name}</span>
+                  {c.isVerifiedBusiness && <ShieldCheck className={`text-blue-400 shrink-0 ${isCompact ? 'h-2.5 w-2.5' : 'h-3 w-3'}`} />}
                 </div>
-                <div className="mt-0.5 truncate text-[11px] text-slate-500">
+                <div className={`truncate text-slate-500 transition-all ${isCompact ? 'mt-0 text-[10px]' : 'mt-0.5 text-[11px]'}`}>
                   {c.number}
                   {c.businessCategory ? ` · ${c.businessCategory}` : ''}
                 </div>
@@ -235,18 +243,18 @@ function ContactsTab({
               <button
                 type="button"
                 onClick={() => onToggleFavorite(c.id)}
-                className="rounded-full p-1.5 text-slate-600 hover:text-amber-400 transition"
+                className={`rounded-full text-slate-600 hover:text-amber-400 transition ${isCompact ? 'p-1' : 'p-1.5'}`}
                 title={t('favorite')}
               >
-                <Star className={`h-3.5 w-3.5 ${c.isFavorite ? 'fill-current text-amber-400' : ''}`} />
+                <Star className={`${isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} ${c.isFavorite ? 'fill-current text-amber-400' : ''}`} />
               </button>
               <button
                 type="button"
                 onClick={() => onInitiateCall(c.number, c.name)}
-                className="grid h-8 w-8 place-items-center rounded-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition"
+                className={`grid shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition ${isCompact ? 'h-7 w-7' : 'h-8 w-8'}`}
                 aria-label={t('nav_phone')}
               >
-                <Phone className="h-3.5 w-3.5 fill-current" />
+                <Phone className={`${isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} fill-current`} />
               </button>
             </div>
           ))}

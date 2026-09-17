@@ -16,12 +16,13 @@ import DisputeModal from './components/DisputeModal';
 import DataSourcesModal from './components/DataSourcesModal';
 import SystemDiagnosticsModal from './components/SystemDiagnosticsModal';
 import PermissionCenterModal from './components/PermissionCenterModal';
-import { BlockRule, WhitelistEntry, ShieldSettings, CallLogItem, IncomingCallState, ActiveCallSession, PostCallState, SecurityTimelineEvent, TruecallerDirectoryProfile, ContactItem, SpamCategory, TabId, CallRecordingItem } from './types';
+import { BlockRule, WhitelistEntry, ShieldSettings, CallLogItem, IncomingCallState, ActiveCallSession, PostCallState, SecurityTimelineEvent, TruecallerDirectoryProfile, ContactItem, SpamCategory, TabId, CallRecordingItem, DisplayDensity } from './types';
 import { INITIAL_SETTINGS } from './data/defaultData';
 import { lookupTruecallerDirectory } from './utils/spamEngine';
 import { detectNeighborSpoof, detectPingBackScam, formatPrivateCallNumber } from './utils/spoofEngine';
 import { telecomBridge } from './services/telephony/telecomBridge';
 import { externalDirectoryService } from './services/externalDirectoryService';
+import { readThemePreferences, persistAndApplyTheme, applyTheme } from './services/theme/themeService';
 
 export const BASELINE_RULES: BlockRule[] = [
  {id:'rule-trai-140',value:'140',matchType:'PREFIX',targetType:'BOTH',category:'TELEMARKETING',label:'TRAI Telemarketing Series (140 Series)',notes:'Official Indian telecom regulatory series designated for commercial telemarketing.',enabled:true,hitCount:0,createdAt:Date.now()},
@@ -47,6 +48,24 @@ export default function App(){
  const [isSyncing,setIsSyncing]=useState(false); const [isDataSourcesModalOpen,setIsDataSourcesModalOpen]=useState(false); const [isDiagnosticsModalOpen,setIsDiagnosticsModalOpen]=useState(false); const [isPermissionCenterOpen,setIsPermissionCenterOpen]=useState(false); const [dialerInitialNumber,setDialerInitialNumber]=useState(''); const [deferredPrompt,setDeferredPrompt]=useState<any>(null); const [isDefaultDialer,setIsDefaultDialer]=useState(()=>telecomBridge.isDefaultDialer());
  const [toastMessage,setToastMessage]=useState<{text:string,type:'info'|'error'|'success'}|null>(null);
  const showToast=(text:string,type:'info'|'error'|'success'='info')=>{setToastMessage({text,type});window.setTimeout(()=>setToastMessage(null),3800)};
+
+ const [density, setDensity] = useState<DisplayDensity>(() => {
+   const tp = readThemePreferences();
+   return tp.density === 'COMPACT' ? 'compact' : 'comfortable';
+ });
+
+ const handleDensityChange = useCallback((newDensity: DisplayDensity) => {
+   setDensity(newDensity);
+   const currentTheme = readThemePreferences();
+   persistAndApplyTheme({
+     ...currentTheme,
+     density: newDensity === 'compact' ? 'COMPACT' : 'COMFORTABLE',
+   });
+ }, []);
+
+ useEffect(() => {
+   applyTheme(readThemePreferences());
+ }, []);
 
  const lastBackPressTimeRef = useRef<number>(0);
  const stateRef = useRef({
@@ -405,12 +424,12 @@ export default function App(){
   const activeRulesCount = useMemo(() => rules.filter(r => r.enabled).length, [rules]);
 
   return <div className="min-h-screen bg-[#070b10] text-white">
-   <Header settings={settings} isDefaultDialer={isDefaultDialer} onRequestDefaultDialer={handleRequestDefaultDialer} onOpenPermissionCenter={()=>setIsPermissionCenterOpen(true)} onSyncDatabase={handleSyncDeviceData} isSyncing={isSyncing} autoCancelEnabled={autoCancelEnabled} onToggleAutoCancel={()=>setAutoCancelEnabled(v=>!v)} onOpenInstallModal={()=>setIsInstallModalOpen(true)} onOpenDataSources={()=>setIsDataSourcesModalOpen(true)} onOpenDiagnostics={()=>setIsDiagnosticsModalOpen(true)} recentSpamCalls={recentSpamCalls} onSelectCall={openCaller} onOpenRecents={()=>setActiveTab('recents')} onOpenProtection={()=>setActiveTab('protection')}/>
+   <Header settings={settings} isDefaultDialer={isDefaultDialer} onRequestDefaultDialer={handleRequestDefaultDialer} onOpenPermissionCenter={()=>setIsPermissionCenterOpen(true)} onSyncDatabase={handleSyncDeviceData} isSyncing={isSyncing} autoCancelEnabled={autoCancelEnabled} onToggleAutoCancel={()=>setAutoCancelEnabled(v=>!v)} onOpenInstallModal={()=>setIsInstallModalOpen(true)} onOpenDataSources={()=>setIsDataSourcesModalOpen(true)} onOpenDiagnostics={()=>setIsDiagnosticsModalOpen(true)} recentSpamCalls={recentSpamCalls} onSelectCall={openCaller} onOpenRecents={()=>setActiveTab('recents')} onOpenProtection={()=>setActiveTab('protection')} density={density} onDensityChange={handleDensityChange}/>
    <Navigation activeTab={activeTab} onChangeTab={setActiveTab} spamCallsCount={spamCallsCount} activeRulesCount={activeRulesCount} assistantAlertsCount={3}/>
    <main className="mx-auto w-full max-w-4xl px-3 py-3 pb-28 sm:pb-32">
-    {activeTab==='dialer'&&<DialerTab contacts={contacts} recentCalls={calls} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onOpenCallerDetail={handleOpenCallerDetail} onSaveContact={(n,nm)=>handleUpdateCallerName(n,nm)} selectedSim={selectedSim} onChangeSim={setSelectedSim} initialNumber={dialerInitialNumber}/>} 
-    {activeTab==='recents'&&<RecentsTab calls={calls} rules={rules} whitelist={whitelist} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onSelectCall={openCaller} onBlockNumber={handleBlockNumber} onWhitelistNumber={handleWhitelistNumber} onDeleteCall={handleDeleteCall} onClearAllCalls={handleClearAllCalls} onSyncDeviceCalls={handleSyncDeviceData}/>} 
-    {activeTab==='contacts'&&<ContactsTab contacts={contacts} onInitiateCall={handleInitiateCall} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} onDeleteContact={handleDeleteContact} onToggleFavorite={handleToggleFavorite} recentCalls={calls}/>} 
+    {activeTab==='dialer'&&<DialerTab contacts={contacts} recentCalls={calls} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onOpenCallerDetail={handleOpenCallerDetail} onSaveContact={(n,nm)=>handleUpdateCallerName(n,nm)} selectedSim={selectedSim} onChangeSim={setSelectedSim} initialNumber={dialerInitialNumber} density={density}/>} 
+    {activeTab==='recents'&&<RecentsTab calls={calls} rules={rules} whitelist={whitelist} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onSelectCall={openCaller} onBlockNumber={handleBlockNumber} onWhitelistNumber={handleWhitelistNumber} onDeleteCall={handleDeleteCall} onClearAllCalls={handleClearAllCalls} onSyncDeviceCalls={handleSyncDeviceData} density={density}/>} 
+    {activeTab==='contacts'&&<ContactsTab contacts={contacts} onInitiateCall={handleInitiateCall} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} onDeleteContact={handleDeleteContact} onToggleFavorite={handleToggleFavorite} recentCalls={calls} density={density}/>} 
     {activeTab==='protection'&&<ProtectionTab settings={settings} onUpdateSettings={setSettings} rules={rules} onToggleRule={handleToggleRule} onDeleteRule={handleDeleteRule} onAddRule={handleAddRule} whitelist={whitelist} onRemoveWhitelist={handleRemoveWhitelist} timelineEvents={timelineEvents} onTriggerScreeningDemo={handleTriggerScreeningDemo}/>} 
     {activeTab==='assistant'&&<AssistantTab calls={calls} contacts={contacts} rules={rules} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onAddRule={handleAddRule}/>} 
    </main>

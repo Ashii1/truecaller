@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { Check, X, UserPlus, ShieldBan, AlertTriangle, FileText, Clock, Phone, Star, ShieldCheck, HelpCircle, Flag, StickyNote, Copy } from 'lucide-react';
+import { Check, X, UserPlus, ShieldBan, AlertTriangle, FileText, Clock, Phone, Star, ShieldCheck, HelpCircle, Flag, StickyNote, Copy, Bot, Sparkles, ChevronDown, MessageSquare } from 'lucide-react';
 import { PostCallState, SpamCategory, ContactItem } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import CallContextCard from './CallContextCard';
@@ -12,9 +12,10 @@ interface PostCallModalProps {
   onBlockNumber: (number: string, label: string) => void;
   onReportSpam: (number: string, category: SpamCategory, reason: string) => void;
   onSaveNote: (number: string, note: string) => void;
+  onRegenerateSummary?: (callId: string) => void;
 }
 
-export default function PostCallModal({ postCall, onDismiss, onAddContact, onBlockNumber, onReportSpam, onSaveNote }: PostCallModalProps) {
+export default function PostCallModal({ postCall, onDismiss, onAddContact, onBlockNumber, onReportSpam, onSaveNote, onRegenerateSummary }: PostCallModalProps) {
   const { t } = useI18n();
   const [showSpamReport, setShowSpamReport] = useState(false);
   const [spamCategory, setSpamCategory] = useState<SpamCategory>('TELEMARKETING');
@@ -22,6 +23,8 @@ export default function PostCallModal({ postCall, onDismiss, onAddContact, onBlo
   const [showNoteEditor, setShowNoteEditor] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [savedSuccessMessage, setSavedSuccessMessage] = useState<string | null>(null);
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [copiedSummary, setCopiedSummary] = useState(false);
 
   // Sync in-call notes
   useEffect(() => {
@@ -62,22 +65,188 @@ export default function PostCallModal({ postCall, onDismiss, onAddContact, onBlo
     setTimeout(() => { setShowNoteEditor(false); setSavedSuccessMessage(null); }, 1200);
   };
 
+  const handleCopySummary = () => {
+    const bulletsText = (postCall.screeningSummaryBullets || []).map(b => `• ${b}`).join('\n');
+    const fullText = bulletsText || postCall.screeningSummary || '';
+    if (fullText && typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(fullText);
+      setCopiedSummary(true);
+      setTimeout(() => setCopiedSummary(false), 2000);
+    }
+  };
+
+  const hasScreeningInfo = Boolean(
+    postCall.usedAiScreener ||
+    (postCall.screeningSummaryBullets && postCall.screeningSummaryBullets.length > 0) ||
+    postCall.screeningSummary ||
+    (postCall.screeningTranscript && postCall.screeningTranscript.length > 0)
+  );
+
   return (
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in zoom-in-95">
       <div className="w-full max-w-md max-h-[92vh] overflow-y-auto bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 text-white">
         <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-          <div className="flex items-center space-x-2"><span className="w-2 h-2 rounded-full bg-indigo-400" /><h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">Post-Call Intelligence</h3></div>
-          <button onClick={onDismiss} className="p-1 rounded-full text-slate-400 hover:text-white" aria-label="Close"><X className="w-5 h-5" /></button>
+          <div className="flex items-center space-x-2">
+            <span className="w-2 h-2 rounded-full bg-indigo-400" />
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">Post-Call Intelligence</h3>
+          </div>
+          <button onClick={onDismiss} className="p-1 rounded-full text-slate-400 hover:text-white" aria-label="Close">
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         <div className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700 flex items-center justify-between">
           <div>
             <div className="text-base font-extrabold text-white">{postCall.name || 'Unidentified Caller'}</div>
             <div className="text-xs text-slate-400 mt-0.5">{formatPhoneNumber(postCall.number)}</div>
-            <div className="flex items-center space-x-2 text-[11px] text-slate-400 mt-1"><span>Duration: <strong className="text-slate-200">{postCall.durationStr}</strong></span><span>•</span><span className="text-indigo-300">{postCall.sim || 'SIM 1'}</span></div>
+            <div className="flex items-center space-x-2 text-[11px] text-slate-400 mt-1">
+              <span>Duration: <strong className="text-slate-200">{postCall.durationStr}</strong></span>
+              <span>•</span>
+              <span className="text-indigo-300">{postCall.sim || 'SIM 1'}</span>
+              {hasScreeningInfo && (
+                <>
+                  <span>•</span>
+                  <span className="inline-flex items-center gap-1 font-bold text-indigo-300">
+                    <Bot className="w-3 h-3" />
+                    AI Screened
+                  </span>
+                </>
+              )}
+            </div>
           </div>
-          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${postCall.isSpam ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'}`}>{postCall.isSpam ? 'Suspicious' : 'Standard'}</span>
+          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${postCall.isSpam ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'}`}>
+            {postCall.isSpam ? 'Suspicious' : 'Standard'}
+          </span>
         </div>
+
+        {/* AI Voice Screener Spoken Content Summary */}
+        {hasScreeningInfo && (
+          <section className="rounded-2xl border border-indigo-500/30 bg-[#0d1322] p-4 shadow-lg shadow-black/20 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className="grid h-8 w-8 place-items-center rounded-xl border border-indigo-500/30 bg-indigo-500/15 text-indigo-300">
+                  <Bot className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-white">AI Screener Spoken Summary</span>
+                    <span className="inline-flex items-center gap-0.5 rounded-full border border-indigo-500/30 bg-indigo-500/20 px-1.5 py-0.2 text-[9px] font-bold text-indigo-300">
+                      <Sparkles className="h-2.5 w-2.5 text-indigo-400" />
+                      Gemini
+                    </span>
+                  </div>
+                  <p className="text-[10.5px] text-slate-400">Bulleted summary of spoken conversation</p>
+                </div>
+              </div>
+
+              {(postCall.screeningSummaryBullets?.length || postCall.screeningSummary) && (
+                <button
+                  type="button"
+                  onClick={handleCopySummary}
+                  className="flex items-center gap-1 rounded-lg border border-indigo-500/30 bg-indigo-950/60 px-2 py-1 text-[10.5px] font-semibold text-indigo-200 transition hover:bg-indigo-900/60"
+                  title="Copy bulleted summary"
+                >
+                  {copiedSummary ? (
+                    <>
+                      <Check className="h-3 w-3 text-emerald-400" />
+                      <span className="text-emerald-300">Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3 w-3 text-indigo-300" />
+                      <span>Copy</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+
+            {postCall.isGeneratingSummary ? (
+              <div className="flex items-center gap-2.5 rounded-xl border border-indigo-500/20 bg-indigo-950/40 p-3 text-xs text-indigo-300">
+                <Sparkles className="h-4 w-4 animate-spin text-indigo-400" />
+                <span>Generating spoken content summary with Gemini AI…</span>
+              </div>
+            ) : postCall.screeningSummaryBullets && postCall.screeningSummaryBullets.length > 0 ? (
+              <div className="space-y-2">
+                <ul className="space-y-1.5 text-xs text-slate-200">
+                  {postCall.screeningSummaryBullets.map((bullet, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400" />
+                      <span className="leading-relaxed text-slate-200">{bullet}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                {postCall.screeningDetectedIntent && (
+                  <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-indigo-500/20 bg-indigo-950/30 px-2.5 py-1 text-[11px] text-indigo-300">
+                    <span className="text-slate-400 font-normal">Intent:</span>
+                    <strong className="text-indigo-200 font-semibold">{postCall.screeningDetectedIntent}</strong>
+                  </div>
+                )}
+              </div>
+            ) : postCall.screeningSummary ? (
+              <div className="rounded-xl border border-indigo-500/20 bg-indigo-950/30 p-2.5 text-xs text-slate-200 leading-relaxed">
+                {postCall.screeningSummary}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-2.5 text-xs text-slate-400 italic">
+                Screening completed. No spoken caller statements recorded.
+              </div>
+            )}
+
+            {/* Collapsible Transcript Explorer */}
+            {postCall.screeningTranscript && postCall.screeningTranscript.length > 0 && (
+              <div className="pt-1 border-t border-slate-800/80">
+                <button
+                  type="button"
+                  onClick={() => setShowTranscript((v) => !v)}
+                  className="flex w-full items-center justify-between text-[11px] font-semibold text-indigo-300 hover:text-indigo-200 transition py-0.5"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <MessageSquare className="h-3.5 w-3.5 text-indigo-400" />
+                    <span>
+                      {showTranscript
+                        ? 'Hide spoken transcript'
+                        : `View spoken transcript (${postCall.screeningTranscript.length} lines)`}
+                    </span>
+                  </span>
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 text-indigo-400 transition-transform ${showTranscript ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {showTranscript && (
+                  <div className="mt-2 max-h-48 space-y-1.5 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950/70 p-2 text-xs">
+                    {postCall.screeningTranscript.map((t) => (
+                      <div
+                        key={t.id}
+                        className={`rounded-lg p-2 ${
+                          t.sender === 'caller'
+                            ? 'border-l-2 border-amber-400 bg-slate-900/90 text-slate-200'
+                            : 'border-l-2 border-indigo-400 bg-indigo-950/50 text-indigo-200'
+                        }`}
+                      >
+                        <div className="mb-0.5 flex items-center justify-between text-[9.5px] text-slate-400">
+                          <span className="font-bold uppercase tracking-wider">
+                            {t.sender === 'caller' ? 'Caller' : t.sender === 'user' ? 'You' : 'AI Assistant'}
+                          </span>
+                          <span>
+                            {new Date(t.timestamp).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit',
+                            })}
+                          </span>
+                        </div>
+                        <p className="leading-snug">{t.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
 
         <CallContextCard number={postCall.number} name={postCall.name} />
 

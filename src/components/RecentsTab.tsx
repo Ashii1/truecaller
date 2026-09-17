@@ -18,7 +18,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { CallLogItem, CallDirection, BlockRule, WhitelistEntry, ShieldSettings, TruecallerDirectoryProfile } from '../types';
+import { CallLogItem, CallDirection, BlockRule, WhitelistEntry, ShieldSettings, TruecallerDirectoryProfile, DisplayDensity } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import { groupCallsByNumber, CallGroup } from '../utils/callHistory';
 import { useI18n } from '../i18n/LanguageContext';
@@ -38,6 +38,7 @@ interface RecentsTabProps {
   onClearAllCalls: () => void;
   onStartScreeningDemo?: (number: string, name: string) => void;
   onSyncDeviceCalls?: () => void;
+  density?: DisplayDensity;
 }
 
 type Filter = 'ALL' | 'MISSED' | 'INCOMING' | 'OUTGOING' | 'RECORDED' | 'BLOCKED';
@@ -63,6 +64,7 @@ function RecentsTab({
   onDeleteCall,
   onClearAllCalls,
   onSyncDeviceCalls,
+  density = 'comfortable',
 }: RecentsTabProps) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
@@ -131,51 +133,53 @@ function RecentsTab({
     { id: 'BLOCKED', label: t('filter_blocked'), icon: PhoneOff, count: counts.BLOCKED, badgeVariant: 'blocked' },
   ];
 
+  const isCompact = density === 'compact';
+
   return (
-    <div className="mx-auto w-full max-w-2xl px-3 pb-8 pt-2 sm:px-4 select-none">
+    <div className={`mx-auto w-full max-w-2xl select-none transition-all ${isCompact ? 'px-2 pb-6 pt-1 sm:px-3' : 'px-3 pb-8 pt-2 sm:px-4'}`}>
       {/* Header */}
-      <header className="mb-3 flex items-end justify-between gap-2">
+      <header className={`flex items-end justify-between gap-2 transition-all ${isCompact ? 'mb-2' : 'mb-3'}`}>
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[.18em] text-slate-500">{t('recents_history')}</p>
-          <h1 className="text-xl font-bold tracking-tight text-white">{t('recents_title')}</h1>
+          <p className={`font-bold uppercase tracking-[.18em] text-slate-500 transition-all ${isCompact ? 'text-[9px]' : 'text-[10px]'}`}>{t('recents_history')}</p>
+          <h1 className={`font-bold tracking-tight text-white transition-all ${isCompact ? 'text-lg' : 'text-xl'}`}>{t('recents_title')}</h1>
         </div>
         <div className="flex items-center gap-1.5">
           {onSyncDeviceCalls && (
             <button
               type="button"
               onClick={onSyncDeviceCalls}
-              className="rounded-full border border-white/10 bg-white/5 p-2 text-slate-400 hover:bg-blue-500/15 hover:text-blue-300 active:scale-95 transition"
+              className={`rounded-full border border-white/10 bg-white/5 text-slate-400 hover:bg-blue-500/15 hover:text-blue-300 active:scale-95 transition ${isCompact ? 'p-1.5' : 'p-2'}`}
               title={t('sync_device_calls')}
               aria-label={t('sync_device_calls')}
             >
-              <RefreshCw className="h-3.5 w-3.5" />
+              <RefreshCw className={isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
             </button>
           )}
           {calls.length > 0 && (
             <button
               type="button"
               onClick={onClearAllCalls}
-              className="rounded-full border border-white/10 bg-white/5 p-2 text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 active:scale-95 transition"
+              className={`rounded-full border border-white/10 bg-white/5 text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 active:scale-95 transition ${isCompact ? 'p-1.5' : 'p-2'}`}
               title={t('clear_all')}
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className={isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
             </button>
           )}
         </div>
       </header>
 
       {/* Search Input */}
-      <div className="mb-2.5 flex h-10 items-center rounded-xl border border-white/10 bg-[#0e141c] px-3 shadow-inner shadow-black/20 focus-within:border-emerald-500/40 focus-within:ring-1 focus-within:ring-emerald-500/20 transition-all">
-        <Search className="mr-2 h-3.5 w-3.5 text-slate-500 shrink-0" />
+      <div className={`flex items-center rounded-xl border border-white/10 bg-[#0e141c] shadow-inner shadow-black/20 focus-within:border-emerald-500/40 focus-within:ring-1 focus-within:ring-emerald-500/20 transition-all ${isCompact ? 'mb-2 h-8.5 px-2.5' : 'mb-2.5 h-10 px-3'}`}>
+        <Search className={`mr-2 text-slate-500 shrink-0 ${isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'}`} />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t('search_calls')}
-          className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-slate-600"
+          className={`min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-slate-600 ${isCompact ? 'text-[11.5px]' : 'text-xs'}`}
         />
         {query && (
           <button type="button" onClick={() => setQuery('')} className="p-1 text-slate-500 hover:text-white">
-            <X className="h-3.5 w-3.5" />
+            <X className={isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
           </button>
         )}
       </div>
@@ -189,19 +193,19 @@ function RecentsTab({
 
       {/* Call History List */}
       {groups.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-[#0e141c] p-8 text-center">
-          <Phone className="mx-auto h-7 w-7 text-slate-700" />
-          <p className="mt-2 text-xs font-semibold text-slate-300">
+        <div className={`border border-white/10 bg-[#0e141c] text-center transition-all ${isCompact ? 'rounded-xl p-6' : 'rounded-2xl p-8'}`}>
+          <Phone className={`mx-auto text-slate-700 ${isCompact ? 'h-6 w-6' : 'h-7 w-7'}`} />
+          <p className={`font-semibold text-slate-300 ${isCompact ? 'mt-1.5 text-[11px]' : 'mt-2 text-xs'}`}>
             {calls.length ? t('no_calls_match') : t('no_call_history')}
           </p>
-          <p className="mt-0.5 text-[11px] text-slate-600">{t('recent_calls_appear_here')}</p>
+          <p className="mt-0.5 text-[10px] text-slate-600">{t('recent_calls_appear_here')}</p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className={isCompact ? 'space-y-3' : 'space-y-4'}>
           {dayEntries.map(([day, dayGroups]) => (
             <section key={day}>
               <h2 className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-[.18em] text-slate-600">{day}</h2>
-              <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0e141c]">
+              <div className={`overflow-hidden border border-white/10 bg-[#0e141c] transition-all ${isCompact ? 'rounded-xl' : 'rounded-2xl'}`}>
                 {dayGroups.map((g) => {
                   const p = lookupProfile(g.number),
                     name =
@@ -213,12 +217,14 @@ function RecentsTab({
                   return (
                     <div
                       key={g.key}
-                      className="group flex items-center gap-2.5 border-b border-white/5 px-3 py-2.5 last:border-0 hover:bg-white/[0.02] transition"
+                      className={`group flex items-center border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition ${isCompact ? 'gap-2 px-2.5 py-1.5' : 'gap-2.5 px-3 py-2.5'}`}
                     >
                       <button
                         type="button"
                         onClick={() => onSelectCall(latest)}
-                        className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${
+                        className={`grid shrink-0 place-items-center rounded-full transition-all ${
+                          isCompact ? 'h-7.5 w-7.5 text-xs' : 'h-9 w-9'
+                        } ${
                           g.missedCount
                             ? 'bg-amber-400/10 text-amber-400'
                             : spam
@@ -235,48 +241,50 @@ function RecentsTab({
                       >
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span
-                            className={`truncate text-sm font-semibold ${
+                            className={`truncate font-semibold transition-all ${
+                              isCompact ? 'text-xs' : 'text-sm'
+                            } ${
                               g.missedCount ? 'text-amber-200' : 'text-white'
                             }`}
                           >
                             {name}
                           </span>
                           {spam ? (
-                            <span className="inline-flex items-center gap-1 rounded bg-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold text-rose-300">
+                            <span className="inline-flex items-center gap-1 rounded bg-rose-500/20 px-1.5 py-0.5 text-[8.5px] font-bold text-rose-300">
                               <ShieldAlert className="h-2.5 w-2.5 text-rose-400" />
                               {t('spam_badge')}
                             </span>
                           ) : latest.isVerifiedBusiness || p.isVerified ? (
-                            <span className="inline-flex items-center gap-1 rounded bg-blue-500/20 px-1.5 py-0.5 text-[9px] font-bold text-blue-300">
+                            <span className="inline-flex items-center gap-1 rounded bg-blue-500/20 px-1.5 py-0.5 text-[8.5px] font-bold text-blue-300">
                               <ShieldCheck className="h-2.5 w-2.5 text-blue-400" />
                               {t('verified_badge')}
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">
+                            <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[8.5px] font-bold text-emerald-300">
                               <ShieldCheck className="h-2.5 w-2.5 text-emerald-400" />
                               {t('safe_badge')}
                             </span>
                           )}
                           {g.calls.some((c) => c.isNeighborSpoof) && (
-                            <span className="inline-flex items-center gap-1 rounded bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.5 text-[9px] font-bold text-amber-300">
+                            <span className="inline-flex items-center gap-1 rounded bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.5 text-[8.5px] font-bold text-amber-300">
                               <AlertTriangle className="h-2.5 w-2.5 text-amber-400" />
                               Neighbor Spoof
                             </span>
                           )}
                           {g.calls.some((c) => c.isPingBackScam) && (
-                            <span className="inline-flex items-center gap-1 rounded bg-rose-500/20 border border-rose-500/30 px-1.5 py-0.5 text-[9px] font-bold text-rose-300">
+                            <span className="inline-flex items-center gap-1 rounded bg-rose-500/20 border border-rose-500/30 px-1.5 py-0.5 text-[8.5px] font-bold text-rose-300">
                               <ShieldAlert className="h-2.5 w-2.5 text-rose-400" />
                               1-Ring Trap
                             </span>
                           )}
                           {g.calls.some((c) => Boolean(c.recordingUri)) && (
-                            <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">
+                            <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.5 text-[8.5px] font-bold text-emerald-300">
                               <Disc className="h-2.5 w-2.5 text-emerald-400 animate-pulse" />
                               REC
                             </span>
                           )}
                         </div>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-slate-400">
+                        <div className={`flex flex-wrap items-center text-slate-400 transition-all ${isCompact ? 'mt-0 text-[10px] gap-x-1' : 'mt-0.5 text-[11px] gap-x-1.5'}`}>
                           <span className="font-mono">{formatPhoneNumber(g.number)}</span>
                           <span>·</span>
                           <span>{p.location || 'India'}</span>
@@ -288,7 +296,7 @@ function RecentsTab({
                           <span>{timeLabel(latest.timestamp)}</span>
                         </div>
                         {g.missedCount > 0 && (
-                          <div className="mt-0.5 text-[10px] font-semibold text-amber-400">
+                          <div className={`font-semibold text-amber-400 ${isCompact ? 'mt-0 text-[9.5px]' : 'mt-0.5 text-[10px]'}`}>
                             {g.missedCount} {t('missed')}
                           </div>
                         )}
@@ -296,20 +304,20 @@ function RecentsTab({
                       <button
                         type="button"
                         onClick={() => onInitiateCall(g.number, name)}
-                        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition"
+                        className={`grid shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition ${isCompact ? 'h-7 w-7' : 'h-8 w-8'}`}
                         aria-label={t('nav_phone')}
                         title="Call"
                       >
-                        <Phone className="h-3.5 w-3.5 fill-current" />
+                        <Phone className={`fill-current ${isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'}`} />
                       </button>
                       <button
                         type="button"
                         onClick={() => onInitiateCall(g.number, name, undefined, true)}
-                        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 transition"
+                        className={`grid shrink-0 place-items-center rounded-full bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 transition ${isCompact ? 'h-7 w-7' : 'h-8 w-8'}`}
                         aria-label="Call Privately (*67 Masked)"
                         title={`Call Privately (${settings?.privateCallPrefix || '*67'} Masked)`}
                       >
-                        <EyeOff className="h-3.5 w-3.5" />
+                        <EyeOff className={isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
                       </button>
                       <button
                         type="button"
@@ -317,7 +325,7 @@ function RecentsTab({
                         className="hidden rounded-full p-1.5 text-slate-700 hover:text-rose-400 sm:block transition"
                         title={t('delete')}
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className={isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
                       </button>
                       <button
                         type="button"
@@ -325,7 +333,7 @@ function RecentsTab({
                         className="hidden rounded-full p-1.5 text-slate-700 hover:text-rose-400 sm:block transition"
                         title={t('block')}
                       >
-                        <Ban className="h-3.5 w-3.5" />
+                        <Ban className={isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
                       </button>
                     </div>
                   );

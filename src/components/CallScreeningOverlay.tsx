@@ -19,9 +19,9 @@ import { formatPhoneNumber } from '../utils/spamEngine';
 
 interface CallScreeningOverlayProps {
   call: IncomingCallState;
-  onPickUp: () => void;
-  onHangUp: () => void;
-  onBlockSpam: () => void;
+  onPickUp: (transcript: ScreeningTranscriptEntry[], intent: string | null) => void;
+  onHangUp: (transcript: ScreeningTranscriptEntry[], intent: string | null) => void;
+  onBlockSpam: (transcript: ScreeningTranscriptEntry[], intent: string | null) => void;
 }
 
 const PRESET_REPLIES = [
@@ -353,7 +353,7 @@ export default function CallScreeningOverlay({
           {/* Block Spam */}
           <button
             type="button"
-            onClick={onBlockSpam}
+            onClick={() => onBlockSpam(transcript, detectedIntent)}
             className="flex h-12 flex-col items-center justify-center rounded-xl border border-rose-600/50 bg-rose-950/40 text-rose-300 transition hover:bg-rose-900/60 active:scale-95"
           >
             <Ban className="h-4 w-4" />
@@ -363,7 +363,7 @@ export default function CallScreeningOverlay({
           {/* Hang Up */}
           <button
             type="button"
-            onClick={onHangUp}
+            onClick={() => onHangUp(transcript, detectedIntent)}
             className="flex h-12 flex-col items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-300 transition hover:bg-slate-700 active:scale-95"
           >
             <PhoneOff className="h-4 w-4" />
@@ -373,7 +373,7 @@ export default function CallScreeningOverlay({
           {/* Pick Up (Take Over Call) */}
           <button
             type="button"
-            onClick={onPickUp}
+            onClick={() => onPickUp(transcript, detectedIntent)}
             className="flex h-12 flex-col items-center justify-center rounded-xl bg-emerald-600 font-bold text-white shadow-lg shadow-emerald-600/30 transition hover:bg-emerald-500 active:scale-95"
           >
             <Phone className="h-4 w-4 fill-current" />
