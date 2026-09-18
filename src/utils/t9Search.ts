@@ -1,4 +1,4 @@
-import { ContactItem, CallLogItem, TruecallerDirectoryProfile } from '../types';
+import { ContactItem, CallLogItem, CallShieldDirectoryProfile } from '../types';
 
 const CHAR_TO_T9: Record<string, string> = {
   a: '2', b: '2', c: '2',
@@ -39,14 +39,14 @@ export function matchesT9Query(name: string, queryDigits: string): boolean {
 export interface SmartSearchResult {
   matchingContacts: ContactItem[];
   matchingRecents: CallLogItem[];
-  possibleCaller?: TruecallerDirectoryProfile | null;
+  possibleCaller?: CallShieldDirectoryProfile | null;
 }
 
 export function smartDialerSearch(
   input: string,
   contacts: ContactItem[],
   recentCalls: CallLogItem[],
-  lookupProfileFn: (num: string) => TruecallerDirectoryProfile
+  lookupProfileFn: (num: string) => CallShieldDirectoryProfile
 ): SmartSearchResult {
   const cleanInput = input.trim();
   if (!cleanInput) {
@@ -101,7 +101,7 @@ export function smartDialerSearch(
   }
 
   // 3. Possible Caller Lookup (only if it's a verified directory profile or known spam, not random unlisted numbers)
-  let possibleCaller: TruecallerDirectoryProfile | null = null;
+  let possibleCaller: CallShieldDirectoryProfile | null = null;
   if (digitsOnly.length >= 4) {
     const profile = lookupProfileFn(cleanInput);
     if (
