@@ -87,7 +87,7 @@ function ProtectionTab({
     return rules.filter((r) => {
       if (activeSubTab === 'NUMBERS') return r.matchType === 'EXACT';
       if (activeSubTab === 'PATTERNS') return r.matchType === 'PREFIX' || r.matchType === 'REGEX';
-      if (activeSubTab === 'PRIVATE') return r.value.toLowerCase().includes('private') || r.category === 'CUSTOM';
+      if (activeSubTab === 'PRIVATE') return String(r.value ?? '').toLowerCase().includes('private') || r.category === 'CUSTOM';
       if (activeSubTab === 'SPAM') return r.category === 'SCAM' || r.category === 'ROBOCALL' || r.category === 'TELEMARKETING';
       return true;
     });
