@@ -16,9 +16,9 @@
     <application
         android:allowBackup="false"
         android:icon="@drawable/ic_vigilshield"
-        android:label="VigilShield"
+        android:label="CallShield"
         android:supportsRtl="true"
-        android:theme="@style/Theme.VigilShield">
+        android:theme="@style/Theme.CallShield">
         <service android:name=".NativeInCallService" android:permission="android.permission.BIND_INCALL_SERVICE" android:exported="true">
             <meta-data android:name="android.telecom.IN_CALL_SERVICE_UI" android:value="true" />
             <meta-data android:name="android.telecom.IN_CALL_SERVICE_RINGING" android:value="true" />
