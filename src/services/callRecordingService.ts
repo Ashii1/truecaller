@@ -1,9 +1,9 @@
 import { CallRecordingItem } from '../types';
 
-const DB_NAME = 'VigilShield_Storage';
+const DB_NAME = 'CallShield_Storage';
 const DB_VERSION = 1;
 const STORE_NAME = 'call_recordings';
-export const DEFAULT_RECORDINGS_FOLDER = 'Internal Storage/Recordings/VigilShield/';
+export const DEFAULT_RECORDINGS_FOLDER = 'Internal Storage/Recordings/CallShield/';
 
 // In-memory fallback and cache for instant retrieval
 let memoryCache: CallRecordingItem[] = [];
@@ -213,7 +213,7 @@ function synthesizeStudioCallVoice(durationSeconds: number, sampleRate: number):
  * CallRecordingService manages:
  * 1. Studio-grade 48kHz audio capture (Microphone + Call Voice Audio).
  * 2. Lossless WAV packaging without compression quality sacrifice.
- * 3. Saving to device storage folder structure (Internal Storage/Recordings/VigilShield/).
+ * 3. Saving to device storage folder structure (Internal Storage/Recordings/CallShield/).
  * 4. Full query, playback, and device file export capabilities.
  */
 class CallRecordingService {
