@@ -387,7 +387,7 @@ npx cap open android # Opens Android Studio to click "Build APK"`;
         <div className="px-6 py-3.5 bg-slate-850 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center space-x-1.5">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>VigilShield Native Android & PWA v1.5.1</span>
+            <span>CallShield Native Android & PWA v1.5.1</span>
           </div>
           <button
             onClick={onClose}
