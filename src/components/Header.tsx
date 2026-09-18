@@ -73,7 +73,7 @@ const PRIVACY_DEFAULTS: PrivacySettings = {
 
 function readPrivacySettings(): PrivacySettings {
   try {
-    const raw = localStorage.getItem('vigilshield_privacy_settings');
+    const raw = localStorage.getItem('callshield_privacy_settings');
     const parsed = raw ? JSON.parse(raw) : {};
     return { ...PRIVACY_DEFAULTS, ...parsed };
   } catch {
@@ -109,7 +109,7 @@ function Header({
   const [privacy, setPrivacy] = useState<PrivacySettings>(readPrivacySettings);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<string[]>(() => {
     try {
-      const raw = localStorage.getItem('vigilshield_dismissed_notifications');
+      const raw = localStorage.getItem('callshield_dismissed_notifications');
       return raw ? JSON.parse(raw) : [];
     } catch {
       return [];
@@ -128,7 +128,7 @@ function Header({
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('vigilshield_privacy_settings', JSON.stringify(privacy));
+    localStorage.setItem('callshield_privacy_settings', JSON.stringify(privacy));
     telecomBridge.setSecuritySetting('call_recording_enabled', privacy.callRecordingEnabled);
     telecomBridge.setSecuritySetting('notification_caller_details', privacy.showCallerDetailsInNotifications);
     telecomBridge.setSecuritySetting('privacy_mode', privacy.privacyMode);
@@ -151,7 +151,7 @@ function Header({
   const handleDismissNotification = (id: string) => {
     setDismissedNotificationIds(prev => {
       const updated = [...prev, id];
-      localStorage.setItem('vigilshield_dismissed_notifications', JSON.stringify(updated));
+      localStorage.setItem('callshield_dismissed_notifications', JSON.stringify(updated));
       return updated;
     });
   };
@@ -159,7 +159,7 @@ function Header({
   const handleClearAllNotifications = () => {
     const allIds = recentSpamCalls.map(c => c.id);
     setDismissedNotificationIds(allIds);
-    localStorage.setItem('vigilshield_dismissed_notifications', JSON.stringify(allIds));
+    localStorage.setItem('callshield_dismissed_notifications', JSON.stringify(allIds));
   };
 
   return (
@@ -184,6 +184,7 @@ function Header({
             </div>
             <div className="min-w-0">
               <div className="text-sm font-bold leading-tight tracking-tight text-white">{t('app_title')}</div>
+              <div className="text-[9px] font-medium leading-tight text-slate-500">{t('app_tagline')}</div>
               <div className="truncate text-[10.5px] font-medium text-slate-400 flex items-center gap-1.5">
                 <span className={`inline-block h-1.5 w-1.5 rounded-full ${settings?.masterEnabled !== false ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
                 <span>{isDefaultDialer ? t('default_phone_app') : t('phone_setup_required')}</span>
