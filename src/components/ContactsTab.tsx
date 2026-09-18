@@ -82,8 +82,8 @@ function ContactsTab({
         if (filter === 'RECENT' && (!c.lastCallTimestamp || c.lastCallTimestamp < Date.now() - 604800000)) return false;
         if (!q) return true;
         return (
-          c.name.toLowerCase().includes(q) ||
-          Boolean(c.businessCategory?.toLowerCase().includes(q)) ||
+          String(c.name ?? '').toLowerCase().includes(q) ||
+          Boolean(String(c.businessCategory ?? '').toLowerCase().includes(q)) ||
           (d.length > 0 && clean(c.number).includes(d))
         );
       })
