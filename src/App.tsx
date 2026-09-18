@@ -220,6 +220,10 @@ export default function App(){
     window.addEventListener('focus', handleFocus);
 
     const unsub = telecomBridge.subscribe((eventType, payload) => {
+      if (eventType === 'PHONE_SURFACE_CHANGED') {
+        setPhoneOnly(Boolean(payload?.phoneOnly));
+        return;
+      }
       if (eventType === 'DEVICE_LOCK_STATE_CHANGED') {
         setIsDeviceLocked(Boolean(payload?.isLocked));
         return;
