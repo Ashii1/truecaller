@@ -46,6 +46,7 @@ class MainActivity : AppCompatActivity() {
     private var startupCheckAttempts = 0
     private var lastConsoleError: String? = null
     private var lastPermissionSignature: String? = null
+    private var lastDispatchedIntentIdentity: Int = 0
     companion object {
         private const val PERMISSION_REQ = 7002
         private const val DIALER_ROLE_REQ = 7001
@@ -161,6 +162,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun dispatchLaunchIntent() {
         val current = intent ?: return
+        val identity = System.identityHashCode(current)
+        if (identity == lastDispatchedIntentIdentity) return
+        lastDispatchedIntentIdentity = identity
         val callId = current.getStringExtra("open_call_id")
         val telUri = current.data?.schemeSpecificPart?.trim()
         val number = current.getStringExtra("open_call_number")
@@ -182,7 +186,10 @@ class MainActivity : AppCompatActivity() {
                 .put("tab", tab ?: if (isIncoming) "incoming" else if (current.action == Intent.ACTION_CALL || current.action == Intent.ACTION_DIAL) "dialer" else "recents")
                 .put("action", action)
                 .put("isIncoming", isIncoming)
-            if (current.action != Intent.ACTION_CALL) {
+            val actionIsCallUi = current.action == "com.vigilshield.telecom.OPEN_INCOMING_CALL"
+            val actionIsDialIntent = current.action == Intent.ACTION_DIAL || current.action == Intent.ACTION_VIEW
+            val actionIsDirectCall = current.action == Intent.ACTION_CALL
+            if (actionIsCallUi || (!actionIsDirectCall && !actionIsDialIntent && !current.action.equals("com.vigilshield.telecom.OPEN_OUTGOING_CALL"))) {
                 bridge.dispatchWebEvent("OPEN_CALL_FROM_NOTIFICATION", payload)
             }
             if (!number.isNullOrBlank()) {
