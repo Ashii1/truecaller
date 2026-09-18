@@ -259,6 +259,10 @@ class MainActivity : AppCompatActivity() {
             alpha = 0f
         }
         addView(icon, FrameLayout.LayoutParams(88, 88, Gravity.CENTER))
+        val tagline = TextView(this).apply { text = "CallShield - Know Who's Calling"; textSize = 14f; setTextColor(Color.LTGRAY); gravity = Gravity.CENTER; alpha = 0f }
+        val taglineParams = FrameLayout.LayoutParams(-2, -2, Gravity.CENTER).apply { topMargin = 124 }
+        addView(tagline, taglineParams)
+        tagline.animate().alpha(1f).setStartDelay(80L).setDuration(220L).start()
         icon.animate().alpha(1f).setDuration(220L).start()
     }
 
