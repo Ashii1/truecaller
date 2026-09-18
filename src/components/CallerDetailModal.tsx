@@ -211,7 +211,7 @@ export default function CallerDetailModal({
     displayName = suggestedDirectoryName;
   }
 
-  if (!isOpen || (!call && !profile)) return null;
+  const shouldRender = isOpen && (!!call || !!profile);
 
   const entries = history.length ? history : call ? [call] : [];
   const spamEvidence = entries.filter((c) => c.isSpam || c.classification === 'SPAM' || c.classification === 'SCAM' || c.riskScore >= 60);
@@ -393,6 +393,8 @@ export default function CallerDetailModal({
       setInaccuracyFeedback(null);
     }, 1200);
   };
+
+  if (!shouldRender) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-0 backdrop-blur-sm sm:p-4" role="dialog" aria-modal="true">
