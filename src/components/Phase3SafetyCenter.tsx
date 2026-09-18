@@ -76,7 +76,7 @@ export default function Phase3SafetyCenter() {
 
   const sendSafetyMessage = () => {
     if (emergencyCount === 0) { setNotice('Add at least one emergency contact first.'); return; }
-    const body = encodeURIComponent("I'm Not Safe. Please call me and check on me. This message was prepared by VigilShield.");
+    const body = encodeURIComponent("I'm Not Safe. Please call me and check on me. This message was prepared by CallShield.");
     window.location.href = `sms:${prefs.emergencyContacts.join(',')}?body=${body}`;
   };
 
@@ -145,7 +145,7 @@ export default function Phase3SafetyCenter() {
       </div>
 
       {notice && <div role="status" className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-[11px] text-slate-400">{notice}</div>}
-      <p className="text-[10px] leading-4 text-slate-600">Safety modes are device-local controls. VigilShield does not automatically dispatch police, ambulance, emergency services, or claim third-party caller verification without a legitimate data source.</p>
+      <p className="text-[10px] leading-4 text-slate-600">Safety modes are device-local controls. CallShield does not automatically dispatch police, ambulance, emergency services, or claim third-party caller verification without a legitimate data source.</p>
     </section>
   );
 }
