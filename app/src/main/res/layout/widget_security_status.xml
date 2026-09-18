@@ -11,12 +11,11 @@
     android:paddingTop="8dp"
     android:paddingBottom="8dp">
 
-    <!-- Shield Icon & Protection status -->
     <ImageView
         android:id="@+id/widget_security_icon"
         android:layout_width="32dp"
         android:layout_height="32dp"
-        android:src="@drawable/ic_vigilshield"
+        android:src="@drawable/ic_callshield"
         android:contentDescription="Shield" />
 
     <LinearLayout
@@ -46,7 +45,6 @@
             android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- Quick Action Button to Open Dialer / App -->
     <TextView
         android:id="@+id/btn_widget_action"
         android:layout_width="wrap_content"
