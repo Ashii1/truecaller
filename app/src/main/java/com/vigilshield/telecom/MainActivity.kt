@@ -253,7 +253,7 @@ class MainActivity : AppCompatActivity() {
     private fun createLoadingView(): View = FrameLayout(this).apply {
         setBackgroundColor(Color.rgb(2, 6, 23))
         val icon = android.widget.ImageView(this@MainActivity).apply {
-            setImageResource(R.drawable.ic_vigilshield)
+            setImageResource(R.drawable.ic_callshield)
             scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
             contentDescription = "CallShield"
             alpha = 0f
