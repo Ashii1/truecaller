@@ -84,7 +84,8 @@ export default function CallerDetailModal({
   const [recordings, setRecordings] = useState<CallRecordingItem[]>([]);
 
   // Inaccuracy Report Modal State
-  const [isInaccuracyModalOpen, setIsInaccuracyModalOpen] = useState(false);\n  const [isClosing, setIsClosing] = useState(false);
+  const [isInaccuracyModalOpen, setIsInaccuracyModalOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [inaccuracyCorrectedName, setInaccuracyCorrectedName] = useState('');
   const [inaccuracyReason, setInaccuracyReason] = useState('Wrong Individual');
   const [inaccuracyNotes, setInaccuracyNotes] = useState('');
@@ -211,7 +212,17 @@ export default function CallerDetailModal({
     displayName = suggestedDirectoryName;
   }
 
-  const shouldRender = isOpen && (!!call || !!profile);\n\n  useEffect(() => {\n    if (isOpen) setIsClosing(false);\n  }, [isOpen]);\n\n  const handleClose = useCallback(() => {\n    if (isClosing) return;\n    setIsClosing(true);\n    window.setTimeout(onClose, 180);\n  }, [isClosing, onClose]);
+  const shouldRender = isOpen && (!!call || !!profile);
+
+  useEffect(() => {
+    if (isOpen) setIsClosing(false);
+  }, [isOpen]);
+
+  const handleClose = useCallback(() => {
+    if (isClosing) return;
+    setIsClosing(true);
+    window.setTimeout(onClose, 180);
+  }, [isClosing, onClose]);
 
   const entries = history.length ? history : call ? [call] : [];
   const spamEvidence = entries.filter((c) => c.isSpam || c.classification === 'SPAM' || c.classification === 'SCAM' || c.riskScore >= 60);
