@@ -131,7 +131,7 @@ export function parseCallLogXml(
     else if (rawType === '3' || rawType.toLowerCase().includes('miss')) type = 'MISSED';
     else if (rawType === '5' || rawType === '6' || rawType.toLowerCase().includes('reject') || rawType.toLowerCase().includes('block')) type = 'BLOCKED_CANCELLED';
 
-    // Screen each call with Truecaller Spam Engine
+    // Screen each call with CallShield Spam Engine
     const screenRes = screenEvent({
       type: 'CALL',
       sender: number,
@@ -189,7 +189,7 @@ export function parseRawNumbersText(
         // Look for text outside the phone match as a potential caller name
         const textWithoutNum = line.replace(num, '').replace(/^[,\-–—:\t\s]+|[,\-–—:\t\s]+$/g, '').trim();
         if (textWithoutNum && textWithoutNum.length >= 2 && !/^\d+$/.test(textWithoutNum)) {
-          // User gave a specific caller name (e.g. from Truecaller!)
+          // User gave a specific caller name (e.g. from CallShield!)
           saveCustomDirectoryName(num, textWithoutNum);
           itemsToProcess.push({ number: num, explicitName: textWithoutNum });
         } else {
