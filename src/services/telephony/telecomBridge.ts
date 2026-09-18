@@ -44,13 +44,7 @@ class TelecomBridgeService {
     this.initEvents();
     this.initWebBattery();
     this.clearStaleCallNotifications();
-    if(this.native()&&!this.defaultDialerConfirmed&&typeof window!=='undefined'){
-      const promptedKey='vigilshield_default_role_prompted_v1';
-      if(window.localStorage.getItem(promptedKey)!=='true'){
-        window.localStorage.setItem(promptedKey,'true');
-        window.setTimeout(()=>{if(!this.defaultDialerConfirmed)this.requestDefaultDialerRole();},700);
-      }
-    }
+
   }
   private initWebBattery() {
     if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
