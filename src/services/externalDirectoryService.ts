@@ -256,8 +256,8 @@ class ExternalDirectoryService {
         matched.callerName &&
         matched.callerName.trim() !== '' &&
         matched.callerName.replace(/\D/g, '') !== digits &&
-        !matched.callerName.toLowerCase().includes('unknown') &&
-        !matched.callerName.toLowerCase().includes('caller (cellular)')
+        !String(matched.callerName ?? '').toLowerCase().includes('unknown') &&
+        !String(matched.callerName ?? '').toLowerCase().includes('caller (cellular)')
       ) {
         return matched.callerName;
       }
@@ -304,8 +304,8 @@ class ExternalDirectoryService {
             !c.callerName ||
             c.callerName === c.number ||
             c.callerName.replace(/\D/g, '') === digits ||
-            c.callerName.toLowerCase().includes('unknown') ||
-            c.callerName.toLowerCase().includes('caller (cellular)');
+            String(c.callerName ?? '').toLowerCase().includes('unknown') ||
+            String(c.callerName ?? '').toLowerCase().includes('caller (cellular)');
 
           if (currentIsGeneric || c.callerName !== callerName) {
             hasModifications = true;
@@ -562,7 +562,7 @@ class ExternalDirectoryService {
                 !c.callerName ||
                 c.callerName === c.number ||
                 c.callerName.replace(/\D/g, '') === digits ||
-                c.callerName.toLowerCase().includes('unknown')
+                String(c.callerName ?? '').toLowerCase().includes('unknown')
               );
             })
             .map((c) => c.number)
