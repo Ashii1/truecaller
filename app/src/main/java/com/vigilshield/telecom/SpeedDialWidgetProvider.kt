@@ -27,10 +27,7 @@ class SpeedDialWidgetProvider : AppWidgetProvider() {
 
         fun updateAppWidget(context: Context, manager: AppWidgetManager, appWidgetId: Int) {
             val views = RemoteViews(context.packageName, R.layout.widget_speed_dial)
-            views.setOnClickPendingIntent(R.id.widget_recents, createSurfacePendingIntent(context, 201, "recents"))
-            views.setOnClickPendingIntent(R.id.widget_dialer, createSurfacePendingIntent(context, 202, "dialer"))
             views.setOnClickPendingIntent(R.id.widget_phone_icon, createSurfacePendingIntent(context, 203, "recents"))
-            views.setOnClickPendingIntent(R.id.widget_title, createSurfacePendingIntent(context, 204, "recents"))
             manager.updateAppWidget(appWidgetId, views)
         }
 
