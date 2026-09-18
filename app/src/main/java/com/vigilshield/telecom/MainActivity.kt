@@ -78,7 +78,6 @@ class MainActivity : AppCompatActivity() {
                 bridge.dispatchWebEvent("ROLE_STATUS_CHANGED", bridge.roleStatus())
                 bridge.dispatchWebEvent("PERMISSIONS_CHANGED", bridge.permissionStatus())
                 syncWebSettingsToNative()
-                dispatchLaunchIntent()
                 scheduleReactMountCheck(view)
             }
             override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: android.webkit.WebResourceError?) { if (request?.isForMainFrame != false) showError("The VigilShield screen could not load.\n\n${error?.description ?: "Unknown WebView error"}") }
@@ -170,6 +169,7 @@ class MainActivity : AppCompatActivity() {
         val tab = current.getStringExtra("open_tab")
         val action = current.getStringExtra("notification_action") ?: current.action ?: ""
         val isIncoming = isIncomingCallIntent(current)
+        val phoneSurface = current.getBooleanExtra("phone_surface", false)
         hideLoading()
         hideError()
         if (!callId.isNullOrBlank() || !number.isNullOrBlank() || !tab.isNullOrBlank() || isIncoming) {
@@ -180,11 +180,13 @@ class MainActivity : AppCompatActivity() {
                 .put("tab", tab ?: if (isIncoming) "incoming" else if (current.action == Intent.ACTION_CALL || current.action == Intent.ACTION_DIAL) "dialer" else "recents")
                 .put("action", action)
                 .put("isIncoming", isIncoming)
-            bridge.dispatchWebEvent("OPEN_CALL_FROM_NOTIFICATION", payload)
+            if (current.action != Intent.ACTION_CALL) {
+                bridge.dispatchWebEvent("OPEN_CALL_FROM_NOTIFICATION", payload)
+            }
             if (!number.isNullOrBlank()) {
                 val quoted = JSONObject.quote(number)
                 if (current.action == Intent.ACTION_CALL) {
-                    webView.post { webView.evaluateJavascript("if(window.__onAndroidCallIntent){window.__onAndroidCallIntent($quoted);}else if(window.__onAndroidDialIntent){window.__onAndroidDialIntent($quoted);}", null) }
+                    webView.post { webView.evaluateJavascript("if(window.__onAndroidCallIntent){window.__onAndroidCallIntent($quoted);}", null) }
                 } else if (current.action == Intent.ACTION_DIAL || current.action == Intent.ACTION_VIEW) {
                     webView.post { webView.evaluateJavascript("if(window.__onAndroidDialIntent){window.__onAndroidDialIntent($quoted);}", null) }
                 }
