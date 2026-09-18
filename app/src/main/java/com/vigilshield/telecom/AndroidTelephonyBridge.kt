@@ -37,6 +37,8 @@ import org.json.JSONObject
 class AndroidTelephonyBridge(private val activity: Activity, private val webView: WebView) {
     companion object { const val INTERFACE_NAME = "AndroidTelecomBridge"; private const val PREFS = "vigilshield"; private const val PERMISSION_REQ = 7002 }
     private val telecom: TelecomManager get() = activity.getSystemService(TelecomManager::class.java)
+    private var lastCallRequestNumber: String = ""
+    private var lastCallRequestAt: Long = 0L
 
     init { NativeInCallService.bridge = this; NativeInCallService.appContext = activity.applicationContext; CallNotificationHelper.ensureChannel(activity.applicationContext) }
 
