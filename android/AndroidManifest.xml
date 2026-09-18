@@ -20,14 +20,14 @@
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
-        android:label="VigilShield"
+        android:label="CallShield"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.VigilShield">
+        android:theme="@style/Theme.CallShield">
 
         <!-- Android InCallService Registration (Default Dialer / InCall UI) -->
         <service
-            android:name=".VigilShieldInCallService"
+            android:name=".CallShieldInCallService"
             android:permission="android.permission.BIND_INCALL_SERVICE"
             android:exported="true">
             <meta-data
@@ -43,7 +43,7 @@
 
         <!-- Android CallScreeningService Registration -->
         <service
-            android:name=".VigilShieldCallScreeningService"
+            android:name=".CallShieldCallScreeningService"
             android:permission="android.permission.BIND_SCREENING_SERVICE"
             android:exported="true">
             <intent-filter>
