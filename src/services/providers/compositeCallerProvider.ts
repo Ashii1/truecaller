@@ -8,7 +8,7 @@ import { LibPhoneNumberValidationProvider } from './phoneValidationProvider';
 import { BlockRule, WhitelistEntry, ContactItem } from '../../types';
 
 export class CompositeCallerIdResolver implements CallerDataProvider {
-  name = 'VigilShield Composite Caller ID Engine';
+  name = 'CallShield Composite Caller ID Engine';
   private normalizer = new LibPhoneNumberValidationProvider();
 
   // Legitimate Verified Enterprise Registry (Authorized Public Business Data)
