@@ -51,6 +51,7 @@ export default function App(){
  const [toastMessage,setToastMessage]=useState<{text:string,type:'info'|'error'|'success'}|null>(null);
  const [isDeviceLocked, setIsDeviceLocked] = useState<boolean>(() => telecomBridge.isDeviceLocked());
  const [appInForeground, setAppInForeground] = useState<boolean>(() => typeof document === 'undefined' || document.visibilityState === 'visible');
+ const [appInForeground, setAppInForeground] = useState<boolean>(() => typeof document === 'undefined' || document.visibilityState === 'visible');
  const showToast=(text:string,type:'info'|'error'|'success'='info')=>{setToastMessage({text,type});window.setTimeout(()=>setToastMessage(null),3800)};
 
  const [density, setDensity] = useState<DisplayDensity>(() => {
@@ -315,7 +316,7 @@ export default function App(){
         if (incoming && (state === 'RINGING' || state === 'CONNECTING')) {
           const contactNums = dataRef.current.contacts.map((c) => c.number);
           const spoofCheck =
-            dataRef.current.dataRef.current.settings.neighborSpoofEnabled !== false
+            dataRef.current.settings.neighborSpoofEnabled !== false
               ? detectNeighborSpoof(number, dataRef.current.settings.userPhoneNumber, contactNums)
               : { isNeighborSpoof: false, warningMessage: '' };
           const pingBackCheck =
