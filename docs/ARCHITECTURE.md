@@ -1,6 +1,6 @@
-# VigilShield: System Architecture & Engineering Specification
+# CallShield: System Architecture & Engineering Specification
 
-This document details the production architecture, data models, API contracts, security mechanisms, platform differences, and caller identification pipelines for **VigilShield**.
+This document details the production architecture, data models, API contracts, security mechanisms, platform differences, and caller identification pipelines for **CallShield**.
 
 ---
 
@@ -278,7 +278,7 @@ Where:
 
 ## I. Privacy & Data Retention Plan
 
-1. **Address Book Exemption**: Address book contacts are processed exclusively within client memory. No contact names, numbers, or emails are ever sent to VigilShield servers.
+1. **Address Book Exemption**: Address book contacts are processed exclusively within client memory. No contact names, numbers, or emails are ever sent to CallShield servers.
 2. **Hashing in Transit**: Number queries can be transmitted using k-anonymity (prefix-hashed SHA-256) where client queries `SHA256(e164)[:8]` and receives a small bucket of candidates to filter locally.
 3. **Data Deletion**: Users can delete their profile, dispute reports, or wipe local cache at any time via the Privacy Center.
 4. **Audit Trails**: All business verification approvals and rule modifications are logged with immutable cryptographic timestamps.
