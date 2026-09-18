@@ -182,6 +182,7 @@ export default function App(){
 
  useEffect(()=>{const handler=(e:any)=>{e.preventDefault();setDeferredPrompt(e)};window.addEventListener('beforeinstallprompt',handler);return()=>window.removeEventListener('beforeinstallprompt',handler)},[]);
  useEffect(()=>{const handleCallsUpdate=(e:any)=>{if(e.detail&&Array.isArray(e.detail)){setCalls(e.detail)}else{const fresh=safeParse<CallLogItem[]>('callshield_calls',[]);if(fresh?.length)setCalls(fresh)}};window.addEventListener('callshield_calls_updated',handleCallsUpdate as EventListener);externalDirectoryService.batchEnrichLocalCalls();return()=>window.removeEventListener('callshield_calls_updated',handleCallsUpdate as EventListener)},[]);
+ const syncNativeDeviceData=useCallback(()=>{if(!telecomBridge.isAndroidEnvironment())return;try{const freshCalls=telecomBridge.fetchDeviceCallLogs(200);const freshContacts=telecomBridge.fetchDeviceContacts(500);setCalls(prev=>freshCalls.length?freshCalls:prev);setContacts(prev=>freshContacts.length?freshContacts:prev)}catch(e){console.warn('Device data refresh failed',e)}},[]);
   useEffect(() => { safeStore('callshield_settings', settings); }, [settings]);
   useEffect(() => { safeStore('callshield_rules', rules); }, [rules]);
   useEffect(() => { safeStore('callshield_whitelist', whitelist); }, [whitelist]);
@@ -202,6 +203,7 @@ export default function App(){
   useEffect(() => {
     setIsDefaultDialer(telecomBridge.isDefaultDialer());
     if (telecomBridge.isAndroidEnvironment()) {
+      syncNativeDeviceData();
       setIsDeviceLocked(telecomBridge.isDeviceLocked());
       try {
         const d = telecomBridge.fetchDeviceCallLogs(100);
@@ -307,6 +309,10 @@ export default function App(){
       const state = details?.state || 'RINGING';
       const incoming = details?.isIncoming ?? (state === 'RINGING');
 
+      if (eventType === 'PERMISSIONS_CHANGED') {
+        syncNativeDeviceData();
+        return;
+      }
       if (eventType === 'ROLE_STATUS_CHANGED') {
         setIsDefaultDialer(Boolean(payload?.isDefaultDialer));
         return;
@@ -457,7 +463,7 @@ export default function App(){
       window.removeEventListener('focus', handleFocus);
     document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, []);
+  }, [syncNativeDeviceData]);
 
  const handleLookupProfile = useCallback((n: string) => lookupCallShieldDirectory(n, rules, whitelist), [rules, whitelist]);
  const handleRequestDefaultDialer = useCallback(() => { const r = telecomBridge.requestDefaultDialerRole(); if (!r.success) showToast(r.message, 'error'); else showToast(r.message, 'info'); }, []);
