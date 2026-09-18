@@ -5,6 +5,7 @@ import android.net.Uri
 import android.provider.ContactsContract
 import android.telecom.Call
 import android.telecom.CallScreeningService
+import android.telecom.TelecomManager
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -30,7 +31,7 @@ class ProductionCallScreeningService : CallScreeningService() {
         }
 
         val isPrivate = details.handle == null ||
-            details.handlePresentation == Call.Details.PRESENTATION_RESTRICTED ||
+            details.handlePresentation == TelecomManager.PRESENTATION_RESTRICTED ||
             number.isBlank() ||
             number.equals("private", ignoreCase = true) ||
             number.equals("unknown", ignoreCase = true) ||
