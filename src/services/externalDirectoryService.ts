@@ -183,7 +183,7 @@ class ExternalDirectoryService {
         spamScore: curated.spamScore,
         isVerified: curated.isVerified,
         confidence: 'HIGH',
-        source: 'Public Directory Registry (Curated Truecaller Record)',
+        source: 'Public Directory Registry (Curated CallShield Record)',
         cachedAt: Date.now(),
       };
     }
