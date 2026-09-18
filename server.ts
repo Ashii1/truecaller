@@ -628,11 +628,11 @@ app.get('/v1/data-sources', (req, res) => {
       },
       {
         id: 'community_reputation',
-        name: 'VigilShield Distributed Anti-Abuse Network',
+        name: 'CallShield Distributed Anti-Abuse Network',
         authority: 'Time-Decayed Community Telemetry',
         confidence: 'Weighted (40% - 95%)',
         caching: '1 hour',
-        license: 'VigilShield Privacy First Policy',
+        license: 'CallShield Privacy First Policy',
       }
     ]
   });
@@ -642,7 +642,7 @@ app.get('/v1/data-sources', (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    app: 'VigilShield Call Security Engine',
+    app: 'CallShield Call Security Engine',
     geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
     timestamp: Date.now(),
   });
@@ -714,7 +714,7 @@ app.post('/api/call-summary', async (req, res) => {
       });
     }
 
-    const prompt = `You are the AI security engine of VigilShield, an enterprise-grade mobile caller protection system.
+    const prompt = `You are the AI security engine of CallShield, an enterprise-grade mobile caller protection system.
 Analyze the following call metadata and generate a concise 1-2 sentence Call Summary and 3 specific bullet Risk Signals.
 Keep it strictly factual, objective, and privacy-focused. Do NOT invent fraudulent claims without evidence.
 
@@ -778,7 +778,7 @@ app.post('/api/screened-call-summary', async (req, res) => {
   try {
     const ai = getGeminiClient();
     if (ai && transcriptText.trim()) {
-      const prompt = `You are the AI Voice Screener engine of VigilShield mobile telephony protection.
+      const prompt = `You are the AI Voice Screener engine of CallShield mobile telephony protection.
 An incoming phone call was screened by the automated voice assistant.
 Analyze the following spoken conversation transcript between the caller and the AI screener, and produce a short, high-fidelity, bulleted summary of spoken content.
 
@@ -906,7 +906,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`VigilShield Production Call Security Server running on http://0.0.0.0:${PORT}`);
+    console.log(`CallShield Production Call Security Server running on http://0.0.0.0:${PORT}`);
   });
 }
 
