@@ -6,7 +6,17 @@ import { parsePhoneNumberFromString } from 'libphonenumber-js';
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+// VAPT baseline: reject oversized JSON payloads and apply conservative browser-facing
+// security headers without relying on an additional middleware dependency.
+app.use(express.json({ limit: '256kb' }));
+app.disable('x-powered-by');
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
 
 // Lazy-initialize Gemini AI client safely
 let geminiClient: GoogleGenAI | null = null;
