@@ -20,7 +20,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { CallLogItem, CallDirection, BlockRule, WhitelistEntry, ShieldSettings, TruecallerDirectoryProfile, DisplayDensity } from '../types';
+import { CallLogItem, CallDirection, BlockRule, WhitelistEntry, ShieldSettings, CallShieldDirectoryProfile, DisplayDensity } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import { groupCallsByNumber, CallGroup } from '../utils/callHistory';
 import { useI18n } from '../i18n/LanguageContext';
@@ -31,7 +31,7 @@ interface RecentsTabProps {
   rules: BlockRule[];
   whitelist: WhitelistEntry[];
   settings: ShieldSettings;
-  lookupProfile: (num: string) => TruecallerDirectoryProfile;
+  lookupProfile: (num: string) => CallShieldDirectoryProfile;
   onInitiateCall: (number: string, name?: string, sim?: 'SIM 1 (Personal)' | 'SIM 2 (Work)', isPrivate?: boolean) => void;
   onSelectCall: (call: CallLogItem) => void;
   onBlockNumber: (number: string, label: string) => void;
