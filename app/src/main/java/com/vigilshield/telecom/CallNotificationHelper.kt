@@ -155,18 +155,20 @@ object CallNotificationHelper {
         val text = if (privacyMode(context)) "Review this call before sharing sensitive information" else "$identityText · Spoof risk: $spoofRisk"
         val openIntent = PendingIntent.getActivity(context, (name + risk).hashCode(), Intent(context, MainActivity::class.java).apply { putExtra("open_tab", "recents"); addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP) }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val body = "$explanation Caller ID is not proof of identity. Never share OTPs, PINs or passwords."
-        val notification = applyPrivacy(NotificationCompat.Builder(context, SECURITY_CHANNEL_ID).setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield).setContentTitle(title).setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(body)).setCategory(NotificationCompat.CATEGORY_STATUS).setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true).setContentIntent(openIntent), context).build()
+        val notification = applyPrivacy(NotificationCompat.Builder(context, SECURITY_CHANNEL_ID).setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield).setContentTitle(title).setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(body)).setCategory(NotificationCompat.CATEGORY_STATUS).setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true).setContentIntent(openIntent).addAction(0, "Call back", callbackIntent), context).build()
         context.getSystemService(NotificationManager::class.java).notify((name + risk + spoofRisk).hashCode(), notification)
     }
 
-    fun showRepeatedCallAttention(context: Context, name: String, number: String) {
+    fun showRepeatedCallAttention(context: Context, name: String, number: String, callCount: Int) {
         if (!notificationsEnabled(context)) return
         ensureChannel(context)
         val identityText = if (privacyMode(context)) "The same caller" else identity(context, name, number)
         val detail = if (privacyMode(context)) "" else if (detailedNotifications(context) && number.isNotBlank()) " · $number" else ""
         val openIntent = PendingIntent.getActivity(context, REPEATED_ID, Intent(context, MainActivity::class.java).putExtra("open_tab", "recents").putExtra("search_number", number).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val text = if (privacyMode(context)) "A caller contacted you repeatedly within 10 minutes" else "$identityText$detail called again within 10 minutes"
-        val body = if (privacyMode(context)) "A caller called again within 10 minutes. If you were expecting the call, review it from Recents." else "$identityText called again within 10 minutes. If you were expecting this call, you can return it from Recents. If not, review the caller before calling back."
+        val callbackIntent = PendingIntent.getActivity(context, (REPEATED_ID.toString() + number + "callback").hashCode(), Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(number)}")), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val countLabel = if (callCount == 1) "1 time" else "$callCount times"
+        val text = if (privacyMode(context)) "A caller called $countLabel within 10 minutes" else "$identityText$detail called $countLabel within 10 minutes"
+        val body = if (privacyMode(context)) "A caller called $countLabel within 10 minutes. Review it from Recents if needed." else "$identityText called $countLabel within 10 minutes. You can call back or review the caller in Recents."
         val notification = applyPrivacy(NotificationCompat.Builder(context, SECURITY_CHANNEL_ID).setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield).setContentTitle("Repeated call needs your attention").setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(body)).setCategory(NotificationCompat.CATEGORY_STATUS).setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true).setContentIntent(openIntent), context).build()
         context.getSystemService(NotificationManager::class.java).notify(REPEATED_ID, notification)
     }
