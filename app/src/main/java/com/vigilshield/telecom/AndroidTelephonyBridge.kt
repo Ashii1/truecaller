@@ -148,21 +148,10 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
             // Immediately launch VigilShield in-call UI activity so Android Telecom knows the UI is ready
             NativeInCallService.launchActiveCallActivity(activity, callId, callerName, clean, Call.STATE_DIALING)
 
-            try {
-                telecom.placeCall(Uri.fromParts("tel", clean, null), extras)
-            } catch (sec: Exception) {
-                val callIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:" + Uri.encode(clean))).apply {
-                    setPackage(activity.packageName)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                }
-                try {
-                    activity.startActivity(callIntent)
-                } catch (e2: Exception) {
-                    val dialIntent = Intent(Intent.ACTION_CALL, Uri.parse("tel:" + Uri.encode(clean)))
-                    dialIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    activity.startActivity(dialIntent)
-                }
-            }
+            // Once VigilShield owns ROLE_DIALER, Android Telecom is the single call entry point.
+            // Never fall back to ACTION_CALL here: that can hand the call back to the
+            // manufacturer's Phone app and can also create duplicate call attempts.
+            telecom.placeCall(Uri.fromParts("tel", clean, null), extras)
             JSONObject().put("success", true).put("callId", callId).put("message", "Call sent to Android Telecom").toString()
         } catch (error: Exception) {
             JSONObject().put("success", false).put("message", error.message ?: "Unable to place call").toString()
