@@ -213,6 +213,9 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
     fun hasCallLogPermission(): Boolean = hasPermission(Manifest.permission.READ_CALL_LOG)
     fun hasContactsPermission(): Boolean = hasPermission(Manifest.permission.READ_CONTACTS)
     fun hasDevicePermissions(): Boolean = hasContactsPermission()
+    fun setSecuritySetting(key: String, enabled: Boolean) {
+        activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(key, enabled).apply()
+    }
     fun roleStatus(): JSONObject = JSONObject().put("isDefaultDialer", isDefaultDialer()).put("isDialerRoleAvailable", Build.VERSION.SDK_INT >= 29 && activity.getSystemService(RoleManager::class.java).isRoleAvailable(RoleManager.ROLE_DIALER)).put("isCallScreeningRoleHeld", Build.VERSION.SDK_INT >= 29 && activity.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_CALL_SCREENING))
     fun permissionStatus(): JSONObject = JSONObject().put("callLogPermission", hasCallLogPermission()).put("contactsPermission", hasContactsPermission()).put("callPhonePermission", hasPermission(Manifest.permission.CALL_PHONE)).put("phoneStatePermission", hasPermission(Manifest.permission.READ_PHONE_STATE)).put("answerCallsPermission", hasPermission(Manifest.permission.ANSWER_PHONE_CALLS)).put("notificationsPermission", Build.VERSION.SDK_INT < 33 || hasPermission(Manifest.permission.POST_NOTIFICATIONS))
     fun dispatchWebEvent(type: String, data: JSONObject) { webView.post { webView.evaluateJavascript("if(window.__onAndroidTelecomEvent){window.__onAndroidTelecomEvent(${JSONObject.quote(type)},$data);}", null) } }
