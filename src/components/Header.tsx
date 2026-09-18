@@ -297,11 +297,11 @@ function Header({
         <div
           id="oneui-notification-panel-overlay"
           className="fixed inset-0 z-[65] bg-black/60 backdrop-blur-sm p-2 safe-top-panel sm:p-4 sm:pt-16 animate-in fade-in duration-150"
-          onMouseDown={() => setShowNotifications(false)}
+          onClick={() => setShowNotifications(false)}
         >
           <div
             className="mx-auto w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-[#0e141c] shadow-2xl shadow-black/80"
-            onMouseDown={e => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
           >
             {/* Notification Panel Header */}
             <div className="flex items-center justify-between border-b border-white/[0.08] bg-[#121924] px-4 py-3">
@@ -462,7 +462,7 @@ function Header({
 
       {/* Main Settings Modal */}
       {showSettings && (
-        <div className="fixed inset-0 z-[70] bg-black/60 p-0 sm:p-4" onMouseDown={() => setShowSettings(false)}>
+        <div className="fixed inset-0 z-[70] bg-black/60 p-0 sm:p-4" onClick={() => setShowSettings(false)} role="presentation">
           <section
             className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto border-l border-slate-700 bg-slate-950 shadow-2xl sm:relative sm:mx-auto sm:my-8 sm:h-auto sm:max-h-[calc(100vh-4rem)] sm:rounded-3xl sm:border"
             onMouseDown={e => e.stopPropagation()}
