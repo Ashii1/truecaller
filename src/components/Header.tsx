@@ -117,14 +117,15 @@ function Header({
   });
 
   useEffect(() => {
-    if (isDefaultDialer || !telecomBridge.isAndroidEnvironment() || !onRequestDefaultDialer) return;
-    try {
-      if (sessionStorage.getItem('vigilshield_default_phone_prompted') === 'true') return;
-      sessionStorage.setItem('vigilshield_default_phone_prompted', 'true');
-    } catch {}
-    const timer = window.setTimeout(() => onRequestDefaultDialer(), 350);
-    return () => window.clearTimeout(timer);
-  }, [isDefaultDialer, onRequestDefaultDialer]);
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setShowSettings(false);
+      setShowNotifications(false);
+      setShowTheme(false);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('vigilshield_privacy_settings', JSON.stringify(privacy));
