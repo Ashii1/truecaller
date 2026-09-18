@@ -4,7 +4,7 @@ export const TRANSLATIONS = {
   en: {
     // App & Header
     app_title: 'CallShield',
-    app_tagline: 'CallShield - Know Who\\'s Calling',
+    app_tagline: 'CallShield - Know Who\'s Calling',
     default_phone_app: 'Default phone app',
     phone_setup_required: 'Phone setup required',
     set_as_phone_app: 'Set as phone app',
@@ -334,6 +334,7 @@ export const TRANSLATIONS = {
   ta: {
     // App & Header
     app_title: 'CallShield',
+    app_tagline: 'CallShield - Know Who\'s Calling',
     default_phone_app: 'இயல்புநிலை அழைப்பு செயலி',
     phone_setup_required: 'அழைப்பு அமைப்பு தேவை',
     set_as_phone_app: 'அழைப்பு செயலியாக அமை',
