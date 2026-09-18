@@ -208,96 +208,6 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
     @JavascriptInterface fun rejectCall(id: String, reason: String?): Boolean { NativeInCallService.stopRinging(); CallNotificationHelper.clearCall(activity.applicationContext, id); CallNotificationHelper.clearAllCallNotifications(activity.applicationContext); return NativeInCallService.activeCalls[id]?.let { it.reject(false, reason ?: "Declined"); true } ?: false }
     @JavascriptInterface fun disconnectCall(id: String): Boolean { NativeInCallService.stopRinging(); CallNotificationHelper.clearCall(activity.applicationContext, id); CallNotificationHelper.clearAllCallNotifications(activity.applicationContext); return NativeInCallService.activeCalls[id]?.let { it.disconnect(); true } ?: false }
     @JavascriptInterface fun clearStaleCallNotifications(): Boolean { CallNotificationHelper.clearAllCallNotifications(activity.applicationContext); NativeInCallService.stopRinging(); return true }
-    @JavascriptInterface fun silenceRinger(): Boolean {
-        NativeInCallService.stopRinging()
-        runCatching {
-            val tm = activity.getSystemService(TelecomManager::class.java)
-            tm?.silenceRinger()
-        }
-        runCatching {
-            val audio = activity.getSystemService(AudioManager::class.java)
-            audio?.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_MUTE, 0)
-        }
-        dispatchWebEvent("SILENCE_RINGER", JSONObject())
-        return true
-    }
-    @JavascriptInterface fun isDeviceLocked(): Boolean {
-        val km = activity.getSystemService(KeyguardManager::class.java)
-        return km?.isKeyguardLocked == true
-    }
-    @JavascriptInterface fun requestUnlockDevice(): Boolean {
-        val km = activity.getSystemService(KeyguardManager::class.java) ?: return false
-        if (!km.isKeyguardLocked) return true
-        activity.runOnUiThread {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                km.requestDismissKeyguard(activity, object : KeyguardManager.KeyguardDismissCallback() {
-                    override fun onDismissSucceeded() {
-                        dispatchWebEvent("DEVICE_LOCK_STATE_CHANGED", JSONObject().put("isLocked", false))
-                    }
-                    override fun onDismissCancelled() {
-                        dispatchWebEvent("DEVICE_LOCK_STATE_CHANGED", JSONObject().put("isLocked", true))
-                    }
-                    override fun onDismissError() {
-                        dispatchWebEvent("DEVICE_LOCK_STATE_CHANGED", JSONObject().put("isLocked", true))
-                    }
-                })
-            }
-        }
-        return true
-    }
-    @JavascriptInterface fun setMuted(value: Boolean): Boolean = NativeInCallService.instance?.let { it.setMuted(value); true } ?: false
-    @JavascriptInterface fun setSpeakerRoute(enabled: Boolean): Boolean = NativeInCallService.instance?.setSpeaker(enabled) ?: false
-    @JavascriptInterface fun sendDtmfTone(id: String, digit: String): Boolean { val call = NativeInCallService.activeCalls[id] ?: return false; val tone = digit.firstOrNull() ?: return false; call.playDtmfTone(tone); call.stopDtmfTone(); return true }
-    @JavascriptInterface fun holdCall(id: String): Boolean = NativeInCallService.activeCalls[id]?.let { it.hold(); true } ?: false
-    @JavascriptInterface fun unholdCall(id: String): Boolean = NativeInCallService.activeCalls[id]?.let { it.unhold(); true } ?: false
-    @JavascriptInterface fun swapCalls(): Boolean = NativeInCallService.swapCalls()
-    @JavascriptInterface fun mergeCalls(): Boolean = NativeInCallService.mergeCalls()
-    @JavascriptInterface fun syncBlockRules(json: String): Boolean { activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("block_rules", json).apply(); return true }
-    @JavascriptInterface fun syncWhitelist(json: String): Boolean { activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("whitelist", json).apply(); return true }
-    @JavascriptInterface fun setSecuritySetting(key: String, value: Boolean): Boolean { activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(key, value).apply(); return true }
-    @JavascriptInterface fun analyzeChatSpam(message: String, senderKnown: Boolean, recentMessageCount: Int): String = ChatSpamProtection.analyze(message, senderKnown, recentMessageCount.coerceIn(0, 1000)).toJson().toString()
-    @JavascriptInterface fun createContact(number: String, name: String?): Boolean = false
-    @JavascriptInterface
-    fun onUiReady() {
-        activity.runOnUiThread {
-            if (activity is MainActivity) {
-                activity.onReactUiReady()
-            }
-        }
-    }
-    @JavascriptInterface
-    fun silenceRinger(): Boolean {
-        NativeInCallService.stopRinging()
-        val tm = activity.getSystemService(TelecomManager::class.java)
-        runCatching { tm?.silenceRinger() }
-        val am = activity.getSystemService(AudioManager::class.java)
-        runCatching { am?.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_MUTE, 0) }
-        return true
-    }
-    @JavascriptInterface
-    fun isDeviceLocked(): Boolean {
-        val km = activity.getSystemService(KeyguardManager::class.java) ?: return false
-        return km.isKeyguardLocked
-    }
-    @JavascriptInterface
-    fun requestDeviceUnlock(): Boolean {
-        val km = activity.getSystemService(KeyguardManager::class.java) ?: return false
-        if (!km.isKeyguardLocked) return true
-        activity.runOnUiThread {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                km.requestDismissKeyguard(activity, object : KeyguardManager.KeyguardDismissCallback() {
-                    override fun onDismissSucceeded() {
-                        dispatchWebEvent("DEVICE_LOCK_STATE_CHANGED", JSONObject().put("isLocked", false))
-                    }
-                })
-            }
-        }
-        return true
-    }
-    @JavascriptInterface
-    fun syncActiveCalls() {
-        NativeInCallService.instance?.emitActiveCalls()
-    }
     fun isDefaultDialer(): Boolean = if (Build.VERSION.SDK_INT >= 29) activity.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_DIALER) else telecom.defaultDialerPackage == activity.packageName
     fun hasPermission(permission: String): Boolean = ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED
     fun hasCallLogPermission(): Boolean = hasPermission(Manifest.permission.READ_CALL_LOG)
@@ -443,7 +353,7 @@ class NativeInCallService : InCallService() {
         persist(call)
         val incoming = call.details.callDirection == Call.Details.DIRECTION_INCOMING
         val rawNum = call.details.handle?.schemeSpecificPart.orEmpty()
-        val isRestricted = call.details.handlePresentation == Call.Details.PRESENTATION_RESTRICTED || rawNum.isBlank() || rawNum.equals("private", ignoreCase = true) || rawNum.equals("unknown", ignoreCase = true) || rawNum == "0"
+        val isRestricted = call.details.handlePresentation == TelecomManager.PRESENTATION_RESTRICTED || rawNum.isBlank() || rawNum.equals("private", ignoreCase = true) || rawNum.equals("unknown", ignoreCase = true) || rawNum == "0"
         val number = if (isRestricted) "Private Number" else rawNum
         val name = if (isRestricted) "Private / Withheld Number" else bridge?.lookupName(number).orEmpty().ifBlank { call.details.callerDisplayName.orEmpty() }.ifBlank { number.ifBlank { "Unknown caller" } }
         if (incoming && call.state == Call.STATE_RINGING) {
@@ -457,7 +367,7 @@ class NativeInCallService : InCallService() {
         }
         emit(call, call.state)
     }
-    private fun emit(call: Call, state: Int) { val id = ids[call] ?: return; val rawNum = call.details.handle?.schemeSpecificPart.orEmpty(); val isRestricted = call.details.handlePresentation == Call.Details.PRESENTATION_RESTRICTED || rawNum.isBlank() || rawNum.equals("private", ignoreCase = true) || rawNum.equals("unknown", ignoreCase = true) || rawNum == "0"; val number = if (isRestricted) "Private Number" else rawNum; val incoming = call.details.callDirection == Call.Details.DIRECTION_INCOMING; val name = if (isRestricted) "Private / Withheld Number" else bridge?.lookupName(number).orEmpty().ifBlank { call.details.callerDisplayName.orEmpty() }.ifBlank { number }; val stateName = when (state) { Call.STATE_NEW -> "NEW"; Call.STATE_RINGING -> "RINGING"; Call.STATE_DIALING -> "DIALING"; Call.STATE_CONNECTING -> "CONNECTING"; Call.STATE_ACTIVE -> "ACTIVE"; Call.STATE_HOLDING -> "HOLDING"; Call.STATE_DISCONNECTED -> "DISCONNECTED"; else -> "UNKNOWN" }; val details = JSONObject().put("number", number).put("callerDisplayName", name).put("state", stateName).put("isIncoming", incoming).put("durationSeconds", if (call.details.connectTimeMillis > 0) ((System.currentTimeMillis() - call.details.connectTimeMillis) / 1000).coerceAtLeast(0) else 0).put("isHolding", state == Call.STATE_HOLDING).put("phoneAccountId", call.details.accountHandle?.id); if (state == Call.STATE_ACTIVE || state == Call.STATE_HOLDING || state == Call.STATE_DIALING || state == Call.STATE_CONNECTING) { CallNotificationHelper.showOngoingCall(applicationContext, id, name.ifBlank { number.ifBlank { "Unknown caller" } }, number, stateName, call.details.connectTimeMillis, null) }; bridge?.dispatchCallEvent(if (state == Call.STATE_DISCONNECTED) "CALL_DISCONNECTED" else if (state == Call.STATE_RINGING && incoming) "CALL_ADDED" else "CALL_STATE_CHANGED", JSONObject().put("callId", id).put("details", details)) }
+    private fun emit(call: Call, state: Int) { val id = ids[call] ?: return; val rawNum = call.details.handle?.schemeSpecificPart.orEmpty(); val isRestricted = call.details.handlePresentation == TelecomManager.PRESENTATION_RESTRICTED || rawNum.isBlank() || rawNum.equals("private", ignoreCase = true) || rawNum.equals("unknown", ignoreCase = true) || rawNum == "0"; val number = if (isRestricted) "Private Number" else rawNum; val incoming = call.details.callDirection == Call.Details.DIRECTION_INCOMING; val name = if (isRestricted) "Private / Withheld Number" else bridge?.lookupName(number).orEmpty().ifBlank { call.details.callerDisplayName.orEmpty() }.ifBlank { number }; val stateName = when (state) { Call.STATE_NEW -> "NEW"; Call.STATE_RINGING -> "RINGING"; Call.STATE_DIALING -> "DIALING"; Call.STATE_CONNECTING -> "CONNECTING"; Call.STATE_ACTIVE -> "ACTIVE"; Call.STATE_HOLDING -> "HOLDING"; Call.STATE_DISCONNECTED -> "DISCONNECTED"; else -> "UNKNOWN" }; val details = JSONObject().put("number", number).put("callerDisplayName", name).put("state", stateName).put("isIncoming", incoming).put("durationSeconds", if (call.details.connectTimeMillis > 0) ((System.currentTimeMillis() - call.details.connectTimeMillis) / 1000).coerceAtLeast(0) else 0).put("isHolding", state == Call.STATE_HOLDING).put("phoneAccountId", call.details.accountHandle?.id); if (state == Call.STATE_ACTIVE || state == Call.STATE_HOLDING || state == Call.STATE_DIALING || state == Call.STATE_CONNECTING) { CallNotificationHelper.showOngoingCall(applicationContext, id, name.ifBlank { number.ifBlank { "Unknown caller" } }, number, stateName, call.details.connectTimeMillis, null) }; bridge?.dispatchCallEvent(if (state == Call.STATE_DISCONNECTED) "CALL_DISCONNECTED" else if (state == Call.STATE_RINGING && incoming) "CALL_ADDED" else "CALL_STATE_CHANGED", JSONObject().put("callId", id).put("details", details)) }
     override fun onCallRemoved(call: Call) { val id = ids[call] ?: activeCalls.entries.firstOrNull { it.value == call }?.key; if (id == null) { stopRinging(); CallNotificationHelper.clearAllCallNotifications(applicationContext); super.onCallRemoved(call); return }; val incoming = call.details.callDirection == Call.Details.DIRECTION_INCOMING; val number = call.details.handle?.schemeSpecificPart.orEmpty(); val name = bridge?.lookupName(number).orEmpty().ifBlank { call.details.callerDisplayName.orEmpty() }.ifBlank { number.ifBlank { "Unknown caller" } }; if (incoming && call.details.connectTimeMillis <= 0L) CallNotificationHelper.showMissedCall(applicationContext, name, number); CallNotificationHelper.clearCall(applicationContext, id); CallNotificationHelper.clearAllCallNotifications(applicationContext); persist(call); activeCalls.remove(id); callbacks.remove(id)?.let { call.unregisterCallback(it) }; ids.remove(call); stopRinging(); if (activeCalls.isEmpty()) { instance = null; CallNotificationHelper.clearAllCallNotifications(applicationContext) }; super.onCallRemoved(call) }
     @Suppress("DEPRECATION") fun setSpeaker(enabled: Boolean): Boolean { setAudioRoute(if (enabled) CallAudioState.ROUTE_SPEAKER else CallAudioState.ROUTE_WIRED_OR_EARPIECE); return true }
 }
