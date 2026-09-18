@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from 'react';
 import { Check, Delete, EyeOff, Layers, Phone, ShieldAlert, ShieldCheck, User, UserPlus, X, Sparkles } from 'lucide-react';
-import { ContactItem, CallLogItem, TruecallerDirectoryProfile, ShieldSettings, DisplayDensity } from '../types';
+import { ContactItem, CallLogItem, CallShieldDirectoryProfile, ShieldSettings, DisplayDensity } from '../types';
 import { smartDialerSearch } from '../utils/t9Search';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import { useI18n } from '../i18n/LanguageContext';
@@ -9,9 +9,9 @@ interface DialerTabProps {
   contacts: ContactItem[];
   recentCalls: CallLogItem[];
   settings: ShieldSettings;
-  lookupProfile: (num: string) => TruecallerDirectoryProfile;
+  lookupProfile: (num: string) => CallShieldDirectoryProfile;
   onInitiateCall: (number: string, name?: string, sim?: 'SIM 1 (Personal)' | 'SIM 2 (Work)', isPrivate?: boolean) => void;
-  onOpenCallerDetail: (item: CallLogItem | TruecallerDirectoryProfile) => void;
+  onOpenCallerDetail: (item: CallLogItem | CallShieldDirectoryProfile) => void;
   onSaveContact: (number: string, name?: string) => void;
   selectedSim: 'SIM 1 (Personal)' | 'SIM 2 (Work)';
   onChangeSim: (sim: 'SIM 1 (Personal)' | 'SIM 2 (Work)') => void;
