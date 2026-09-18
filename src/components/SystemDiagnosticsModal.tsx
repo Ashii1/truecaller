@@ -240,7 +240,7 @@ export default function SystemDiagnosticsModal({
         onImportAllData(parsed);
         alert('Data backup successfully restored!');
       } catch {
-        alert('Invalid JSON file. Please provide a valid VigilShield backup file.');
+        alert('Invalid JSON file. Please provide a valid CallShield backup file.');
       }
     };
     reader.readAsText(file);
@@ -372,7 +372,7 @@ export default function SystemDiagnosticsModal({
                 {/* Remediation actions */}
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-amber-500/20">
                   <span className="text-[11px] text-amber-300/80">
-                    Plug in charger or exempt VigilShield from OS battery optimization to restore full real-time shielding.
+                    Plug in charger or exempt CallShield from OS battery optimization to restore full real-time shielding.
                   </span>
                   <button
                     onClick={handleRequestBatteryExemption}
@@ -894,7 +894,7 @@ export default function SystemDiagnosticsModal({
 
         {/* Footer */}
         <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-          <span>VigilShield Telephony Engine v2026.09</span>
+          <span>CallShield Telephony Engine v2026.09</span>
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold"
