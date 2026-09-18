@@ -219,6 +219,8 @@ export default function App(){
       }
     };
     window.addEventListener('focus', handleFocus);
+    const handleVisibility = () => setAppInForeground(document.visibilityState === 'visible');
+    document.addEventListener('visibilitychange', handleVisibility);
 
     const unsub = telecomBridge.subscribe((eventType, payload) => {
       if (eventType === 'PHONE_SURFACE_CHANGED') {
@@ -451,6 +453,7 @@ export default function App(){
       unsubDial();
       unsubCall();
       window.removeEventListener('focus', handleFocus);
+    document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
 
@@ -744,7 +747,7 @@ export default function App(){
 
   <CallerDetailModal call={selectedCall} calls={calls} contacts={contacts} profile={selectedProfile} isOpen={isCallerModalOpen} onClose={()=>setIsCallerModalOpen(false)} onBlockNumber={handleBlockNumber} onMarkSafe={handleWhitelistNumber} onInitiateCall={handleInitiateCall} onOpenReportModal={n=>{setFastReportNumber(n);setIsFastReportOpen(true)}} onOpenDisputeModal={(n,nm)=>{setDisputeNumber(n);setDisputeName(nm);setIsDisputeOpen(true)}} onUpdateCallerName={handleUpdateCallerName} onAddContact={handleAddContact} onSaveNote={handleSaveNote}/>
   <IncomingCallOverlay
-    call={activeIncomingCall}
+    call={appInForeground ? null : activeIncomingCall}
     autoCancelEnabled={autoCancelEnabled}
     onCancelCall={(reason, block, screeningData) => {
       if (activeIncomingCall?.callId) {
