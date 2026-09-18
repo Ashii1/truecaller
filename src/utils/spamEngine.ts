@@ -4,7 +4,7 @@ import {
   ShieldSettings, 
   ScreeningResult, 
   SpamCategory, 
-  TruecallerDirectoryProfile,
+  CallShieldDirectoryProfile,
   RiskLevel
 } from '../types';
 import { resolveFromPublicDirectory } from './publicDirectory';
@@ -22,7 +22,7 @@ export function normalizePhoneNumber(rawNumber: string): string {
 }
 
 /**
- * Formats a phone string for Truecaller-standard display
+ * Formats a phone string for CallShield-standard display
  */
 export function formatPhoneNumber(num: string): string {
   if (!num) return 'Unknown';
@@ -349,7 +349,7 @@ export function getGlobalCommunitySpamIntelligence(rawNumber: string): Community
       ],
       comments: [
         {
-          author: 'Truecaller Community',
+          author: 'CallShield Community',
           text: 'Registered commercial telemarketing line under TRAI 140 series. High-frequency unsolicited sales pitch for loans and insurance.',
           date: 'Active Threat',
         },
@@ -601,7 +601,7 @@ export function getGlobalCommunitySpamIntelligence(rawNumber: string): Community
       spamScore: entry.spamScore || 95,
       category: entry.category || 'SPAM',
       name: entry.name || 'Suspected Spammer',
-      reason: entry.reason || 'Reported by Truecaller and SpamShield community members',
+      reason: entry.reason || 'Reported by CallShield and SpamShield community members',
       reportsCount: entry.reportsCount || 5000,
       carrier: entry.carrier || meta.carrier,
       location: entry.location || meta.location,
@@ -771,7 +771,7 @@ const HIGH_RISK_SUSPICIOUS_WORDS = [
 const SUSPICIOUS_DOMAINS = ['.xyz', '.top', '.ru', '.cfd', '.click', '.info', '.biz', 'bit.ly', 'tinyurl'];
 
 /**
- * Core screening engine modeling Android CallScreeningService and Truecaller live evaluation
+ * Core screening engine modeling Android CallScreeningService and CallShield live evaluation
  */
 export function screenEvent({
   type,
@@ -1069,8 +1069,8 @@ export function screenEvent({
     };
   }
 
-  // 9. Truecaller Global Directory & Public Reputation Lookup
-  const directoryProfile = lookupTruecallerDirectory(sender, rules, whitelist);
+  // 9. CallShield Global Directory & Public Reputation Lookup
+  const directoryProfile = lookupCallShieldDirectory(sender, rules, whitelist);
   if (directoryProfile) {
     if (directoryProfile.isSpam) {
       return {
@@ -1124,18 +1124,18 @@ export function screenEvent({
 }
 
 // High-performance bounded in-memory cache for directory profile resolutions
-const LOOKUP_MEMORY_CACHE = new Map<string, TruecallerDirectoryProfile>();
+const LOOKUP_MEMORY_CACHE = new Map<string, CallShieldDirectoryProfile>();
 const MAX_LOOKUP_CACHE_SIZE = 500;
 
 /**
- * Truecaller global directory search engine.
+ * CallShield global directory search engine.
  * Computes deterministic or queried reputation, community comments, tags, and score.
  */
-export function lookupTruecallerDirectory(
+export function lookupCallShieldDirectory(
   phoneNumber: string,
   rules: BlockRule[] = [],
   whitelist: WhitelistEntry[] = []
-): TruecallerDirectoryProfile {
+): CallShieldDirectoryProfile {
   const norm = normalizePhoneNumber(phoneNumber);
   const cacheKey = `${norm}::${rules.length}::${whitelist.length}`;
   const cachedHit = LOOKUP_MEMORY_CACHE.get(cacheKey);
@@ -1145,7 +1145,7 @@ export function lookupTruecallerDirectory(
   const digits = norm.replace(/\D/g, '');
 
   // Helper to store resolved caller identity in bounded in-memory cache
-  const cacheAndReturn = (profile: TruecallerDirectoryProfile): TruecallerDirectoryProfile => {
+  const cacheAndReturn = (profile: CallShieldDirectoryProfile): CallShieldDirectoryProfile => {
     if (LOOKUP_MEMORY_CACHE.size >= MAX_LOOKUP_CACHE_SIZE) {
       const firstKey = LOOKUP_MEMORY_CACHE.keys().next().value;
       if (firstKey) LOOKUP_MEMORY_CACHE.delete(firstKey);
@@ -1190,14 +1190,14 @@ export function lookupTruecallerDirectory(
       isSpam: !!customEntry.isSpam,
       spamReportsCount: customEntry.isSpam ? 2450 : 0,
       spamCategory: customEntry.category,
-      topTags: customEntry.isSpam ? ['Reported Spam', 'User Labeled'] : ['Truecaller Saved Identity', 'Clean Record'],
+      topTags: customEntry.isSpam ? ['Reported Spam', 'User Labeled'] : ['CallShield Saved Identity', 'Clean Record'],
       carrier: meta.carrier,
       location: meta.location,
       lineType: 'Mobile',
       isVerified: !customEntry.isSpam,
       communityComments: [
         {
-          author: 'Truecaller User Directory',
+          author: 'CallShield User Directory',
           text: customEntry.isSpam ? 'Reported as spam in community directory.' : `Verified identity: ${customEntry.name}.`,
           date: 'Active Record',
         },
@@ -1266,7 +1266,7 @@ export function lookupTruecallerDirectory(
       isVerified: false,
       communityComments: [
         {
-          author: 'Truecaller User #9421',
+          author: 'CallShield User #9421',
           text: `Blocked by rule: ${rule.label}. Repeated unwanted calls.`,
           date: 'Recent',
         },
@@ -1329,7 +1329,7 @@ export function lookupTruecallerDirectory(
       isVerified: true,
       communityComments: [
         {
-          author: 'Truecaller Verified Enterprise',
+          author: 'CallShield Verified Enterprise',
           text: `Official customer service line for ${ent.name}.`,
           date: 'Verified Record',
         },
@@ -1354,7 +1354,7 @@ export function lookupTruecallerDirectory(
       isVerified: false,
       communityComments: [
         {
-          author: 'Truecaller Fraud Desk',
+          author: 'CallShield Fraud Desk',
           text: 'One-ring scam baiting high-cost international return call. Do not call back.',
           date: 'Yesterday',
         },
@@ -1416,7 +1416,7 @@ export function lookupTruecallerDirectory(
 }
 
 /**
- * 4-Tier Risk Indicator calculation matching VigilShield & product requirements:
+ * 4-Tier Risk Indicator calculation matching CallShield & product requirements:
  * 🟢 Safe
  * 🟡 Unknown
  * 🟠 Suspicious
