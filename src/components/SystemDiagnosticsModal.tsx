@@ -18,7 +18,14 @@ import {
   Terminal,
   Cpu,
   Wifi,
-  HardDrive
+  HardDrive,
+  Battery,
+  BatteryCharging,
+  BatteryWarning,
+  Zap,
+  ShieldAlert,
+  Sliders,
+  Info
 } from 'lucide-react';
 import {
   ContactItem,
@@ -29,6 +36,7 @@ import {
   SecurityTimelineEvent
 } from '../types';
 import { CompositeCallerIdResolver } from '../services/providers/compositeCallerProvider';
+import { telecomBridge, TelephonyDiagnosticsData } from '../services/telephony/telecomBridge';
 
 interface SystemDiagnosticsModalProps {
   isOpen: boolean;
@@ -65,8 +73,50 @@ export default function SystemDiagnosticsModal({
   const [backendLatency, setBackendLatency] = useState<number | null>(null);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const [activeSubTab, setActiveSubTab] = useState<'OVERVIEW' | 'PIPELINE' | 'ACTIONS'>('OVERVIEW');
+  const [telephonyDiag, setTelephonyDiag] = useState<TelephonyDiagnosticsData>(() => telecomBridge.getDiagnostics());
+  const [simulateLowBattery, setSimulateLowBattery] = useState(false);
+  const [batteryExemptionStatus, setBatteryExemptionStatus] = useState<string | null>(null);
 
   const resolver = useMemo(() => new CompositeCallerIdResolver(), []);
+
+  // Effective telephony and battery diagnostics with simulation override
+  const effectiveDiag = useMemo(() => {
+    if (simulateLowBattery) {
+      return {
+        ...telephonyDiag,
+        batteryLevel: 12,
+        isCharging: false,
+        isPowerSaveMode: true,
+        isBatteryLow: true,
+        isBatteryThrottlingRisk: true,
+        isIgnoringBatteryOptimizations: false,
+      };
+    }
+    return telephonyDiag;
+  }, [telephonyDiag, simulateLowBattery]);
+
+  const isThrottlingRisk = Boolean(
+    effectiveDiag.isBatteryThrottlingRisk ||
+    effectiveDiag.isPowerSaveMode ||
+    (effectiveDiag.batteryLevel !== undefined && effectiveDiag.batteryLevel <= 20 && !effectiveDiag.isCharging)
+  );
+
+  const handleRequestBatteryExemption = () => {
+    if (telecomBridge.isAndroidEnvironment()) {
+      const ok = telecomBridge.requestIgnoreBatteryOptimizations();
+      if (ok) {
+        setBatteryExemptionStatus('System battery optimization exemption dialog opened');
+      } else {
+        telecomBridge.openAppSettings();
+        setBatteryExemptionStatus('Opening App Settings: please set Battery to "Unrestricted"');
+      }
+    } else {
+      setBatteryExemptionStatus('Simulated: Battery optimization set to Unrestricted');
+    }
+    setTimeout(() => {
+      setTelephonyDiag(telecomBridge.getDiagnostics());
+    }, 1200);
+  };
 
   // Check backend health
   const checkBackendHealth = async () => {
@@ -91,6 +141,13 @@ export default function SystemDiagnosticsModal({
     if (isOpen) {
       checkBackendHealth();
       runPipelineTest(pipelineTestNumber);
+      setTelephonyDiag(telecomBridge.getDiagnostics());
+      const unsub = telecomBridge.subscribe((type) => {
+        if (type === 'ROLE_STATUS_CHANGED' || type === 'BATTERY_CHANGED') {
+          setTelephonyDiag(telecomBridge.getDiagnostics());
+        }
+      });
+      return () => { unsub(); };
     }
   }, [isOpen]);
 
@@ -206,9 +263,14 @@ export default function SystemDiagnosticsModal({
                 <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                   Real-time
                 </span>
+                {isThrottlingRisk && (
+                  <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1 animate-pulse">
+                    <BatteryWarning className="w-3 h-3 text-rose-400" /> Throttling Alert
+                  </span>
+                )}
               </h2>
               <p className="text-xs text-slate-400">
-                Live verification of permissions, 8-tier caller ID pipeline, and local database integrity
+                Live verification of permissions, battery throttling status, 8-tier caller ID pipeline, and local database integrity
               </p>
             </div>
           </div>
@@ -245,6 +307,198 @@ export default function SystemDiagnosticsModal({
         {/* TAB 1: OVERVIEW */}
         {activeSubTab === 'OVERVIEW' && (
           <div className="space-y-4">
+            {/* Low-Battery & OS Protection Throttling Alert Banner */}
+            {isThrottlingRisk && (
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-950/90 via-rose-950/80 to-amber-950/90 border-2 border-amber-500/70 shadow-lg shadow-amber-950/40 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/40 shrink-0 mt-0.5">
+                      <BatteryWarning className="w-5 h-5 text-amber-400 animate-pulse" />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-white">
+                          OS Protection Throttling Detected
+                        </span>
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-500/30 text-rose-300 border border-rose-500/50">
+                          Battery {effectiveDiag.batteryLevel ?? 15}% ({effectiveDiag.isCharging ? 'Charging' : 'Discharging'})
+                        </span>
+                        {effectiveDiag.isPowerSaveMode && (
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/30 text-amber-300 border border-amber-500/50">
+                            Power Saver Active
+                          </span>
+                        )}
+                        {!effectiveDiag.isIgnoringBatteryOptimizations && (
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/30 text-amber-300 border border-amber-500/50">
+                            Subject to Android Doze
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-amber-200/90 leading-relaxed">
+                        The operating system is restricting background services to conserve power. Under low battery or Battery Saver mode, Android throttles CPU clocks, delays background InCallService / CallScreening bindings, and suspends real-time network threat queries. Spam calls may ring before they can be analyzed or blocked.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Subsystems at risk */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs pt-1">
+                  <div className="p-2.5 rounded-xl bg-slate-900/80 border border-amber-500/30">
+                    <div className="flex items-center gap-1.5 font-bold text-amber-300">
+                      <ShieldAlert className="w-3.5 h-3.5" /> CallScreeningService
+                    </div>
+                    <p className="text-[11px] text-slate-300 mt-1">
+                      OS may timeout spam analysis (&gt;500ms) before the phone rings.
+                    </p>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-slate-900/80 border border-amber-500/30">
+                    <div className="flex items-center gap-1.5 font-bold text-amber-300">
+                      <Cpu className="w-3.5 h-3.5" /> Real-Time AI Threat Intel
+                    </div>
+                    <p className="text-[11px] text-slate-300 mt-1">
+                      Background cellular network queries throttled or queued.
+                    </p>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-slate-900/80 border border-amber-500/30">
+                    <div className="flex items-center gap-1.5 font-bold text-amber-300">
+                      <Zap className="w-3.5 h-3.5" /> In-Call HUD WakeLock
+                    </div>
+                    <p className="text-[11px] text-slate-300 mt-1">
+                      Device may delay launching the custom in-call security overlay.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Remediation actions */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-amber-500/20">
+                  <span className="text-[11px] text-amber-300/80">
+                    Plug in charger or exempt VigilShield from OS battery optimization to restore full real-time shielding.
+                  </span>
+                  <button
+                    onClick={handleRequestBatteryExemption}
+                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Zap className="w-3.5 h-3.5 fill-current" />
+                    Exempt from Battery Saver
+                  </button>
+                </div>
+                {batteryExemptionStatus && (
+                  <div className="text-[11px] text-emerald-400 font-semibold bg-emerald-950/40 p-2 rounded-lg border border-emerald-500/30 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> {batteryExemptionStatus}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Battery & Power Management Diagnostics Card */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-850 border border-slate-750 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                  {effectiveDiag.isCharging ? (
+                    <BatteryCharging className="w-4 h-4 text-emerald-400" />
+                  ) : isThrottlingRisk ? (
+                    <BatteryWarning className="w-4 h-4 text-amber-400" />
+                  ) : (
+                    <Battery className="w-4 h-4 text-indigo-400" />
+                  )}
+                  Battery Status & OS Protection Throttling
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSimulateLowBattery(!simulateLowBattery)}
+                    className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition flex items-center gap-1 ${
+                      simulateLowBattery
+                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30'
+                        : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                    }`}
+                    title="Toggle simulated low battery to test OS throttling detection"
+                  >
+                    <Sliders className="w-3 h-3" />
+                    {simulateLowBattery ? 'Exit Low-Battery Test' : 'Test Low-Battery Alert'}
+                  </button>
+                  <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${
+                    isThrottlingRisk
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
+                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                  }`}>
+                    {isThrottlingRisk ? 'THROTTLING RISK' : 'OPTIMAL'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Battery Meter Visual */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex justify-between text-xs text-slate-300">
+                  <span className="flex items-center gap-1.5">
+                    <span>Charge Level:</span>
+                    <strong className="text-white font-mono">{effectiveDiag.batteryLevel !== undefined ? `${effectiveDiag.batteryLevel}%` : '85%'}</strong>
+                    {effectiveDiag.isCharging && (
+                      <span className="text-emerald-400 text-[11px] font-semibold flex items-center gap-0.5">
+                        <Zap className="w-3 h-3" /> Charging
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    Threshold: &le;20% triggers throttling warning
+                  </span>
+                </div>
+                <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden border border-slate-700/60 p-0.5">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      (effectiveDiag.batteryLevel ?? 85) <= 20
+                        ? 'bg-rose-500'
+                        : (effectiveDiag.batteryLevel ?? 85) <= 50
+                        ? 'bg-amber-500'
+                        : 'bg-emerald-500'
+                    }`}
+                    style={{ width: `${Math.min(100, Math.max(5, effectiveDiag.batteryLevel ?? 85))}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Grid of battery states */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-slate-300 pt-1">
+                <div className="flex justify-between items-center p-2 rounded-xl bg-slate-800/80 border border-slate-700/60">
+                  <div>
+                    <div className="font-semibold text-white">OS Power Save Mode</div>
+                    <div className="text-[10px] text-slate-400">System battery saver status</div>
+                  </div>
+                  <span className={`text-[11px] font-bold ${effectiveDiag.isPowerSaveMode ? 'text-rose-400' : 'text-emerald-400'}`}>
+                    {effectiveDiag.isPowerSaveMode ? '⚠️ ACTIVE (Throttling)' : '✓ NORMAL'}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center p-2 rounded-xl bg-slate-800/80 border border-slate-700/60">
+                  <div>
+                    <div className="font-semibold text-white">Battery Optimization</div>
+                    <div className="text-[10px] text-slate-400">Doze / standby restrictions</div>
+                  </div>
+                  <span className={`text-[11px] font-bold ${effectiveDiag.isIgnoringBatteryOptimizations ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {effectiveDiag.isIgnoringBatteryOptimizations ? '✓ UNRESTRICTED' : '⚠️ OPTIMIZED'}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center p-2 rounded-xl bg-slate-800/80 border border-slate-700/60">
+                  <div>
+                    <div className="font-semibold text-white">Spam Intercept Latency</div>
+                    <div className="text-[10px] text-slate-400">CallScreeningService SLA</div>
+                  </div>
+                  <span className={`text-[11px] font-bold ${isThrottlingRisk ? 'text-amber-400' : 'text-emerald-400'}`}>
+                    {isThrottlingRisk ? '⚠️ Latency risk (>500ms)' : '✓ Fast (<50ms)'}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center p-2 rounded-xl bg-slate-800/80 border border-slate-700/60">
+                  <div>
+                    <div className="font-semibold text-white">Background Threat Sync</div>
+                    <div className="text-[10px] text-slate-400">Local DB auto-update</div>
+                  </div>
+                  <span className={`text-[11px] font-bold ${isThrottlingRisk ? 'text-amber-400' : 'text-emerald-400'}`}>
+                    {isThrottlingRisk ? '⏸ Deferred by OS' : '✓ Real-time Sync'}
+                  </span>
+                </div>
+              </div>
+            </div>
             {/* Issue 30: Core Telecom & InCallService Diagnostics */}
             <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 to-indigo-950/40 border border-indigo-500/30 space-y-3">
               <div className="flex items-center justify-between">

@@ -11,6 +11,7 @@ import {
   MicOff,
   Minimize2,
   PhoneCall,
+  LayoutGrid,
   Palette,
   Settings,
   ShieldAlert,
@@ -104,6 +105,7 @@ function Header({
   const [showSettings, setShowSettings] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showTheme, setShowTheme] = useState(false);
+  const [widgetFeedback, setWidgetFeedback] = useState<string | null>(null);
   const [privacy, setPrivacy] = useState<PrivacySettings>(readPrivacySettings);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<string[]>(() => {
     try {
@@ -164,7 +166,7 @@ function Header({
       {/* Top Header Bar with Safe-Area Clearance for Android Notification Panel */}
       <header
         id="app-top-header"
-        className="sticky top-0 z-40 border-b border-white/[0.08] bg-[#0b0f14]/98 backdrop-blur-xl pt-[max(env(safe-area-inset-top),0.625rem)] pb-1 transition-all"
+        className="sticky top-0 z-40 border-b border-white/[0.08] bg-[#0b0f14]/98 backdrop-blur-xl safe-top-header pb-2 transition-all shadow-md shadow-black/20"
       >
         <div className="mx-auto flex h-14 sm:h-16 max-w-4xl items-center justify-between gap-2 px-3.5 sm:px-6">
           {/* Brand & Live Protection Status */}
@@ -293,7 +295,7 @@ function Header({
       {showNotifications && (
         <div
           id="oneui-notification-panel-overlay"
-          className="fixed inset-0 z-[65] bg-black/60 backdrop-blur-sm p-2 pt-[max(env(safe-area-inset-top),1rem)] sm:p-4 sm:pt-16 animate-in fade-in duration-150"
+          className="fixed inset-0 z-[65] bg-black/60 backdrop-blur-sm p-2 safe-top-panel sm:p-4 sm:pt-16 animate-in fade-in duration-150"
           onMouseDown={() => setShowNotifications(false)}
         >
           <div
@@ -464,7 +466,7 @@ function Header({
             className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto border-l border-slate-700 bg-slate-950 shadow-2xl sm:relative sm:mx-auto sm:my-8 sm:h-auto sm:max-h-[calc(100vh-4rem)] sm:rounded-3xl sm:border"
             onMouseDown={e => e.stopPropagation()}
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-slate-950/95 p-5 backdrop-blur">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-slate-950/95 px-5 pb-4 safe-top-modal sm:pt-5 backdrop-blur">
               <div>
                 <h2 className="text-lg font-bold text-white">{t('settings_title')}</h2>
                 <p className="mt-0.5 text-xs text-slate-400">{t('settings_subtitle')}</p>
@@ -687,6 +689,59 @@ function Header({
                   </span>
                 </button>
               )}
+
+              {/* Home Screen Widgets Section */}
+              <div className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-4">
+                <div className="flex items-start gap-3">
+                  <LayoutGrid className="mt-0.5 h-5 w-5 shrink-0 text-sky-400" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-bold text-white">Home Screen Widgets</div>
+                    <div className="mt-1 text-xs leading-5 text-slate-400">
+                      Add quick one-tap calling and live spam protection status to your Android home screen.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3.5 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const res = telecomBridge.pinWidget('speed_dial');
+                      setWidgetFeedback(res.message);
+                      setTimeout(() => setWidgetFeedback(null), 4500);
+                    }}
+                    className="flex flex-col items-start gap-1 rounded-xl border border-sky-500/30 bg-slate-900/90 p-3 text-left transition-colors hover:bg-slate-800 active:scale-98"
+                  >
+                    <div className="flex items-center gap-2 text-xs font-bold text-sky-300">
+                      <PhoneCall className="h-3.5 w-3.5" />
+                      <span>Speed Dial Widget</span>
+                    </div>
+                    <span className="text-[11px] text-slate-400">Top contacts & 1-tap dialer</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const res = telecomBridge.pinWidget('security');
+                      setWidgetFeedback(res.message);
+                      setTimeout(() => setWidgetFeedback(null), 4500);
+                    }}
+                    className="flex flex-col items-start gap-1 rounded-xl border border-emerald-500/30 bg-slate-900/90 p-3 text-left transition-colors hover:bg-slate-800 active:scale-98"
+                  >
+                    <div className="flex items-center gap-2 text-xs font-bold text-emerald-300">
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      <span>Protection Widget</span>
+                    </div>
+                    <span className="text-[11px] text-slate-400">Live spam guard stats & dialer</span>
+                  </button>
+                </div>
+
+                {widgetFeedback && (
+                  <div className="mt-2.5 rounded-lg bg-sky-950/80 border border-sky-500/40 px-3 py-2 text-xs font-medium text-sky-200">
+                    {widgetFeedback}
+                  </div>
+                )}
+              </div>
 
               <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-xs leading-5 text-slate-500">
                 {t('security_principle_note')}

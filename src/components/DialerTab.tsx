@@ -141,57 +141,12 @@ const DialerTab = memo(function DialerTab({
 
   return (
     <div className={`mx-auto flex w-full max-w-md flex-col select-none transition-all ${isCompact ? 'px-2 pb-4 pt-0.5 sm:px-3' : 'px-3 pb-6 pt-1 sm:px-4'}`}>
-      {/* Top Header & Selected SIM Pill */}
+      {/* Top Header */}
       <div className={`flex items-center justify-between transition-all ${isCompact ? 'mb-1.5' : 'mb-2.5'}`}>
         <div>
           <p className={`font-bold uppercase tracking-[.18em] text-slate-500 transition-all ${isCompact ? 'text-[9px]' : 'text-[10px]'}`}>{t('nav_phone')}</p>
           <h1 className={`font-bold tracking-tight text-white transition-all ${isCompact ? 'text-lg' : 'text-xl'}`}>{t('dialer_keypad')}</h1>
         </div>
-
-        {/* Selected SIM Selector Button */}
-        <button
-          type="button"
-          onClick={() => setShowSimPicker(true)}
-          className={`flex items-center gap-1.5 rounded-full border font-semibold transition-all ${
-            isCompact ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1.5 text-xs'
-          } ${
-            isSim1
-              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
-              : 'border-blue-500/30 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20'
-          }`}
-          title={t('call_using')}
-        >
-          <Layers className="h-3 w-3" />
-          <span>{isSim1 ? t('sim_1') : t('sim_2')}</span>
-        </button>
-      </div>
-
-      {/* Dual SIM Switcher Strip */}
-      <div className={`flex items-center rounded-xl border border-white/10 bg-[#0e141b] transition-all ${isCompact ? 'mb-1.5 p-0.5 text-[11px]' : 'mb-2 p-1 text-xs'}`}>
-        <button
-          type="button"
-          onClick={() => onChangeSim('SIM 1 (Personal)')}
-          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg font-semibold transition ${
-            isCompact ? 'py-1 text-[11px]' : 'py-1.5 text-xs'
-          } ${
-            isSim1 ? 'bg-emerald-500/20 text-emerald-300 shadow-sm' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <span className={`h-2 w-2 rounded-full ${isSim1 ? 'bg-emerald-400' : 'bg-slate-600'}`} />
-          <span>{t('sim_1')}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => onChangeSim('SIM 2 (Work)')}
-          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg font-semibold transition ${
-            isCompact ? 'py-1 text-[11px]' : 'py-1.5 text-xs'
-          } ${
-            !isSim1 ? 'bg-blue-500/20 text-blue-300 shadow-sm' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <span className={`h-2 w-2 rounded-full ${!isSim1 ? 'bg-blue-400' : 'bg-slate-600'}`} />
-          <span>{t('sim_2')}</span>
-        </button>
       </div>
 
       {/* Fixed-Height T9 Matches Strip - Never shifts the keypad layout below */}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import {
   AlertTriangle,
   Ban,
@@ -16,6 +16,8 @@ import {
   Folder,
   Globe,
   Info,
+  Mic,
+  MicOff,
   Phone,
   ShieldAlert,
   ShieldCheck,
@@ -76,6 +78,9 @@ export default function CallerDetailModal({
   const [name, setName] = useState('');
   const [note, setNote] = useState('');
   const [noteSavedFeedback, setNoteSavedFeedback] = useState(false);
+  const [isDictating, setIsDictating] = useState(false);
+  const [dictationError, setDictationError] = useState<string | null>(null);
+  const speechRecognitionRef = useRef<any>(null);
   const [recordings, setRecordings] = useState<CallRecordingItem[]>([]);
 
   // Inaccuracy Report Modal State
@@ -230,6 +235,15 @@ export default function CallerDetailModal({
       (number && detectPingBackScam(number, call?.durationSeconds || 0, call?.type === 'MISSED' ? 1 : 0).isPingBackScam)
   );
 
+  const latestScreenedEntry =
+    entries.find(
+      (e) =>
+        e.usedAiScreener &&
+        ((e.screeningSummaryBullets && e.screeningSummaryBullets.length > 0) || e.screeningSummary)
+    ) ||
+    entries.find((e) => e.usedAiScreener) ||
+    (call?.usedAiScreener ? call : null);
+
   const label =
     classification === 'SCAM'
       ? t('high_scam_risk')
@@ -256,6 +270,83 @@ export default function CallerDetailModal({
     } catch {}
     if (call && onSaveNote) onSaveNote(call.id, note.trim());
   };
+
+  const toggleDictation = useCallback(() => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setDictationError('Voice dictation is not supported in this browser. Please type or use Chrome, Edge, or Safari.');
+      setTimeout(() => setDictationError(null), 4000);
+      return;
+    }
+
+    if (isDictating) {
+      if (speechRecognitionRef.current) {
+        try {
+          speechRecognitionRef.current.stop();
+        } catch {}
+      }
+      setIsDictating(false);
+      return;
+    }
+
+    try {
+      setDictationError(null);
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = navigator.language || 'en-US';
+
+      const baseText = note ? note.trim() : '';
+
+      recognition.onstart = () => {
+        setIsDictating(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        let transcript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        const updated = baseText ? `${baseText} ${transcript.trim()}` : transcript.trim();
+        setNote(updated);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn('Speech recognition error:', event.error);
+        if (event.error === 'not-allowed') {
+          setDictationError('Microphone permission was denied. Please allow microphone access to dictate notes.');
+        } else if (event.error !== 'no-speech') {
+          setDictationError(`Dictation error: ${event.error}`);
+        }
+        setIsDictating(false);
+      };
+
+      recognition.onend = () => {
+        setIsDictating(false);
+      };
+
+      speechRecognitionRef.current = recognition;
+      recognition.start();
+    } catch (err: any) {
+      console.warn('Speech recognition initialization error:', err);
+      setDictationError('Could not start voice dictation.');
+      setIsDictating(false);
+    }
+  }, [isDictating, note]);
+
+  // Clean up dictation when modal closes or unmounts
+  useEffect(() => {
+    if (!isOpen && isDictating) {
+      if (speechRecognitionRef.current) {
+        try {
+          speechRecognitionRef.current.stop();
+        } catch {}
+      }
+      setIsDictating(false);
+    }
+  }, [isOpen, isDictating]);
 
   const handleDeleteRecording = async (id: string) => {
     await callRecordingService.deleteRecording(id);
@@ -307,7 +398,7 @@ export default function CallerDetailModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-0 backdrop-blur-sm sm:p-4" role="dialog" aria-modal="true">
       <section className="flex h-full w-full max-w-2xl flex-col overflow-hidden bg-[#0a1017] sm:h-auto sm:max-h-[92vh] sm:rounded-[28px] sm:border sm:border-slate-800 sm:shadow-2xl">
         {/* Header */}
-        <header className={`border-b px-5 py-5 ${isSpam ? 'border-rose-900/60 bg-rose-950/20' : 'border-slate-800 bg-[#0e1622]'}`}>
+        <header className={`border-b px-5 pb-5 safe-top-modal sm:pt-5 ${isSpam ? 'border-rose-900/60 bg-rose-950/20' : 'border-slate-800 bg-[#0e1622]'}`}>
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               {/* Badges Row */}
@@ -622,6 +713,66 @@ export default function CallerDetailModal({
             </div>
           </section>
 
+          {/* DEDICATED AI VOICE SCREENER SPOKEN SUMMARY SECTION */}
+          {latestScreenedEntry && (
+            <section className="rounded-2xl border border-indigo-500/30 bg-[#0c1222] shadow-lg shadow-indigo-950/20 overflow-hidden">
+              <div className="px-4 py-3 border-b border-indigo-500/20 bg-indigo-950/40 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Bot className="h-4 w-4 text-indigo-400" />
+                  <span className="text-sm font-bold text-white">AI Screener Spoken Summary</span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-indigo-500/30 bg-indigo-500/20 px-2 py-0.5 text-[9px] font-bold text-indigo-300">
+                    <Sparkles className="h-2.5 w-2.5 text-indigo-400" />
+                    Gemini AI
+                  </span>
+                </div>
+                {latestScreenedEntry.screeningDetectedIntent && (
+                  <span className="rounded-lg bg-indigo-900/60 px-2 py-0.5 text-[10px] font-semibold text-indigo-200 border border-indigo-500/30">
+                    {latestScreenedEntry.screeningDetectedIntent}
+                  </span>
+                )}
+              </div>
+              <div className="p-4 space-y-3 bg-[#080d17]">
+                {latestScreenedEntry.screeningSummaryBullets && latestScreenedEntry.screeningSummaryBullets.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-indigo-400/90">
+                      Spoken Content Key Bullets
+                    </div>
+                    <ul className="space-y-2 text-xs text-slate-200">
+                      {latestScreenedEntry.screeningSummaryBullets.map((bullet, idx) => (
+                        <li key={idx} className="flex items-start gap-2 rounded-lg bg-white/[0.03] p-2 border border-white/5">
+                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400" />
+                          <span className="leading-relaxed text-slate-200">{bullet}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : latestScreenedEntry.screeningSummary ? (
+                  <p className="text-xs leading-relaxed text-slate-200">{latestScreenedEntry.screeningSummary}</p>
+                ) : (
+                  <p className="text-xs text-slate-400 italic">Call was screened by AI Voice Screener.</p>
+                )}
+
+                {latestScreenedEntry.screeningTranscript && latestScreenedEntry.screeningTranscript.length > 0 && (
+                  <details className="mt-2 text-xs text-slate-400 group">
+                    <summary className="cursor-pointer font-semibold text-indigo-300 hover:text-indigo-200 transition select-none flex items-center gap-1">
+                      <span>View Spoken Transcript ({latestScreenedEntry.screeningTranscript.length} lines)</span>
+                    </summary>
+                    <div className="mt-2 space-y-1.5 max-h-48 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-[11px]">
+                      {latestScreenedEntry.screeningTranscript.map((t, tIdx) => (
+                        <div key={tIdx} className={`p-1.5 rounded-lg ${t.sender === 'caller' ? 'bg-slate-900 text-slate-200' : 'bg-indigo-950/40 text-indigo-200'}`}>
+                          <span className="font-bold text-[10px] uppercase opacity-70 block mb-0.5">
+                            {t.sender === 'caller' ? 'Caller' : 'AI Voice Screener'}:
+                          </span>
+                          <span>{t.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </div>
+            </section>
+          )}
+
           {/* DEDICATED CALL RECORDINGS SECTION FOR THIS NUMBER */}
           {recordings.length > 0 && (
             <section className="rounded-2xl border border-emerald-500/30 bg-[#0e1722] shadow-lg shadow-black/30 overflow-hidden">
@@ -802,30 +953,81 @@ export default function CallerDetailModal({
 
           {/* Caller note */}
           <section className="rounded-2xl border border-slate-800 bg-[#0e141c] p-4">
-            <div className="flex items-center gap-2 text-sm font-bold text-white">
-              <StickyNote className="h-4 w-4 text-amber-400" />
-              Caller note
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-bold text-white">
+                <StickyNote className="h-4 w-4 text-amber-400" />
+                Caller note
+              </div>
+              <button
+                type="button"
+                onClick={toggleDictation}
+                title={isDictating ? 'Stop dictation' : 'Dictate note with microphone using Web Speech API'}
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition ${
+                  isDictating
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
+                    : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60'
+                }`}
+              >
+                {isDictating ? (
+                  <>
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75"></span>
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500"></span>
+                    </span>
+                    <Mic className="h-3.5 w-3.5 text-rose-400" />
+                    <span>Listening…</span>
+                  </>
+                ) : (
+                  <>
+                    <Mic className="h-3.5 w-3.5 text-amber-400" />
+                    <span>Dictate note</span>
+                  </>
+                )}
+              </button>
             </div>
+
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={3}
-              placeholder="Write a private note about this caller…"
-              className="mt-3 w-full resize-none rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-white outline-none placeholder-slate-600 focus:border-amber-500/40"
+              placeholder={isDictating ? "Listening to speech... speak your note now…" : "Write or dictate a private note about this caller…"}
+              className={`mt-3 w-full resize-none rounded-xl border bg-slate-950 p-3 text-sm text-white outline-none placeholder-slate-600 transition ${
+                isDictating ? 'border-rose-500/60 ring-1 ring-rose-500/30' : 'border-slate-700 focus:border-amber-500/40'
+              }`}
             />
-            <div className="mt-2 flex items-center gap-2">
-              <button
-                onClick={saveNote}
-                disabled={!number}
-                className="rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-bold text-slate-950 disabled:opacity-40 transition"
-              >
-                Save note
-              </button>
-              {noteSavedFeedback && (
-                <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1 animate-in fade-in">
-                  <Check className="w-3.5 h-3.5" />
-                  Saved note
-                </span>
+
+            {dictationError && (
+              <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-300">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+                <span>{dictationError}</span>
+              </div>
+            )}
+
+            <div className="mt-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={saveNote}
+                  disabled={!number}
+                  className="rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-bold text-slate-950 disabled:opacity-40 transition"
+                >
+                  Save note
+                </button>
+                {noteSavedFeedback && (
+                  <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1 animate-in fade-in">
+                    <Check className="w-3.5 h-3.5" />
+                    Saved note
+                  </span>
+                )}
+              </div>
+
+              {isDictating && (
+                <button
+                  type="button"
+                  onClick={toggleDictation}
+                  className="text-xs text-rose-400 hover:text-rose-300 underline font-medium"
+                >
+                  Done speaking
+                </button>
               )}
             </div>
           </section>

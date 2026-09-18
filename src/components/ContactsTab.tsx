@@ -4,10 +4,12 @@ import {
   Building2,
   Clock,
   Edit2,
+  EyeOff,
   Heart,
   Phone,
   Plus,
   Search,
+  Shield,
   ShieldCheck,
   Star,
   Trash2,
@@ -22,13 +24,15 @@ import ModernFilterBar, { FilterTabOption } from './ModernFilterBar';
 
 interface ContactsTabProps {
   contacts: ContactItem[];
-  onInitiateCall: (number: string, name?: string) => void;
+  onInitiateCall: (number: string, name?: string, sim?: any, isPrivate?: boolean) => void;
   onAddContact: (contact: Omit<ContactItem, 'id'>) => void;
   onUpdateContact: (id: string, updates: Partial<ContactItem>) => void;
   onDeleteContact: (id: string) => void;
   onToggleFavorite: (id: string) => void;
   recentCalls: CallLogItem[];
   density?: DisplayDensity;
+  onOpenCallerDetail?: (item: any) => void;
+  privateCallPrefix?: string;
 }
 
 type CategoryFilter = 'ALL' | 'FAVORITES' | 'FAMILY' | 'WORK' | 'BUSINESSES' | 'RECENT';
@@ -42,6 +46,8 @@ function ContactsTab({
   onDeleteContact,
   onToggleFavorite,
   density = 'comfortable',
+  onOpenCallerDetail,
+  privateCallPrefix = '*67',
 }: ContactsTabProps) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
@@ -281,7 +287,7 @@ function ContactsTab({
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="mt-6 grid grid-cols-3 gap-2">
+            <div className="mt-6 grid grid-cols-4 gap-2">
               <button
                 type="button"
                 onClick={() => onInitiateCall(selected.number, selected.name)}
@@ -289,6 +295,15 @@ function ContactsTab({
               >
                 <Phone className="h-5 w-5" />
                 <span className="text-xs font-semibold">{t('call')}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onInitiateCall(selected.number, selected.name, undefined, true)}
+                className="flex flex-col items-center gap-1.5 rounded-2xl bg-indigo-500/10 p-3 text-indigo-300 hover:bg-indigo-500/20 transition"
+                title={`Call with ${privateCallPrefix} caller ID masking`}
+              >
+                <EyeOff className="h-5 w-5 text-indigo-400" />
+                <span className="text-xs font-semibold">Private</span>
               </button>
               <button
                 type="button"
@@ -307,6 +322,21 @@ function ContactsTab({
                 <span className="text-xs font-semibold">{t('edit')}</span>
               </button>
             </div>
+
+            {onOpenCallerDetail && (
+              <button
+                type="button"
+                onClick={() => {
+                  const target = selected;
+                  setSelected(null);
+                  onOpenCallerDetail({ number: target.number, name: target.name });
+                }}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-700/80 bg-slate-900/90 p-3 text-xs font-bold text-slate-200 hover:bg-slate-800 transition"
+              >
+                <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                <span>View Security Profile & Call History</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {

@@ -29,6 +29,36 @@ class ProductionCallScreeningService : CallScreeningService() {
             return
         }
 
+        val isPrivate = details.handle == null ||
+            details.handlePresentation == Call.Details.PRESENTATION_RESTRICTED ||
+            number.isBlank() ||
+            number.equals("private", ignoreCase = true) ||
+            number.equals("unknown", ignoreCase = true) ||
+            number.equals("0")
+
+        if (isPrivate) {
+            if (prefs.getBoolean("block_private_hidden", true)) {
+                CallNotificationHelper.showSecurityWarning(
+                    applicationContext,
+                    "Private / Withheld Number",
+                    "PRIVATE_CALL_BLOCKED",
+                    "HIGH",
+                    "Private and anonymous calls are automatically blocked by your protection settings."
+                )
+                respondToCall(
+                    details,
+                    CallResponse.Builder()
+                        .setDisallowCall(true)
+                        .setRejectCall(true)
+                        .setSilenceCall(false)
+                        .setSkipCallLog(false)
+                        .setSkipNotification(false)
+                        .build()
+                )
+                return
+            }
+        }
+
         val whitelist = readArray(prefs.getString("whitelist", "[]"))
         if (matchesList(whitelist, normalized)) {
             respondToCall(details, allowResponse())

@@ -2,6 +2,7 @@ import { memo, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Ban,
+  Bot,
   ChevronRight,
   Disc,
   EyeOff,
@@ -15,6 +16,7 @@ import {
   Search,
   ShieldAlert,
   ShieldCheck,
+  Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
@@ -283,6 +285,12 @@ function RecentsTab({
                               REC
                             </span>
                           )}
+                          {g.calls.some((c) => c.usedAiScreener) && (
+                            <span className="inline-flex items-center gap-1 rounded bg-indigo-500/20 border border-indigo-500/30 px-1.5 py-0.5 text-[8.5px] font-bold text-indigo-300">
+                              <Bot className="h-2.5 w-2.5 text-indigo-400" />
+                              AI Screened
+                            </span>
+                          )}
                         </div>
                         <div className={`flex flex-wrap items-center text-slate-400 transition-all ${isCompact ? 'mt-0 text-[10px] gap-x-1' : 'mt-0.5 text-[11px] gap-x-1.5'}`}>
                           <span className="font-mono">{formatPhoneNumber(g.number)}</span>
@@ -295,6 +303,12 @@ function RecentsTab({
                           <span>·</span>
                           <span>{timeLabel(latest.timestamp)}</span>
                         </div>
+                        {latest.usedAiScreener && latest.screeningSummaryBullets && latest.screeningSummaryBullets.length > 0 && (
+                          <div className={`flex items-center gap-1.5 text-indigo-300 ${isCompact ? 'mt-0.5 text-[10px]' : 'mt-1 text-[11px]'}`}>
+                            <Sparkles className="h-2.5 w-2.5 shrink-0 text-indigo-400" />
+                            <span className="truncate">{latest.screeningSummaryBullets[0]}</span>
+                          </div>
+                        )}
                         {g.missedCount > 0 && (
                           <div className={`font-semibold text-amber-400 ${isCompact ? 'mt-0 text-[9.5px]' : 'mt-0.5 text-[10px]'}`}>
                             {g.missedCount} {t('missed')}

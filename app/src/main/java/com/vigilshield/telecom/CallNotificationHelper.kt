@@ -27,10 +27,12 @@ object CallNotificationHelper {
         if (manager.getNotificationChannel(CHANNEL_ID) == null) {
             manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Calls", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "Incoming, ongoing and missed call alerts"
-                enableVibration(false)
+                enableVibration(true)
                 setSound(null, null)
                 lightColor = Color.BLUE
                 setShowBadge(true)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                setBypassDnd(true)
             })
         }
         if (manager.getNotificationChannel(SECURITY_CHANNEL_ID) == null) manager.createNotificationChannel(NotificationChannel(SECURITY_CHANNEL_ID, "Call security", NotificationManager.IMPORTANCE_HIGH).apply {
@@ -70,13 +72,21 @@ object CallNotificationHelper {
         putExtra("open_call_id", callId)
         putExtra("open_call_number", number)
         putExtra("open_call_name", name)
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        putExtra("is_incoming_call", true)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
     }
 
     fun showMissedCall(context: Context, name: String, number: String) {
         if (!callAlertsEnabled(context)) return
         ensureChannel(context)
-        val openIntent = PendingIntent.getActivity(context, MISSED_ID, Intent(context, MainActivity::class.java).apply { putExtra("open_tab", "recents"); putExtra("search_number", number); addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP) }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val openIntent = PendingIntent.getActivity(context, MISSED_ID, Intent(context, MainActivity::class.java).apply {
+            action = "com.vigilshield.telecom.OPEN_MISSED_CALL"
+            putExtra("open_tab", "recents")
+            putExtra("search_number", number)
+            putExtra("open_call_number", number)
+            putExtra("open_call_name", name)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val display = identityWithNumber(context, name, number)
         val detail = if (privacyMode(context)) "Missed call: $number" else "Missed call from $display"
         val callBackIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(number)}"))
@@ -97,7 +107,7 @@ object CallNotificationHelper {
         val dismiss = PendingIntent.getBroadcast(context, callId.hashCode() + 4, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_DISMISS).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val display = identity(context, name, number)
         val person = Person.Builder().setName(display).setImportant(true).build()
-        val builder = applyPrivacy(NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield)
             .setContentIntent(openIntent)
             .setDeleteIntent(dismiss)
@@ -106,7 +116,8 @@ object CallNotificationHelper {
             .setTimeoutAfter(60_000L)
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setFullScreenIntent(openIntent, true), context)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setFullScreenIntent(openIntent, true)
         if (Build.VERSION.SDK_INT >= 31) builder.setStyle(NotificationCompat.CallStyle.forIncomingCall(person, decline, answer))
         else builder.setContentTitle(display).setContentText("Incoming call").addAction(0, "Decline", decline).addAction(0, "Answer", answer)
         val notif = builder.build()

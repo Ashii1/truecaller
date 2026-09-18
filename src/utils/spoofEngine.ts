@@ -204,13 +204,13 @@ export const PRIVACY_PREFIX_OPTIONS = [
  * Returns the dialed number with private caller ID prefix applied
  */
 export function formatPrivateCallNumber(targetNumber: string, prefix = '*67'): string {
-  const cleanTarget = targetNumber.trim();
-  if (!cleanTarget) return '';
+  const rawTarget = (targetNumber || '').trim().replace(/[\s\-()]/g, '');
+  if (!rawTarget) return '';
 
-  const cleanPrefix = prefix.trim();
+  const cleanPrefix = (prefix || '*67').trim();
   // Avoid double prefixing
-  if (cleanTarget.startsWith(cleanPrefix)) {
-    return cleanTarget;
+  if (rawTarget.startsWith(cleanPrefix)) {
+    return rawTarget;
   }
-  return `${cleanPrefix}${cleanTarget}`;
+  return `${cleanPrefix}${rawTarget}`;
 }
