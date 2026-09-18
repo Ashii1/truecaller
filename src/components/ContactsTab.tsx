@@ -269,7 +269,7 @@ function ContactsTab({
 
       {/* Contact Details Modal */}
       {selected && !editing && !showAdd && (
-        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4">
           <div className="w-full max-w-md rounded-t-[30px] border border-white/10 bg-[#10161d] p-5 sm:rounded-[30px]">
             <div className="flex items-start justify-between">
               <div>
@@ -354,7 +354,7 @@ function ContactsTab({
 
       {/* Add / Edit Contact Modal */}
       {(showAdd || editing) && (
-        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4">
           <form
             onSubmit={submit}
             className="w-full max-w-md rounded-t-[30px] border border-white/10 bg-[#10161d] p-5 sm:rounded-[30px]"
