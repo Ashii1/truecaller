@@ -51,7 +51,7 @@ const Navigation = memo(function Navigation({
     <nav
       id="ui-floating-navigation"
       aria-label="UI 9.5 Floating Dialer Navigation"
-      className="fixed bottom-3 sm:bottom-4 inset-x-0 z-50 pointer-events-none flex justify-center px-3 sm:px-4 pb-[max(env(safe-area-inset-bottom,0px),0px)]"
+      className="fixed bottom-3 sm:bottom-4 inset-x-0 z-[100] pointer-events-none flex justify-center px-3 sm:px-4 pb-[max(env(safe-area-inset-bottom,0px),0px)]" style={{ touchAction: "manipulation" }}
     >
       <div className="pointer-events-auto flex w-full max-w-[420px] items-center justify-between rounded-full border border-white/[0.12] bg-[#0c1219]/92 backdrop-blur-2xl px-1.5 sm:px-2 py-1.5 shadow-[0_16px_36px_rgba(0,0,0,0.7),0_2px_8px_rgba(0,0,0,0.4)] ring-1 ring-white/[0.06] transition-all">
         {tabs.map((tab) => (
