@@ -26,7 +26,7 @@ export function normalizePhoneNumber(rawNumber: string): string {
  */
 export function formatPhoneNumber(num: string): string {
   if (!num) return 'Unknown';
-  const lower = num.toLowerCase().trim();
+  const lower = String(num ?? '').toLowerCase().trim();
   if (lower === 'private' || lower === 'anonymous' || num === '0' || lower === 'unknown') {
     return 'Private / Hidden';
   }
@@ -789,13 +789,13 @@ export function screenEvent({
   settings: ShieldSettings;
 }): ScreeningResult {
   const normSender = normalizePhoneNumber(sender);
-  const isPrivate = !sender || sender.trim() === '' || sender.toLowerCase() === 'private' || sender.toLowerCase() === 'anonymous' || sender === '0';
+  const isPrivate = !sender || sender.trim() === '' || String(sender ?? '').toLowerCase() === 'private' || String(sender ?? '').toLowerCase() === 'anonymous' || sender === '0';
   const meta = resolveNumberMetadata(sender);
 
   // 1. Check Whitelist first - Whitelist always bypasses all shields
   const whitelisted = whitelist.find((w) => {
     const normW = normalizePhoneNumber(w.value);
-    return normW === normSender || w.value.toLowerCase() === sender.toLowerCase();
+    return normW === normSender || String(w.value ?? '').toLowerCase() === String(sender ?? '').toLowerCase();
   });
 
   if (whitelisted) {
@@ -868,7 +868,7 @@ export function screenEvent({
 
     if (rule.matchType === 'EXACT') {
       const normVal = normalizePhoneNumber(rule.value);
-      if (normVal === normSender || rule.value.toLowerCase() === sender.toLowerCase()) {
+      if (normVal === normSender || String(rule.value ?? '').toLowerCase() === String(sender ?? '').toLowerCase()) {
         return {
           isBlocked: true,
           action: type === 'SMS' ? 'QUARANTINED' : (settings.autoCancelSpamCalls || settings.dropCallInstantly) ? 'DROPPED' : 'BLOCKED',
@@ -932,7 +932,7 @@ export function screenEvent({
     }
 
     if (rule.matchType === 'KEYWORD' && type === 'SMS' && messageBody) {
-      const keywords = rule.value.toLowerCase().split(/\s+/).filter(Boolean);
+      const keywords = String(rule.value ?? '').toLowerCase().split(/\s+/).filter(Boolean);
       const textLower = messageBody.toLowerCase();
       const matches = keywords.filter((kw) => textLower.includes(kw));
       if (matches.length > 0 && matches.length >= Math.min(2, keywords.length)) {
