@@ -65,11 +65,11 @@ export default function DataSourcesModal({
             },
             {
               id: 'community_reputation',
-              name: 'VigilShield Distributed Anti-Abuse Network',
+              name: 'CallShield Distributed Anti-Abuse Network',
               authority: 'Time-Decayed Community Telemetry',
               confidence: 'Weighted (40% - 95%)',
               caching: '1 hour',
-              license: 'VigilShield Privacy First Policy',
+              license: 'CallShield Privacy First Policy',
             }
           ]);
         });
@@ -163,7 +163,7 @@ export default function DataSourcesModal({
               <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-300 flex items-start gap-2.5">
                 <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-semibold">Zero-Scraping Guarantee:</span> VigilShield never scrapes social media, websites, or proprietary caller-ID services. Every data point is sourced from official regulatory datasets, cryptographic telecom headers, or audited enterprise filings.
+                  <span className="font-semibold">Zero-Scraping Guarantee:</span> CallShield never scrapes social media, websites, or proprietary caller-ID services. Every data point is sourced from official regulatory datasets, cryptographic telecom headers, or audited enterprise filings.
                 </div>
               </div>
 
@@ -201,7 +201,7 @@ export default function DataSourcesModal({
                   Your Address Book Never Leaves Your Phone
                 </h4>
                 <p className="text-slate-400 leading-relaxed">
-                  Unlike traditional caller-ID apps that upload your entire contact book to build searchable phone directories, VigilShield performs all contact matching entirely in client-side device memory. Your friends, family, and private contacts are 100% private to you.
+                  Unlike traditional caller-ID apps that upload your entire contact book to build searchable phone directories, CallShield performs all contact matching entirely in client-side device memory. Your friends, family, and private contacts are 100% private to you.
                 </p>
               </div>
 
@@ -247,7 +247,7 @@ export default function DataSourcesModal({
                   Android Implementation (CallScreeningService)
                 </h4>
                 <p className="text-slate-400 leading-relaxed">
-                  On Android 10+ (API 29+), VigilShield binds directly to the OS Telecom subsystem via <code className="text-indigo-300">android.telecom.CallScreeningService</code>. Incoming calls are intercepted in real-time before your phone rings, matching against local SQLite rules and STIR/SHAKEN verification tokens.
+                  On Android 10+ (API 29+), CallShield binds directly to the OS Telecom subsystem via <code className="text-indigo-300">android.telecom.CallScreeningService</code>. Incoming calls are intercepted in real-time before your phone rings, matching against local SQLite rules and STIR/SHAKEN verification tokens.
                 </p>
               </div>
 
@@ -257,7 +257,7 @@ export default function DataSourcesModal({
                   iOS Implementation (CallKit CXCallDirectoryProvider)
                 </h4>
                 <p className="text-slate-400 leading-relaxed">
-                  On iOS 14+, Apple does not permit third-party apps to execute real-time code during incoming calls. Instead, VigilShield compiles a pre-sorted database of blocked and identified numbers into the OS CallKit extension, respecting iOS's strict &lt; 5MB memory limit.
+                  On iOS 14+, Apple does not permit third-party apps to execute real-time code during incoming calls. Instead, CallShield compiles a pre-sorted database of blocked and identified numbers into the OS CallKit extension, respecting iOS's strict &lt; 5MB memory limit.
                 </p>
               </div>
             </div>
