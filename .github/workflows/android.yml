@@ -8,8 +8,6 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
-    env:
-      VIGILSHIELD_HAS_RELEASE_KEY: ${{ secrets.VIGILSHIELD_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -24,10 +22,10 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
       - uses: gradle/actions/setup-gradle@v5
         with:
-          gradle-version: '8.10.2'
+          gradle-version: "8.10.2"
       - name: Configure persistent release signing
         env:
           KEYSTORE_BASE64: ${{ secrets.VIGILSHIELD_KEYSTORE_BASE64 }}
@@ -35,30 +33,23 @@ jobs:
           KEY_ALIAS: ${{ secrets.VIGILSHIELD_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.VIGILSHIELD_KEY_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "Using custom release keystore from repository secrets..."
-            echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/vigilshield-release.jks"
-            test -s "$RUNNER_TEMP/vigilshield-release.jks"
-            {
-              echo "VIGILSHIELD_KEYSTORE_FILE=$RUNNER_TEMP/vigilshield-release.jks"
-              echo "VIGILSHIELD_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
-              echo "VIGILSHIELD_KEY_ALIAS=$KEY_ALIAS"
-              echo "VIGILSHIELD_KEY_PASSWORD=$KEY_PASSWORD"
-            } >> "$GITHUB_ENV"
-          else
-            echo "Using bundled release keystore from project repository..."
-            {
-              echo "VIGILSHIELD_KEYSTORE_FILE=$GITHUB_WORKSPACE/release-keystore.jks"
-              echo "VIGILSHIELD_KEYSTORE_PASSWORD=vigilshield123"
-              echo "VIGILSHIELD_KEY_ALIAS=vigilshield-key"
-              echo "VIGILSHIELD_KEY_PASSWORD=vigilshield123"
-            } >> "$GITHUB_ENV"
-          fi
+          test -n "$KEYSTORE_BASE64" || { echo "Missing VIGILSHIELD_KEYSTORE_BASE64 GitHub secret"; exit 1; }
+          test -n "$KEYSTORE_PASSWORD" || { echo "Missing VIGILSHIELD_KEYSTORE_PASSWORD GitHub secret"; exit 1; }
+          test -n "$KEY_ALIAS" || { echo "Missing VIGILSHIELD_KEY_ALIAS GitHub secret"; exit 1; }
+          test -n "$KEY_PASSWORD" || { echo "Missing VIGILSHIELD_KEY_PASSWORD GitHub secret"; exit 1; }
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/vigilshield-release.jks"
+          test -s "$RUNNER_TEMP/vigilshield-release.jks"
+          {
+            echo "VIGILSHIELD_KEYSTORE_FILE=$RUNNER_TEMP/vigilshield-release.jks"
+            echo "VIGILSHIELD_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "VIGILSHIELD_KEY_ALIAS=$KEY_ALIAS"
+            echo "VIGILSHIELD_KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
       - name: Build release APK
         run: gradle :app:assembleRelease --no-daemon
       - name: Verify APK signature and version
         run: |
-          APK=$(find app/build/outputs/apk/release -name '*.apk' -type f | head -n 1)
+          APK=$(find app/build/outputs/apk/release -name "*.apk" -type f | head -n 1)
           test -n "$APK"
           echo "Built $APK"
           if command -v apksigner >/dev/null 2>&1; then
