@@ -221,6 +221,7 @@ class MainActivity : AppCompatActivity() {
         hideError()
         syncWebSettingsToNative()
         dispatchLaunchIntent()
+        requestPermissionsIfNeeded()
         NativeInCallService.emitActiveCalls()
     }
 
