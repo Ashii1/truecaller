@@ -137,6 +137,16 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
         }
         val clean = number.trim().replace(Regex("[^0-9+*#]"), "")
         if (clean.length < 3) return JSONObject().put("success", false).put("message", "Invalid phone number").toString()
+
+        // Guard against duplicate ACTION_CALL/UI events arriving within the same
+        // short window. Android Telecom itself is the single source of truth.
+        val now = System.currentTimeMillis()
+        if (clean == lastCallRequestNumber && now - lastCallRequestAt < 1500L) {
+            return JSONObject().put("success", false).put("message", "Call is already being started").toString()
+        }
+        lastCallRequestNumber = clean
+        lastCallRequestAt = now
+
         return try {
             val extras = Bundle()
             val accounts = runCatching { telecom.callCapablePhoneAccounts }.getOrNull().orEmpty()
