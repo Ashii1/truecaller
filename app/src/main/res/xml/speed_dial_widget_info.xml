@@ -9,4 +9,4 @@
     android:previewImage="@drawable/ic_vigilshield"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
-    android:description="@string/widget_speed_dial_desc" />
+    android:description="@string/widget_phone_desc" />
