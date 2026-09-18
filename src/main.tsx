@@ -8,13 +8,13 @@ import { registerSW } from 'virtual:pwa-register';
 import { runCallShieldTestSuite } from './tests/callerId.test';
 
 const RECOVERABLE_STORAGE_KEYS = [
-  'vigilshield_settings',
-  'vigilshield_rules',
-  'vigilshield_whitelist',
-  'vigilshield_contacts',
-  'vigilshield_calls',
-  'vigilshield_timeline',
-  'vigilshield_autocancel',
+  'callshield_settings',
+  'callshield_rules',
+  'callshield_whitelist',
+  'callshield_contacts',
+  'callshield_calls',
+  'callshield_timeline',
+  'callshield_autocancel',
 ];
 
 class AppErrorBoundary extends Component<{children: ReactNode}, {error: Error | null}> {
