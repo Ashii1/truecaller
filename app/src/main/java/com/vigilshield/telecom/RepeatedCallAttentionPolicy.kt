@@ -35,10 +35,10 @@ object RepeatedCallAttentionPolicy {
         updated.put(JSONObject().put("number", normalized).put("timestamp", now))
         prefs.edit().putString(EVENTS_KEY, updated.toString()).apply()
 
-        if (recent.size + 1 >= THRESHOLD && recent.size + 1 <= THRESHOLD + 1) {
+        if (recent.size + 1 >= THRESHOLD) {
             val privacy = prefs.getBoolean("privacy_mode", false)
             val name = if (!privacy && displayName.isNotBlank()) displayName else "Unknown caller"
-            CallNotificationHelper.showRepeatedCallAttention(context, name, if (privacy) "" else number)
+            CallNotificationHelper.showRepeatedCallAttention(context, name, if (privacy) "" else number, recent.size + 1)
         }
     }
 
