@@ -1,5 +1,5 @@
 /**
- * VigilShield Public Directory Engine
+ * CallShield Public Directory Engine
  * Comprehensive public directory with verified caller profiles, business identities,
  * public services, known telemarketer/scam databases, and deterministic community caller resolution.
  *
@@ -7,7 +7,7 @@
  * along with an explicit "Spam" or "Safe" verification status.
  */
 
-import { TruecallerDirectoryProfile, RiskLevel, SpamCategory } from '../types';
+import { CallShieldDirectoryProfile, RiskLevel, SpamCategory } from '../types';
 
 export interface PublicDirectoryRecord {
   number: string;
@@ -451,7 +451,7 @@ export const PUBLIC_DIRECTORY_DATABASE: Record<string, PublicDirectoryRecord> = 
     reputationText: 'Dangerous: Threatens power cut tonight unless fake payment app is installed.',
   },
 
-  // High-Risk Spammers Reported by Community & Truecaller
+  // High-Risk Spammers Reported by Community & CallShield
   '9981024217': {
     number: '+91 99810 24217',
     name: 'Fake Investment Spam Call',
