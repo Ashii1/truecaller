@@ -22,7 +22,7 @@ import {
   Copy,
   Trash2
 } from 'lucide-react';
-import { ActiveCallSession, TruecallerDirectoryProfile, CallRecordingItem } from '../types';
+import { ActiveCallSession, CallShieldDirectoryProfile, CallRecordingItem } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import { playDtmfTone, triggerHapticFeedback, playNotificationChime } from '../utils/audioAlerts';
 import { telecomBridge } from '../services/telephony/telecomBridge';
@@ -32,7 +32,7 @@ import { callRecordingService, DEFAULT_RECORDINGS_FOLDER } from '../services/cal
 interface ActiveCallModalProps {
   session: ActiveCallSession | null;
   onEndCall: (recordingItem?: CallRecordingItem | null, callDuration?: number, callerNote?: string) => void;
-  lookupProfile: (num: string) => TruecallerDirectoryProfile;
+  lookupProfile: (num: string) => CallShieldDirectoryProfile;
   onAddCall?: (number: string) => void;
 }
 
@@ -323,7 +323,7 @@ export default function ActiveCallModal({
             </div>
             <div className="flex items-center space-x-1 text-[10px] text-slate-400 font-mono">
               <Folder className="w-3 h-3 text-amber-400/80" />
-              <span>VigilShield/</span>
+              <span>CallShield/</span>
             </div>
           </div>
         )}
