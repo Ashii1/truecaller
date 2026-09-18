@@ -4,6 +4,7 @@ export const TRANSLATIONS = {
   en: {
     // App & Header
     app_title: 'CallShield',
+    app_tagline: 'CallShield - Know Who\\'s Calling',
     default_phone_app: 'Default phone app',
     phone_setup_required: 'Phone setup required',
     set_as_phone_app: 'Set as phone app',
@@ -86,7 +87,7 @@ export const TRANSLATIONS = {
     search_placeholder_dialer: 'Name or phone number',
     paste: 'Paste',
     copied_number_ready: 'Copied number ready',
-    protected_by_vigilshield: 'Calls are protected by CallShield',
+    protected_by_callshield: 'Calls are protected by CallShield',
     choose_line: 'Choose line',
     call_using: 'Call using',
     sim1_label: 'SIM 1 (Personal)',
@@ -415,7 +416,7 @@ export const TRANSLATIONS = {
     search_placeholder_dialer: 'பெயர் அல்லது தொலைபேசி எண்',
     paste: 'ஒட்டு',
     copied_number_ready: 'நகலெடுத்த எண் தயாராக உள்ளது',
-    protected_by_vigilshield: 'அழைப்புகள் CallShield மூலம் பாதுகாக்கப்படுகின்றன',
+    protected_by_callshield: 'அழைப்புகள் CallShield மூலம் பாதுகாக்கப்படுகின்றன',
     choose_line: 'சிம்மைத் தேர்ந்தெடுக்கவும்',
     call_using: 'இதைப் பயன்படுத்தி அழைக்கவும்',
     sim1_label: 'சிம் 1 (தனிப்பட்ட)',
