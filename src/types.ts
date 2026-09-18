@@ -20,7 +20,7 @@ export interface CallRecordingItem {
   callerName?: string;
   timestamp: number;
   durationSeconds: number;
-  folderPath: string; // e.g. "Internal Storage/Recordings/VigilShield/"
+  folderPath: string; // e.g. "Internal Storage/Recordings/CallShield/"
   fileName: string;   // e.g. "REC_9876543210_20260916_1224.wav"
   fileSizeBytes: number;
   mimeType: string;
@@ -44,7 +44,7 @@ export interface SpamReport { id:string; number:string; category:string; descrip
 export interface DisputeRequest { id:string; number:string; requesterName:string; email:string; reason:string; timestamp:number; status:'UNDER_REVIEW'|'APPROVED'|'REJECTED'; }
 export interface SpamCluster { id:string; prefix:string; label:string; count:number; sampleNumbers:string[]; riskScore:number; blocked:boolean; }
 export interface ProtectionLog { id:string; timestamp:number; type:'CALL'|'SMS'; sender:string; senderName?:string; messageBody?:string; actionTaken:ActionTaken; matchedRuleId?:string; matchedReason:string; riskScore:number; riskLevel?:RiskLevel; spamCategory:SpamCategory; flaggedKeywords?:string[]; reviewed?:boolean; }
-export interface TruecallerDirectoryProfile { number:string; name:string; spamScore:number; riskLevel?:RiskLevel; isSpam:boolean; spamReportsCount:number; spamCategory?:SpamCategory; spamReason?:string; topTags:string[]; carrier:string; location:string; lineType:'Mobile'|'Landline'|'VoIP'|'Toll-Free'|'Telemarketing Series'|'Unknown'; isVerified:boolean; source?:string; userVote?:'SPAM'|'SAFE'; communityComments:{author:string;text:string;date:string}[]; reportBreakdown?:{telemarketingPercent:number;scamPercent:number;robocallPercent:number}; authorizedSources?:string[]; }
+export interface CallShieldDirectoryProfile { number:string; name:string; spamScore:number; riskLevel?:RiskLevel; isSpam:boolean; spamReportsCount:number; spamCategory?:SpamCategory; spamReason?:string; topTags:string[]; carrier:string; location:string; lineType:'Mobile'|'Landline'|'VoIP'|'Toll-Free'|'Telemarketing Series'|'Unknown'; isVerified:boolean; source?:string; userVote?:'SPAM'|'SAFE'; communityComments:{author:string;text:string;date:string}[]; reportBreakdown?:{telemarketingPercent:number;scamPercent:number;robocallPercent:number}; authorizedSources?:string[]; }
 export interface ShieldSettings { masterEnabled:boolean; firewallMode:FirewallMode; tempProtection:TemporaryProtectionMode; tempProtectionExpiresAt?:number; scamShieldEnabled:boolean; smartCallScreeningEnabled:boolean; autoCancelSpamCalls:boolean; cancelDelaySeconds:number; blockUnknownNumbers:boolean; blockPrivateHidden:boolean; blockInternational:boolean; blockShortcodes:boolean; aggressiveSmsFilter:boolean; aiAnalysisEnabled:boolean; dropCallInstantly:boolean; playRingtone:boolean; autoSyncDatabase:boolean; lastSyncedTimestamp:number; sensitivity:SensitivityLevel; communityDatabaseVersion:string; neighborSpoofEnabled?:boolean; pingBackShieldEnabled?:boolean; userPhoneNumber?:string; privateCallPrefix?:string; }
 export interface PermissionStatus { callScreeningRole:boolean; defaultSmsRole:boolean; readContacts:boolean; postNotifications:boolean; callLogAccess?:boolean; overlayDrawAccess?:boolean; }
 export interface ScreeningResult { isBlocked:boolean; action:ActionTaken; reason:string; riskScore:number; category:SpamCategory; callerName?:string; reportsCount:number; carrier?:string; location?:string; lineType?:string; topTags?:string[]; matchedRule?:BlockRule; flaggedKeywords?:string[]; extractedUrls?:string[]; }
