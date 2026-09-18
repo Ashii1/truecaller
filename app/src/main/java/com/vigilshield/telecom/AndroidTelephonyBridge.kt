@@ -129,7 +129,7 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
     @JavascriptInterface fun placeRealCall(number: String, accountHandleId: String?): String {
         if (!isDefaultDialer()) {
             requestDefaultDialerRole()
-            return JSONObject().put("success", false).put("message", "Please set VigilShield as the default Phone app").toString()
+            return JSONObject().put("success", false).put("message", "Please set CallShield as the default Phone app").toString()
         }
         if (ContextCompat.checkSelfPermission(activity, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
             requestDevicePermissions()
@@ -160,7 +160,7 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
             // Do not launch a second activity here. NativeInCallService.onCallAdded()
             // owns the in-call UI lifecycle after Telecom accepts the call.
 
-            // Once VigilShield owns ROLE_DIALER, Android Telecom is the single call entry point.
+            // Once CallShield owns ROLE_DIALER, Android Telecom is the single call entry point.
             // Never fall back to ACTION_CALL here: that can hand the call back to the
             // manufacturer's Phone app and can also create duplicate call attempts.
             telecom.placeCall(Uri.fromParts("tel", clean, null), extras)
@@ -176,7 +176,7 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
         }
         val appWidgetManager = AppWidgetManager.getInstance(activity)
         if (!appWidgetManager.isRequestPinAppWidgetSupported) {
-            return JSONObject().put("success", false).put("message", "Launcher does not support automated widget pinning. Long-press home screen to add VigilShield widget.").toString()
+            return JSONObject().put("success", false).put("message", "Launcher does not support automated widget pinning. Long-press home screen to add CallShield widget.").toString()
         }
         val providerClass = if (type == "security") SecurityWidgetProvider::class.java else SpeedDialWidgetProvider::class.java
         val provider = ComponentName(activity, providerClass)
@@ -366,7 +366,7 @@ class NativeInCallService : InCallService() {
             CallNotificationHelper.showIncomingCall(applicationContext, id, name, number)
             launchIncomingCallActivity(applicationContext, id, name, number)
         } else {
-            // OUTGOING CALL OR ACTIVE CALL: Keep VigilShield in front!
+            // OUTGOING CALL OR ACTIVE CALL: Keep CallShield in front!
             launchActiveCallActivity(applicationContext, id, name, number, call.state)
         }
         emit(call, call.state)
