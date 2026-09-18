@@ -37,13 +37,13 @@ export default function App(){
  const [activeTab,setActiveTab]=useState<TabId>('dialer'); const [phoneOnly,setPhoneOnly]=useState(false); const [selectedSim,setSelectedSim]=useState<Sim>('SIM 1 (Personal)');
  const safeParse=<T,>(key:string,fallback:T):T=>{try{const raw=localStorage.getItem(key);return raw?JSON.parse(raw) as T:fallback}catch{return fallback}};
  const safeStore=<T,>(key:string,value:T):void=>{try{localStorage.setItem(key,JSON.stringify(value))}catch(err){console.warn(`Storage quota or write failed for ${key}:`,err)}};
- const [settings,setSettings]=useState<ShieldSettings>(()=>safeParse('vigilshield_settings',INITIAL_SETTINGS));
- const [rules,setRules]=useState<BlockRule[]>(()=>safeParse('vigilshield_rules',BASELINE_RULES));
- const [whitelist,setWhitelist]=useState<WhitelistEntry[]>(()=>safeParse('vigilshield_whitelist',[]));
- const [contacts,setContacts]=useState<ContactItem[]>(()=>safeParse('vigilshield_contacts',[]));
- const [calls,setCalls]=useState<CallLogItem[]>(()=>safeParse('vigilshield_calls',[]));
- const [timelineEvents,setTimelineEvents]=useState<SecurityTimelineEvent[]>(()=>safeParse('vigilshield_timeline',INITIAL_TIMELINE_EVENTS));
- const [autoCancelEnabled,setAutoCancelEnabled]=useState<boolean>(()=>safeParse('vigilshield_autocancel',true));
+ const [settings,setSettings]=useState<ShieldSettings>(()=>safeParse('callshield_settings',INITIAL_SETTINGS));
+ const [rules,setRules]=useState<BlockRule[]>(()=>safeParse('callshield_rules',BASELINE_RULES));
+ const [whitelist,setWhitelist]=useState<WhitelistEntry[]>(()=>safeParse('callshield_whitelist',[]));
+ const [contacts,setContacts]=useState<ContactItem[]>(()=>safeParse('callshield_contacts',[]));
+ const [calls,setCalls]=useState<CallLogItem[]>(()=>safeParse('callshield_calls',[]));
+ const [timelineEvents,setTimelineEvents]=useState<SecurityTimelineEvent[]>(()=>safeParse('callshield_timeline',INITIAL_TIMELINE_EVENTS));
+ const [autoCancelEnabled,setAutoCancelEnabled]=useState<boolean>(()=>safeParse('callshield_autocancel',true));
  const [activeIncomingCall,setActiveIncomingCall]=useState<IncomingCallState|null>(null); const [activeCallSession,setActiveCallSession]=useState<ActiveCallSession|null>(null); const [postCallState,setPostCallState]=useState<PostCallState|null>(null);
  const [selectedProfile,setSelectedProfile]=useState<CallShieldDirectoryProfile|null>(null); const [selectedCall,setSelectedCall]=useState<CallLogItem|null>(null); const [isCallerModalOpen,setIsCallerModalOpen]=useState(false);
  const [isInstallModalOpen,setIsInstallModalOpen]=useState(false); const [isFastReportOpen,setIsFastReportOpen]=useState(false); const [fastReportNumber,setFastReportNumber]=useState(''); const [isDisputeOpen,setIsDisputeOpen]=useState(false); const [disputeNumber,setDisputeNumber]=useState(''); const [disputeName,setDisputeName]=useState('');
@@ -154,12 +154,12 @@ export default function App(){
  };
 
  useEffect(() => {
-   window.history.pushState({ app: 'vigilshield' }, '', window.location.href);
+   window.history.pushState({ app: 'callshield' }, '', window.location.href);
 
    const onPopState = () => {
      const handled = handleAppBack();
      if (handled) {
-       window.history.pushState({ app: 'vigilshield' }, '', window.location.href);
+       window.history.pushState({ app: 'callshield' }, '', window.location.href);
      } else {
        window.history.back();
      }
@@ -181,24 +181,24 @@ export default function App(){
  }, []);
 
  useEffect(()=>{const handler=(e:any)=>{e.preventDefault();setDeferredPrompt(e)};window.addEventListener('beforeinstallprompt',handler);return()=>window.removeEventListener('beforeinstallprompt',handler)},[]);
- useEffect(()=>{const handleCallsUpdate=(e:any)=>{if(e.detail&&Array.isArray(e.detail)){setCalls(e.detail)}else{const fresh=safeParse<CallLogItem[]>('vigilshield_calls',[]);if(fresh?.length)setCalls(fresh)}};window.addEventListener('vigilshield_calls_updated',handleCallsUpdate as EventListener);externalDirectoryService.batchEnrichLocalCalls();return()=>window.removeEventListener('vigilshield_calls_updated',handleCallsUpdate as EventListener)},[]);
-  useEffect(() => { safeStore('vigilshield_settings', settings); }, [settings]);
-  useEffect(() => { safeStore('vigilshield_rules', rules); }, [rules]);
-  useEffect(() => { safeStore('vigilshield_whitelist', whitelist); }, [whitelist]);
-  useEffect(() => { safeStore('vigilshield_contacts', contacts); }, [contacts]);
+ useEffect(()=>{const handleCallsUpdate=(e:any)=>{if(e.detail&&Array.isArray(e.detail)){setCalls(e.detail)}else{const fresh=safeParse<CallLogItem[]>('callshield_calls',[]);if(fresh?.length)setCalls(fresh)}};window.addEventListener('callshield_calls_updated',handleCallsUpdate as EventListener);externalDirectoryService.batchEnrichLocalCalls();return()=>window.removeEventListener('callshield_calls_updated',handleCallsUpdate as EventListener)},[]);
+  useEffect(() => { safeStore('callshield_settings', settings); }, [settings]);
+  useEffect(() => { safeStore('callshield_rules', rules); }, [rules]);
+  useEffect(() => { safeStore('callshield_whitelist', whitelist); }, [whitelist]);
+  useEffect(() => { safeStore('callshield_contacts', contacts); }, [contacts]);
   useEffect(() => {
     const timer = setTimeout(() => {
-      safeStore('vigilshield_calls', calls);
+      safeStore('callshield_calls', calls);
     }, 150);
     return () => clearTimeout(timer);
   }, [calls]);
   useEffect(() => {
     const timer = setTimeout(() => {
-      safeStore('vigilshield_timeline', timelineEvents);
+      safeStore('callshield_timeline', timelineEvents);
     }, 200);
     return () => clearTimeout(timer);
   }, [timelineEvents]);
-  useEffect(() => { safeStore('vigilshield_autocancel', autoCancelEnabled); }, [autoCancelEnabled]);
+  useEffect(() => { safeStore('callshield_autocancel', autoCancelEnabled); }, [autoCancelEnabled]);
   useEffect(() => {
     setIsDefaultDialer(telecomBridge.isDefaultDialer());
     if (telecomBridge.isAndroidEnvironment()) {
@@ -604,7 +604,7 @@ export default function App(){
   }, []);
 
   const handleClearAllData = useCallback(() => {
-    ['vigilshield_settings', 'vigilshield_rules', 'vigilshield_whitelist', 'vigilshield_contacts', 'vigilshield_calls', 'vigilshield_timeline', 'vigilshield_autocancel', 'vigilshield_privacy_settings'].forEach(k => localStorage.removeItem(k));
+    ['callshield_settings', 'callshield_rules', 'callshield_whitelist', 'callshield_contacts', 'callshield_calls', 'callshield_timeline', 'callshield_autocancel', 'callshield_privacy_settings'].forEach(k => localStorage.removeItem(k));
     setSettings(INITIAL_SETTINGS);
     setRules(BASELINE_RULES);
     setWhitelist([]);
