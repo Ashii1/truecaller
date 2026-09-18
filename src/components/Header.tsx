@@ -398,7 +398,7 @@ function Header({
                           </span>
                         </div>
                         <p className="mt-0.5 text-[11px] text-slate-400 line-clamp-1">
-                          {call.spamReason || 'Flagged by VigilShield security engine'}
+                          {call.spamReason || 'Flagged by CallShield security engine'}
                         </p>
                         <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-500">
                           <span className="font-mono">{formatPhoneNumber(call.number)}</span>
