@@ -72,6 +72,8 @@ export default function App(){
 
  const lastBackPressTimeRef = useRef<number>(0);
  const initiateCallRef = useRef<(number: string, name?: string, sim?: Sim, isPrivate?: boolean) => void>(() => {});
+ const dataRef = useRef({ rules, whitelist, contacts, settings, autoCancelEnabled, calls, selectedSim });
+ dataRef.current = { rules, whitelist, contacts, settings, autoCancelEnabled, calls, selectedSim };
  const stateRef = useRef({
    activeTab,
    isCallerModalOpen,
@@ -240,7 +242,7 @@ export default function App(){
         if (payload?.phoneSurface) setPhoneOnly(true);
 
         if (isIncoming && number) {
-          const p = lookupTruecallerDirectory(number, rules, whitelist);
+          const p = lookupTruecallerDirectory(number, dataRef.current.rules, dataRef.current.whitelist);
           setActiveIncomingCall({
             callId: callId || `call-${Date.now()}`,
             number,
@@ -262,8 +264,8 @@ export default function App(){
           initiateCallRef.current(number, payload?.name);
         } else if (number) {
           setActiveTab(tab === 'recents' ? 'recents' : 'dialer');
-          const p = lookupTruecallerDirectory(number, rules, whitelist);
-          const foundCall = calls.find((c) => c.number === number || (callId && c.id === callId));
+          const p = lookupTruecallerDirectory(number, dataRef.current.rules, dataRef.current.whitelist);
+          const foundCall = dataRef.current.calls.find((c) => c.number === number || (callId && c.id === callId));
           if (foundCall) {
             setSelectedCall(foundCall);
             setSelectedProfile(p);
@@ -280,7 +282,7 @@ export default function App(){
               spamCategory: p.spamCategory,
               riskScore: p.spamScore,
               reportsCount: p.spamReportsCount,
-              isContact: contacts.some((c) => c.number === number),
+              isContact: dataRef.current.contacts.some((c) => c.number === number),
               isVerifiedBusiness: p.isVerified,
               carrier: p.carrier,
               location: p.location,
@@ -307,15 +309,15 @@ export default function App(){
         return;
       }
       if (eventType === 'CALL_ADDED' || eventType === 'CALL_STATE_CHANGED') {
-        const p = lookupTruecallerDirectory(number, rules, whitelist);
+        const p = lookupTruecallerDirectory(number, dataRef.current.rules, dataRef.current.whitelist);
         if (incoming && (state === 'RINGING' || state === 'CONNECTING')) {
-          const contactNums = contacts.map((c) => c.number);
+          const contactNums = dataRef.current.contacts.map((c) => c.number);
           const spoofCheck =
-            settings.neighborSpoofEnabled !== false
-              ? detectNeighborSpoof(number, settings.userPhoneNumber, contactNums)
+            dataRef.current.dataRef.current.settings.neighborSpoofEnabled !== false
+              ? detectNeighborSpoof(number, dataRef.current.settings.userPhoneNumber, contactNums)
               : { isNeighborSpoof: false, warningMessage: '' };
           const pingBackCheck =
-            settings.pingBackShieldEnabled !== false
+            dataRef.current.settings.pingBackShieldEnabled !== false
               ? detectPingBackScam(number, details?.durationSeconds || 0, state === 'MISSED' ? 1 : 0)
               : { isPingBackScam: false, warningMessage: '' };
           if (pingBackCheck.isPingBackScam) {
@@ -344,7 +346,7 @@ export default function App(){
             spoofWarning: spoofCheck.warningMessage || pingBackCheck.warningMessage,
             isPingBackMuted: pingBackCheck.isPingBackScam,
             status: 'RINGING',
-            countdown: (p.isSpam || pingBackCheck.isPingBackScam) && autoCancelEnabled ? 3 : 0,
+            countdown: (p.isSpam || pingBackCheck.isPingBackScam) && dataRef.current.autoCancelEnabled ? 3 : 0,
           });
         } else if (state === 'ACTIVE' || state === 'DIALING' || state === 'HOLDING') {
           setActiveIncomingCall(null);
@@ -449,7 +451,7 @@ export default function App(){
       unsubCall();
       window.removeEventListener('focus', handleFocus);
     };
-  }, [rules, whitelist, selectedSim, autoCancelEnabled, contacts, settings, calls]);
+  }, []);
 
  const handleLookupProfile = useCallback((n: string) => lookupTruecallerDirectory(n, rules, whitelist), [rules, whitelist]);
  const handleRequestDefaultDialer = useCallback(() => { const r = telecomBridge.requestDefaultDialerRole(); if (!r.success) showToast(r.message, 'error'); else showToast(r.message, 'info'); }, []);
