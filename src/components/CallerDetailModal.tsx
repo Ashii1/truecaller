@@ -27,7 +27,7 @@ import {
   UserPlus,
   X,
 } from 'lucide-react';
-import { CallLogItem, CallClassification, TruecallerDirectoryProfile, CallRecordingItem, ContactItem } from '../types';
+import { CallLogItem, CallClassification, CallShieldDirectoryProfile, CallRecordingItem, ContactItem } from '../types';
 import { useI18n } from '../i18n/LanguageContext';
 import { callRecordingService, normalizePhoneNumber } from '../services/callRecordingService';
 import { externalDirectoryService } from '../services/externalDirectoryService';
@@ -38,7 +38,7 @@ interface CallerDetailModalProps {
   call: CallLogItem | null;
   calls?: CallLogItem[];
   contacts?: ContactItem[];
-  profile?: TruecallerDirectoryProfile | null;
+  profile?: CallShieldDirectoryProfile | null;
   isOpen: boolean;
   onClose: () => void;
   onBlockNumber: (number: string, label: string) => void;
@@ -131,7 +131,7 @@ export default function CallerDetailModal({
               callerName: c.callerName,
               timestamp: c.timestamp,
               durationSeconds: c.durationSeconds || 15,
-              folderPath: 'Internal Storage/Recordings/VigilShield/',
+              folderPath: 'Internal Storage/Recordings/CallShield/',
               fileName: `REC_${normalizePhoneNumber(c.number)}_${new Date(c.timestamp).toISOString().slice(0, 10)}.wav`,
               fileSizeBytes: 128000,
               mimeType: 'audio/wav',
@@ -186,7 +186,7 @@ export default function CallerDetailModal({
     return externalDirectoryService.getUserNameOverride(number);
   }, [number, name]);
 
-  // Suggested Directory Name (from Truecaller community registry or public directory)
+  // Suggested Directory Name (from CallShield community registry or public directory)
   const suggestedDirectoryName = useMemo(() => {
     if (profile?.name && profile.name !== number && !profile.name.includes('+91') && profile.name !== cleanDigits) {
       return profile.name;
@@ -574,7 +574,7 @@ export default function CallerDetailModal({
                   )}
                 </div>
                 <div className="mt-1 text-xs leading-5 text-rose-300/90">
-                  {profile?.spamReason || call?.spamReason || 'Identified with high risk protection signals in Truecaller community database.'}
+                  {profile?.spamReason || call?.spamReason || 'Identified with high risk protection signals in CallShield community database.'}
                 </div>
                 {profile?.topTags && profile.topTags.length > 1 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
@@ -806,7 +806,7 @@ export default function CallerDetailModal({
                   </div>
                   <div className="mt-0.5 flex items-center gap-1 text-xs text-slate-400">
                     <Folder className="h-3.5 w-3.5 text-amber-400/80" />
-                    <span className="font-mono text-[11px]">Saved in: Internal Storage/Recordings/VigilShield/</span>
+                    <span className="font-mono text-[11px]">Saved in: Internal Storage/Recordings/CallShield/</span>
                   </div>
                 </div>
                 <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${recordingsExpanded ? 'rotate-180' : ''}`} />
@@ -905,7 +905,7 @@ export default function CallerDetailModal({
                               callerName: item.callerName,
                               timestamp: item.timestamp,
                               durationSeconds: item.durationSeconds || 15,
-                              folderPath: 'Internal Storage/Recordings/VigilShield/',
+                              folderPath: 'Internal Storage/Recordings/CallShield/',
                               fileName: `REC_${normalizePhoneNumber(item.number)}_${new Date(item.timestamp).toISOString().slice(0, 10)}.wav`,
                               fileSizeBytes: 128000,
                               mimeType: 'audio/wav',
@@ -1171,7 +1171,7 @@ export default function CallerDetailModal({
                     ? 'Device Contacts'
                     : nameOrigin === 'USER_OVERRIDE'
                     ? 'Custom Local Override'
-                    : 'Public Directory / Truecaller Community'}
+                    : 'Public Directory / CallShield Community'}
                 </span>
               </div>
             </div>
