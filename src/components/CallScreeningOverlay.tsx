@@ -266,7 +266,7 @@ export default function CallScreeningOverlay({
               <div className="mb-1 flex items-center gap-1 text-[10px] text-slate-400">
                 {item.sender === 'assistant' ? (
                   <>
-                    <span className="font-semibold text-indigo-400">VigilShield Assistant</span>
+                    <span className="font-semibold text-indigo-400">CallShield Assistant</span>
                     <Bot className="h-3 w-3 text-indigo-400" />
                   </>
                 ) : (
