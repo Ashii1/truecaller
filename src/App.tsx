@@ -17,9 +17,9 @@ import DataSourcesModal from './components/DataSourcesModal';
 import SystemDiagnosticsModal from './components/SystemDiagnosticsModal';
 import PermissionCenterModal from './components/PermissionCenterModal';
 import LockscreenBarrier from './components/LockscreenBarrier';
-import { BlockRule, WhitelistEntry, ShieldSettings, CallLogItem, IncomingCallState, ActiveCallSession, PostCallState, SecurityTimelineEvent, TruecallerDirectoryProfile, ContactItem, SpamCategory, TabId, CallRecordingItem, DisplayDensity } from './types';
+import { BlockRule, WhitelistEntry, ShieldSettings, CallLogItem, IncomingCallState, ActiveCallSession, PostCallState, SecurityTimelineEvent, CallShieldDirectoryProfile, ContactItem, SpamCategory, TabId, CallRecordingItem, DisplayDensity } from './types';
 import { INITIAL_SETTINGS } from './data/defaultData';
-import { lookupTruecallerDirectory } from './utils/spamEngine';
+import { lookupCallShieldDirectory } from './utils/spamEngine';
 import { detectNeighborSpoof, detectPingBackScam, formatPrivateCallNumber } from './utils/spoofEngine';
 import { telecomBridge } from './services/telephony/telecomBridge';
 import { externalDirectoryService } from './services/externalDirectoryService';
@@ -45,7 +45,7 @@ export default function App(){
  const [timelineEvents,setTimelineEvents]=useState<SecurityTimelineEvent[]>(()=>safeParse('vigilshield_timeline',INITIAL_TIMELINE_EVENTS));
  const [autoCancelEnabled,setAutoCancelEnabled]=useState<boolean>(()=>safeParse('vigilshield_autocancel',true));
  const [activeIncomingCall,setActiveIncomingCall]=useState<IncomingCallState|null>(null); const [activeCallSession,setActiveCallSession]=useState<ActiveCallSession|null>(null); const [postCallState,setPostCallState]=useState<PostCallState|null>(null);
- const [selectedProfile,setSelectedProfile]=useState<TruecallerDirectoryProfile|null>(null); const [selectedCall,setSelectedCall]=useState<CallLogItem|null>(null); const [isCallerModalOpen,setIsCallerModalOpen]=useState(false);
+ const [selectedProfile,setSelectedProfile]=useState<CallShieldDirectoryProfile|null>(null); const [selectedCall,setSelectedCall]=useState<CallLogItem|null>(null); const [isCallerModalOpen,setIsCallerModalOpen]=useState(false);
  const [isInstallModalOpen,setIsInstallModalOpen]=useState(false); const [isFastReportOpen,setIsFastReportOpen]=useState(false); const [fastReportNumber,setFastReportNumber]=useState(''); const [isDisputeOpen,setIsDisputeOpen]=useState(false); const [disputeNumber,setDisputeNumber]=useState(''); const [disputeName,setDisputeName]=useState('');
  const [isSyncing,setIsSyncing]=useState(false); const [isDataSourcesModalOpen,setIsDataSourcesModalOpen]=useState(false); const [isDiagnosticsModalOpen,setIsDiagnosticsModalOpen]=useState(false); const [isPermissionCenterOpen,setIsPermissionCenterOpen]=useState(false); const [dialerInitialNumber,setDialerInitialNumber]=useState(''); const [deferredPrompt,setDeferredPrompt]=useState<any>(null); const [isDefaultDialer,setIsDefaultDialer]=useState(()=>telecomBridge.isDefaultDialer());
  const [toastMessage,setToastMessage]=useState<{text:string,type:'info'|'error'|'success'}|null>(null);
@@ -245,7 +245,7 @@ export default function App(){
         if (payload?.phoneSurface) setPhoneOnly(true);
 
         if (isIncoming && number) {
-          const p = lookupTruecallerDirectory(number, dataRef.current.rules, dataRef.current.whitelist);
+          const p = lookupCallShieldDirectory(number, dataRef.current.rules, dataRef.current.whitelist);
           setActiveIncomingCall({
             callId: callId || `call-${Date.now()}`,
             number,
@@ -267,7 +267,7 @@ export default function App(){
           initiateCallRef.current(number, payload?.name);
         } else if (number) {
           setActiveTab(tab === 'recents' ? 'recents' : 'dialer');
-          const p = lookupTruecallerDirectory(number, dataRef.current.rules, dataRef.current.whitelist);
+          const p = lookupCallShieldDirectory(number, dataRef.current.rules, dataRef.current.whitelist);
           const foundCall = dataRef.current.calls.find((c) => c.number === number || (callId && c.id === callId));
           if (foundCall) {
             setSelectedCall(foundCall);
@@ -312,7 +312,7 @@ export default function App(){
         return;
       }
       if (eventType === 'CALL_ADDED' || eventType === 'CALL_STATE_CHANGED') {
-        const p = lookupTruecallerDirectory(number, dataRef.current.rules, dataRef.current.whitelist);
+        const p = lookupCallShieldDirectory(number, dataRef.current.rules, dataRef.current.whitelist);
         if (incoming && (state === 'RINGING' || state === 'CONNECTING')) {
           const contactNums = dataRef.current.contacts.map((c) => c.number);
           const spoofCheck =
@@ -459,7 +459,7 @@ export default function App(){
     };
   }, []);
 
- const handleLookupProfile = useCallback((n: string) => lookupTruecallerDirectory(n, rules, whitelist), [rules, whitelist]);
+ const handleLookupProfile = useCallback((n: string) => lookupCallShieldDirectory(n, rules, whitelist), [rules, whitelist]);
  const handleRequestDefaultDialer = useCallback(() => { const r = telecomBridge.requestDefaultDialerRole(); if (!r.success) showToast(r.message, 'error'); else showToast(r.message, 'info'); }, []);
  const handleSyncDeviceData = useCallback(() => {
    setIsSyncing(true);
@@ -494,7 +494,7 @@ export default function App(){
  }, []);
  const handleClearAllCalls = useCallback(() => { if (window.confirm('Clear your entire call log history?')) setCalls([]); }, []);
   const handleInitiateCall = useCallback((number: string, name?: string, sim?: Sim, isPrivate?: boolean) => {
-    const clean = number.trim(), digits = clean.replace(/[^\d+*#]/g, ''), target = sim || selectedSim, p = lookupTruecallerDirectory(clean, rules, whitelist), matched = contacts.find(c => c.number.replace(/\D/g, '') === clean.replace(/\D/g, '')), resolved = name || matched?.name || p.name || clean;
+    const clean = number.trim(), digits = clean.replace(/[^\d+*#]/g, ''), target = sim || selectedSim, p = lookupCallShieldDirectory(clean, rules, whitelist), matched = contacts.find(c => c.number.replace(/\D/g, '') === clean.replace(/\D/g, '')), resolved = name || matched?.name || p.name || clean;
     const dialedNumber = isPrivate ? formatPrivateCallNumber(digits, settings.privateCallPrefix || '*67') : digits;
     const result = telecomBridge.placeRealCall(dialedNumber, target);
     if (!result.success) { showToast(result.message, 'error'); return; }
@@ -715,7 +715,7 @@ export default function App(){
   }, [activeCallSession]);
 
   const openCaller = useCallback((call: CallLogItem) => {
-    setSelectedProfile(lookupTruecallerDirectory(call.number, rules, whitelist));
+    setSelectedProfile(lookupCallShieldDirectory(call.number, rules, whitelist));
     setSelectedCall(call);
     setIsCallerModalOpen(true);
   }, [rules, whitelist]);
@@ -727,7 +727,7 @@ export default function App(){
   const handleRemoveWhitelist = useCallback((id: string) => setWhitelist(p => p.filter(w => w.id !== id)), []);
   const handleOpenCallerDetail = useCallback((item: any) => {
     const n = 'number' in item ? item.number : '';
-    setSelectedProfile(lookupTruecallerDirectory(n, rules, whitelist));
+    setSelectedProfile(lookupCallShieldDirectory(n, rules, whitelist));
     setSelectedCall(calls.find(c => c.number === n) || null);
     setIsCallerModalOpen(true);
   }, [rules, whitelist, calls]);
