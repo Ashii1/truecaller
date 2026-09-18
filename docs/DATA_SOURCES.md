@@ -1,8 +1,8 @@
-# VigilShield: Caller ID & Reputation Data Sources Specification
+# CallShield: Caller ID & Reputation Data Sources Specification
 
-This document provides a comprehensive, legally compliant, and technically rigorous inventory of every legitimate data source used by the **VigilShield** platform for caller identification, business directory resolution, spam detection, and number validation.
+This document provides a comprehensive, legally compliant, and technically rigorous inventory of every legitimate data source used by the **CallShield** platform for caller identification, business directory resolution, spam detection, and number validation.
 
-VigilShield strictly adheres to:
+CallShield strictly adheres to:
 1. **Zero Scraping Policy**: We do not scrape search engines, social media networks, or proprietary caller ID services.
 2. **Zero Address Book Upload**: User contact books are never uploaded or synced to our servers. All contact-matching occurs strictly on the local client device.
 3. **Multi-Source Confidence**: Caller identity is resolved by synthesizing independent signals, each with explicit confidence weighting, cryptographic validation, and transparent attribution.
@@ -20,8 +20,8 @@ VigilShield strictly adheres to:
 | `opencorporates` | Official Business Registration & Corporate Identity | OpenCorporates Public Registry Database | REST API / API Key | Open Database License (ODbL) / Commercial Tier | Global (140+ jurisdictions) | Bi-weekly | **High (90%)** | 30 days | Yes ("OpenCorporates Registry") |
 | `itu_e164_allocations` | Numbering Plan, Carrier Blocks & Geographic Ranges | ITU-T E.164 National Numbering Plans & libphonenumber | Public Standard / Library Embedded | Free / Apache 2.0 | Global (All country codes) | Monthly | **Highest (99%)** | 90 days | No |
 | `openstreetmap_nominatim`| Geographic Location & Municipal Boundary Resolution | OpenStreetMap Foundation | HTTPS REST API / User-Agent Policy | Free (1 req/sec strict rate limit) / Self-hosted ODbL | Global | Monthly | **Medium (75%)** | 60 days | Yes ("© OpenStreetMap contributors") |
-| `user_claimed_profile` | Self-Claimed Personal or Business Profile | VigilShield Verified Identity System | SMS OTP / Carrier SIM Auth | Platform Feature | Global | Real-time | **High (90-98%)** (when OTP verified) | 24 hours | Yes ("VigilShield Verified") |
-| `community_reports` | Crowdsourced Spam / Scam / Harassment Reports | VigilShield Distributed Community Telemetry | Authenticated Client API (HMAC-SHA256) | Internal Platform Service | Global | Real-time streaming | **Weighted (40-95%)** (based on reporter reputation) | 1 hour | Yes ("Community Reports") |
+| `user_claimed_profile` | Self-Claimed Personal or Business Profile | CallShield Verified Identity System | SMS OTP / Carrier SIM Auth | Platform Feature | Global | Real-time | **High (90-98%)** (when OTP verified) | 24 hours | Yes ("CallShield Verified") |
+| `community_reports` | Crowdsourced Spam / Scam / Harassment Reports | CallShield Distributed Community Telemetry | Authenticated Client API (HMAC-SHA256) | Internal Platform Service | Global | Real-time streaming | **Weighted (40-95%)** (based on reporter reputation) | 1 hour | Yes ("Community Reports") |
 | `device_local_contacts` | Personal Contacts | Local OS Contact Store (`navigator.contacts`, Android ContactsContract, iOS CNContactStore) | Device Permission (Local Sandbox) | Free (Device OS) | Local to device | Instant local lookup | **Absolute (100%)** | Local only (Never transmitted) | Local label |
 
 ---
