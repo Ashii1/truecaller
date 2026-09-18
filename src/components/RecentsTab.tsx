@@ -107,7 +107,7 @@ function RecentsTab({
       if (filter === 'BLOCKED' && c.type !== 'BLOCKED_CANCELLED' && !c.isSpam) return false;
       if (!q) return true;
       return (
-        (c.callerName || '').toLowerCase().includes(q) ||
+        String(c.callerName ?? '').toLowerCase().includes(q) ||
         (d.length > 0 && c.number.replace(/\D/g, '').includes(d))
       );
     });
