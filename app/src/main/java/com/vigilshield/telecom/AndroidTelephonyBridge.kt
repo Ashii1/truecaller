@@ -157,8 +157,8 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
             val callId = "out-${System.currentTimeMillis()}"
             val callerName = lookupName(clean).orEmpty().ifBlank { clean }
 
-            // Immediately launch VigilShield in-call UI activity so Android Telecom knows the UI is ready
-            NativeInCallService.launchActiveCallActivity(activity, callId, callerName, clean, Call.STATE_DIALING)
+            // Do not launch a second activity here. NativeInCallService.onCallAdded()
+            // owns the in-call UI lifecycle after Telecom accepts the call.
 
             // Once VigilShield owns ROLE_DIALER, Android Telecom is the single call entry point.
             // Never fall back to ACTION_CALL here: that can hand the call back to the
