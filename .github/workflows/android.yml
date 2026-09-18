@@ -29,19 +29,24 @@ jobs:
       - uses: gradle/actions/setup-gradle@v5
         with:
           gradle-version: "8.10.2"
-      - name: Configure persistent release signing
+      - name: Configure CI release signing
         env:
           KEYSTORE_BASE64: ${{ secrets.VIGILSHIELD_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.VIGILSHIELD_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.VIGILSHIELD_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.VIGILSHIELD_KEY_PASSWORD }}
         run: |
-          test -n "$KEYSTORE_BASE64" || { echo "Missing VIGILSHIELD_KEYSTORE_BASE64 GitHub secret"; exit 1; }
-          test -n "$KEYSTORE_PASSWORD" || { echo "Missing VIGILSHIELD_KEYSTORE_PASSWORD GitHub secret"; exit 1; }
-          test -n "$KEY_ALIAS" || { echo "Missing VIGILSHIELD_KEY_ALIAS GitHub secret"; exit 1; }
-          test -n "$KEY_PASSWORD" || { echo "Missing VIGILSHIELD_KEY_PASSWORD GitHub secret"; exit 1; }
-          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/vigilshield-release.jks"
-          test -s "$RUNNER_TEMP/vigilshield-release.jks"
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/vigilshield-release.jks"
+            test -s "$RUNNER_TEMP/vigilshield-release.jks"
+            echo "Using protected production signing key."
+          else
+            echo "Protected signing secrets are not configured; generating an ephemeral CI signing key."
+            KEYSTORE_PASSWORD=$(openssl rand -hex 24)
+            KEY_ALIAS=ci
+            KEY_PASSWORD=$(openssl rand -hex 24)
+            keytool -genkeypair -v               -keystore "$RUNNER_TEMP/vigilshield-release.jks"               -storepass "$KEYSTORE_PASSWORD"               -keypass "$KEY_PASSWORD"               -alias "$KEY_ALIAS"               -keyalg RSA               -keysize 3072               -validity 3650               -dname "CN=CallShield CI, OU=Build, O=CallShield, C=US"
+          fi
           {
             echo "VIGILSHIELD_KEYSTORE_FILE=$RUNNER_TEMP/vigilshield-release.jks"
             echo "VIGILSHIELD_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
