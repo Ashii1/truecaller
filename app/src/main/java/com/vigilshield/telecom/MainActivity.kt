@@ -239,14 +239,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun createLoadingView(): View = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        gravity = Gravity.CENTER
+    private fun createLoadingView(): View = FrameLayout(this).apply {
         setBackgroundColor(Color.rgb(2, 6, 23))
-        setPadding(48, 48, 48, 48)
-        addView(ProgressBar(this@MainActivity), LinearLayout.LayoutParams(64, 64))
-        addView(TextView(this@MainActivity).apply { text = "Starting VigilShield"; textSize = 18f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setPadding(0, 24, 0, 0) })
-        addView(TextView(this@MainActivity).apply { text = "Preparing your call protection…"; textSize = 13f; setTextColor(Color.LTGRAY); gravity = Gravity.CENTER; setPadding(0, 8, 0, 0) })
+        val icon = android.widget.ImageView(this@MainActivity).apply {
+            setImageResource(com.vigilshield.R.drawable.ic_vigilshield)
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            contentDescription = "VigilShield"
+            alpha = 0f
+        }
+        addView(icon, FrameLayout.LayoutParams(88, 88, Gravity.CENTER))
+        icon.animate().alpha(1f).setDuration(220L).start()
     }
 
     private fun createErrorView(): View {
