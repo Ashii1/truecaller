@@ -27,10 +27,10 @@ const Navigation = memo(function Navigation({
   spamCallsCount = 0,
   activeRulesCount = 0,
   assistantAlertsCount = 0,
+  phoneOnly = false,
 }: NavigationProps) {
   const { t } = useI18n();
 
-  // Modern UI 9.5 Balanced 5-tab layout with Keypad centered as the signature hero action
   const tabs = useMemo<NavigationItem[]>(
     () => {
       const all: NavigationItem[] = [
