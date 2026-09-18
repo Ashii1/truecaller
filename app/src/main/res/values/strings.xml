@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">CallShield</string>
-    <string name="app_tagline">CallShield - Know Who&apos;s Calling</string>
+    <string name="app_tagline">CallShield - Know Who's Calling</string>
     <string name="widget_speed_dial_name">CallShield Speed Dial</string>
     <string name="widget_speed_dial_desc">One-tap calling for top contacts directly from your home screen</string>
     <string name="widget_phone_desc">CallShield phone access to Recent Calls and Dialer</string>
