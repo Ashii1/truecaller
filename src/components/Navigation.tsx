@@ -10,6 +10,7 @@ interface NavigationProps {
   spamCallsCount?: number;
   activeRulesCount?: number;
   assistantAlertsCount?: number;
+  phoneOnly?: boolean;
 }
 
 type NavigationItem = {
@@ -31,14 +32,17 @@ const Navigation = memo(function Navigation({
 
   // Modern UI 9.5 Balanced 5-tab layout with Keypad centered as the signature hero action
   const tabs = useMemo<NavigationItem[]>(
-    () => [
-      { id: 'recents', name: t('nav_recents'), icon: Clock, badge: spamCallsCount || undefined },
-      { id: 'contacts', name: t('nav_contacts'), icon: Users },
-      { id: 'dialer', name: t('dialer_keypad'), icon: Grid3x3, isCenter: true },
-      { id: 'protection', name: t('nav_protection'), icon: ShieldCheck, badge: activeRulesCount || undefined },
-      { id: 'assistant', name: t('nav_assistant'), icon: Sparkles, badge: assistantAlertsCount || undefined },
-    ],
-    [spamCallsCount, activeRulesCount, assistantAlertsCount, t],
+    () => {
+      const all: NavigationItem[] = [
+        { id: 'recents', name: t('nav_recents'), icon: Clock, badge: spamCallsCount || undefined },
+        { id: 'contacts', name: t('nav_contacts'), icon: Users },
+        { id: 'dialer', name: t('dialer_keypad'), icon: Grid3x3, isCenter: true },
+        { id: 'protection', name: t('nav_protection'), icon: ShieldCheck, badge: activeRulesCount || undefined },
+        { id: 'assistant', name: t('nav_assistant'), icon: Sparkles, badge: assistantAlertsCount || undefined },
+      ];
+      return phoneOnly ? all.filter(tab => tab.id === 'recents' || tab.id === 'dialer') : all;
+    },
+    [spamCallsCount, activeRulesCount, assistantAlertsCount, phoneOnly, t],
   );
 
   const handleSelect = (id: string) => onChangeTab(id as TabId);
