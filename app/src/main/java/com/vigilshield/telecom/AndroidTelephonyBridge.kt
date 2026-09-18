@@ -213,7 +213,7 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
     fun hasPermission(permission: String): Boolean = ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED
     fun hasCallLogPermission(): Boolean = hasPermission(Manifest.permission.READ_CALL_LOG)
     fun hasContactsPermission(): Boolean = hasPermission(Manifest.permission.READ_CONTACTS)
-    fun hasDevicePermissions(): Boolean = hasContactsPermission()
+    fun hasDevicePermissions(): Boolean = hasContactsPermission() && hasCallLogPermission() && hasPermission(Manifest.permission.CALL_PHONE) && hasPermission(Manifest.permission.READ_PHONE_STATE) && hasPermission(Manifest.permission.ANSWER_PHONE_CALLS) && (Build.VERSION.SDK_INT < 33 || hasPermission(Manifest.permission.POST_NOTIFICATIONS))
     fun setSecuritySetting(key: String, enabled: Boolean) {
         activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(key, enabled).apply()
     }
