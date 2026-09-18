@@ -84,7 +84,7 @@ export default function CallerDetailModal({
   const [recordings, setRecordings] = useState<CallRecordingItem[]>([]);
 
   // Inaccuracy Report Modal State
-  const [isInaccuracyModalOpen, setIsInaccuracyModalOpen] = useState(false);
+  const [isInaccuracyModalOpen, setIsInaccuracyModalOpen] = useState(false);\n  const [isClosing, setIsClosing] = useState(false);
   const [inaccuracyCorrectedName, setInaccuracyCorrectedName] = useState('');
   const [inaccuracyReason, setInaccuracyReason] = useState('Wrong Individual');
   const [inaccuracyNotes, setInaccuracyNotes] = useState('');
@@ -211,7 +211,7 @@ export default function CallerDetailModal({
     displayName = suggestedDirectoryName;
   }
 
-  const shouldRender = isOpen && (!!call || !!profile);
+  const shouldRender = isOpen && (!!call || !!profile);\n\n  useEffect(() => {\n    if (isOpen) setIsClosing(false);\n  }, [isOpen]);\n\n  const handleClose = useCallback(() => {\n    if (isClosing) return;\n    setIsClosing(true);\n    window.setTimeout(onClose, 180);\n  }, [isClosing, onClose]);
 
   const entries = history.length ? history : call ? [call] : [];
   const spamEvidence = entries.filter((c) => c.isSpam || c.classification === 'SPAM' || c.classification === 'SCAM' || c.riskScore >= 60);
@@ -540,7 +540,7 @@ export default function CallerDetailModal({
             </div>
 
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition shrink-0"
               aria-label="Close"
             >
