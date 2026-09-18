@@ -184,9 +184,7 @@ function Header({
             </div>
             <div className="min-w-0">
               <div className="text-sm font-bold leading-tight tracking-tight text-white">{t('app_title')}</div>
-              <div className="text-[9px] font-medium leading-tight text-slate-500">Know Who&apos;s Calling</div>
-              <div className="text-[9px] font-medium leading-tight text-slate-500">{t('app_tagline')}</div>
-              <div className="truncate text-[10.5px] font-medium text-slate-400 flex items-center gap-1.5">
+              <div className="hidden">
                 <span className={`inline-block h-1.5 w-1.5 rounded-full ${settings?.masterEnabled !== false ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
                 <span>{isDefaultDialer ? t('default_phone_app') : t('phone_setup_required')}</span>
               </div>
