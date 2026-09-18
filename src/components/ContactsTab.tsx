@@ -1,4 +1,5 @@
 import { FormEvent, memo, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Briefcase,
   Building2,
@@ -268,9 +269,9 @@ function ContactsTab({
       )}
 
       {/* Contact Details Modal */}
-      {selected && !editing && !showAdd && (
-        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4">
-          <div className="w-full max-w-md rounded-t-[30px] border border-white/10 bg-[#10161d] p-5 sm:rounded-[30px]">
+      {selected && !editing && !showAdd && createPortal(
+        <div className="fixed inset-0 z-[9998] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4" style={{ backdropFilter: 'none', WebkitBackdropFilter: 'none', filter: 'none', transform: 'none' }}>
+          <div className="w-full max-w-md rounded-t-[30px] border border-white/10 bg-[#10161d] p-5 sm:rounded-[30px]" style={{ backdropFilter: 'none', WebkitBackdropFilter: 'none', filter: 'none', transform: 'none' }}>
             <div className="flex items-start justify-between">
               <div>
                 <div className="grid h-16 w-16 place-items-center rounded-full bg-white/10 text-xl font-bold text-white">
@@ -349,7 +350,8 @@ function ContactsTab({
               <span>{t('delete_contact')}</span>
             </button>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Add / Edit Contact Modal */}
