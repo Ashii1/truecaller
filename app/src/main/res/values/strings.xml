@@ -3,6 +3,7 @@
     <string name="app_name">VigilShield</string>
     <string name="widget_speed_dial_name">VigilShield Speed Dial</string>
     <string name="widget_speed_dial_desc">One-tap calling for top contacts directly from your home screen</string>
+    <string name="widget_phone_desc">VigilShield phone access to Recent Calls and Dialer</string>
     <string name="widget_security_name">VigilShield Protection Status</string>
     <string name="widget_security_desc">Live spam block stats and one-tap dialer access</string>
 </resources>
