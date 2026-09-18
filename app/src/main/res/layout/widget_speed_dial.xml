@@ -41,7 +41,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
-                android:text="Calls, Recents & Dialer"
+                android:text="Calls, Recents &amp; Dialer"
                 android:textColor="#94A3B8"
                 android:textSize="10sp" />
         </LinearLayout>
