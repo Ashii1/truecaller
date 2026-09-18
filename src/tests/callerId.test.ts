@@ -2,9 +2,9 @@ import { LibPhoneNumberValidationProvider } from '../services/providers/phoneVal
 import { CompositeCallerIdResolver } from '../services/providers/compositeCallerProvider';
 import { ContactItem, BlockRule } from '../types';
 import { externalDirectoryService } from '../services/externalDirectoryService';
-import { lookupTruecallerDirectory } from '../utils/spamEngine';
+import { lookupCallShieldDirectory } from '../utils/spamEngine';
 
-export function runVigilShieldTestSuite() {
+export function runCallShieldTestSuite() {
   const results: { name: string; passed: boolean; message?: string }[] = [];
   const normalizer = new LibPhoneNumberValidationProvider();
   const resolver = new CompositeCallerIdResolver();
@@ -70,7 +70,7 @@ export function runVigilShieldTestSuite() {
   // Test 6: External Directory Service & Local Calls List Caching
   try {
     const testNum = '+919876543210';
-    const profile = lookupTruecallerDirectory(testNum);
+    const profile = lookupCallShieldDirectory(testNum);
     if (profile && profile.name) {
       results.push({ name: 'External Directory: Resolves caller identity and caches in local calls', passed: true });
     } else {
