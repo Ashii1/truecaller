@@ -28,13 +28,13 @@ import java.util.concurrent.ConcurrentHashMap
  * - Direct bidirectional bridging to the application UI
  */
 @RequiresApi(Build.VERSION_CODES.Q)
-class CallShieldInCallService : InCallService() {
+class VigilShieldInCallService : InCallService() {
 
     companion object {
         private const val TAG = "CallShieldInCall"
         
         // Active singleton instance reference for UI bridge communication
-        var instance: CallShieldInCallService? = null
+        var instance: VigilShieldInCallService? = null
             private set
             
         // Thread-safe map of active Android Call objects indexed by unique Call ID
