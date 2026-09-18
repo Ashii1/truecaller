@@ -9,7 +9,7 @@ import android.content.Intent
 import android.widget.RemoteViews
 
 /**
- * Phone-style VigilShield launcher widget.
+ * Phone-style CallShield launcher widget.
  * The widget is intentionally limited to the two primary phone surfaces:
  * Recents and Dialer. It never launches a contact/speed-dial flow.
  */
