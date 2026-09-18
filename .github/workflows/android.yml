@@ -44,7 +44,7 @@ jobs:
             echo "Protected signing secrets are not configured; generating an ephemeral CI signing key."
             KEYSTORE_PASSWORD=$(openssl rand -hex 24)
             KEY_ALIAS=ci
-            KEY_PASSWORD=$(openssl rand -hex 24)
+            KEY_PASSWORD=$KEYSTORE_PASSWORD
             keytool -genkeypair -v               -keystore "$RUNNER_TEMP/vigilshield-release.jks"               -storepass "$KEYSTORE_PASSWORD"               -keypass "$KEY_PASSWORD"               -alias "$KEY_ALIAS"               -keyalg RSA               -keysize 3072               -validity 3650               -dname "CN=CallShield CI, OU=Build, O=CallShield, C=US"
           fi
           {
