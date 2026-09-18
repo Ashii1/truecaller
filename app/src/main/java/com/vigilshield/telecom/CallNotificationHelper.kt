@@ -91,7 +91,7 @@ object CallNotificationHelper {
         val detail = if (privacyMode(context)) "Missed call: $number" else "Missed call from $display"
         val callBackIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(number)}"))
         val callBackPendingIntent = PendingIntent.getActivity(context, (number + "callback").hashCode(), callBackIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID).setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield).setContentTitle("Missed call").setContentText(if (name.isNotBlank() && name != number) "$name · $number" else number).setCategory(NotificationCompat.CATEGORY_MISSED_CALL).setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true).setContentIntent(openIntent).addAction(0, "Call back", callBackPendingIntent).setStyle(NotificationCompat.BigTextStyle().bigText(detail))
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID).setSmallIcon(com.vigilshield.telecom.R.drawable.ic_callshield).setContentTitle("Missed call").setContentText(if (name.isNotBlank() && name != number) "$name · $number" else number).setCategory(NotificationCompat.CATEGORY_MISSED_CALL).setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true).setContentIntent(openIntent).addAction(0, "Call back", callBackPendingIntent).setStyle(NotificationCompat.BigTextStyle().bigText(detail))
         context.getSystemService(NotificationManager::class.java).notify(MISSED_ID, applyPrivacy(builder, context).build())
     }
 
@@ -108,7 +108,7 @@ object CallNotificationHelper {
         val display = identity(context, name, number)
         val person = Person.Builder().setName(display).setImportant(true).build()
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield)
+            .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_callshield)
             .setContentTitle(display)
             .setContentText(number)
             .setContentIntent(openIntent)
@@ -142,7 +142,7 @@ object CallNotificationHelper {
         val riskText = when (riskLevel) { "HIGH_RISK" -> " · High risk"; "SUSPICIOUS" -> " · Suspicious"; else -> "" }
         val detail = if (privacyMode(context)) "$status$riskText · Tap to return to call" else "$display$riskText · $status · Tap to return to call"
         val person = Person.Builder().setName(display).setImportant(true).build()
-        val builder = applyPrivacy(NotificationCompat.Builder(context, CHANNEL_ID).setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield).setContentTitle(display).setContentText(detail).setSubText(status).setCategory(NotificationCompat.CATEGORY_CALL).setPriority(NotificationCompat.PRIORITY_HIGH).setOngoing(true).setOnlyAlertOnce(true).setContentIntent(openIntent).setWhen(if (connectTimeMillis > 0L) connectTimeMillis else System.currentTimeMillis()).setUsesChronometer(state == "ACTIVE" || state == "HOLDING").setStyle(NotificationCompat.BigTextStyle().bigText(detail + if (state == "ACTIVE" || state == "HOLDING") "\nCall controls are available when you return to CallShield." else "")).addAction(0, "End call", end), context)
+        val builder = applyPrivacy(NotificationCompat.Builder(context, CHANNEL_ID).setSmallIcon(com.vigilshield.telecom.R.drawable.ic_callshield).setContentTitle(display).setContentText(detail).setSubText(status).setCategory(NotificationCompat.CATEGORY_CALL).setPriority(NotificationCompat.PRIORITY_HIGH).setOngoing(true).setOnlyAlertOnce(true).setContentIntent(openIntent).setWhen(if (connectTimeMillis > 0L) connectTimeMillis else System.currentTimeMillis()).setUsesChronometer(state == "ACTIVE" || state == "HOLDING").setStyle(NotificationCompat.BigTextStyle().bigText(detail + if (state == "ACTIVE" || state == "HOLDING") "\nCall controls are available when you return to CallShield." else "")).addAction(0, "End call", end), context)
         if (Build.VERSION.SDK_INT >= 31) builder.setStyle(NotificationCompat.CallStyle.forOngoingCall(person, end))
         manager.notify(callId.hashCode(), builder.build())
     }
@@ -157,7 +157,7 @@ object CallNotificationHelper {
         val text = if (privacyMode(context)) "Review this call before sharing sensitive information" else "$identityText · Spoof risk: $spoofRisk"
         val openIntent = PendingIntent.getActivity(context, (name + risk).hashCode(), Intent(context, MainActivity::class.java).apply { putExtra("open_tab", "recents"); addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP) }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val body = "$explanation Caller ID is not proof of identity. Never share OTPs, PINs or passwords."
-        val notification = applyPrivacy(NotificationCompat.Builder(context, SECURITY_CHANNEL_ID).setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield).setContentTitle(title).setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(body)).setCategory(NotificationCompat.CATEGORY_STATUS).setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true).setContentIntent(openIntent).addAction(0, "Call back", callbackIntent), context).build()
+        val notification = applyPrivacy(NotificationCompat.Builder(context, SECURITY_CHANNEL_ID).setSmallIcon(com.vigilshield.telecom.R.drawable.ic_callshield).setContentTitle(title).setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(body)).setCategory(NotificationCompat.CATEGORY_STATUS).setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true).setContentIntent(openIntent), context).build()
         context.getSystemService(NotificationManager::class.java).notify((name + risk + spoofRisk).hashCode(), notification)
     }
 
@@ -171,7 +171,7 @@ object CallNotificationHelper {
         val countLabel = if (callCount == 1) "1 time" else "$callCount times"
         val text = if (privacyMode(context)) "A caller called $countLabel within 10 minutes" else "$identityText$detail called $countLabel within 10 minutes"
         val body = if (privacyMode(context)) "A caller called $countLabel within 10 minutes. Review it from Recents if needed." else "$identityText called $countLabel within 10 minutes."
-        val notification = applyPrivacy(NotificationCompat.Builder(context, SECURITY_CHANNEL_ID).setSmallIcon(com.vigilshield.telecom.R.drawable.ic_vigilshield).setContentTitle("Repeated call needs your attention").setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(body)).setCategory(NotificationCompat.CATEGORY_STATUS).setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true).setContentIntent(openIntent).addAction(0, "Call back", callbackIntent), context).build()
+        val notification = applyPrivacy(NotificationCompat.Builder(context, SECURITY_CHANNEL_ID).setSmallIcon(com.vigilshield.telecom.R.drawable.ic_callshield).setContentTitle("Repeated call needs your attention").setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(body)).setCategory(NotificationCompat.CATEGORY_STATUS).setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true).setContentIntent(openIntent).addAction(0, "Call back", callbackIntent), context).build()
         context.getSystemService(NotificationManager::class.java).notify(REPEATED_ID, notification)
     }
 
