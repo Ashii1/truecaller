@@ -46,7 +46,7 @@ export default function ThemeCustomizerModal({ isOpen, onClose }: ThemeCustomize
         <header className="flex items-center justify-between border-b border-slate-800 p-5">
           <div className="flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-2xl bg-blue-500/10 text-blue-400"><Palette className="h-5 w-5" /></div>
-            <div><h2 className="text-lg font-extrabold text-white">Appearance</h2><p className="text-xs text-slate-400">Make VigilShield feel like your phone.</p></div>
+            <div><h2 className="text-lg font-extrabold text-white">Appearance</h2><p className="text-xs text-slate-400">Make CallShield feel like your phone.</p></div>
           </div>
           <button onClick={onClose} className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close appearance settings"><X className="h-5 w-5" /></button>
         </header>
