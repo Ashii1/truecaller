@@ -408,7 +408,7 @@ export default function CallerDetailModal({
   if (!shouldRender) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-0 sm:p-4" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-0 sm:p-4" style={{ backdropFilter: "none", WebkitBackdropFilter: "none" }} role="dialog" aria-modal="true">
       <section className="flex h-full w-full max-w-2xl flex-col overflow-hidden bg-[#0a1017] sm:h-auto sm:max-h-[92vh] sm:rounded-[28px] sm:border sm:border-slate-800 sm:shadow-2xl">
         {/* Header */}
         <header className={`border-b px-5 pb-5 safe-top-modal sm:pt-5 ${isSpam ? 'border-rose-900/60 bg-rose-950/20' : 'border-slate-800 bg-[#0e1622]'}`}>
@@ -1134,7 +1134,7 @@ export default function CallerDetailModal({
 
       {/* DEDICATED REPORT NAME INACCURACY MODAL */}
       {isInaccuracyModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-4 animate-in fade-in duration-150" style={{ backdropFilter: "none", WebkitBackdropFilter: "none" }}>
           <div className="w-full max-w-lg rounded-3xl border border-slate-800 bg-[#0c1219] p-6 shadow-2xl space-y-4">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
