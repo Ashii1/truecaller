@@ -16,9 +16,9 @@ import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Official Android InCallService Implementation for VigilShield.
+ * Official Android InCallService Implementation for CallShield.
  * 
- * When VigilShield is granted the default dialer role (ROLE_DIALER) by Android Telecom,
+ * When CallShield is granted the default dialer role (ROLE_DIALER) by Android Telecom,
  * the Android OS binds to this service to manage cellular voice calls.
  * 
  * Provides:
@@ -28,13 +28,13 @@ import java.util.concurrent.ConcurrentHashMap
  * - Direct bidirectional bridging to the application UI
  */
 @RequiresApi(Build.VERSION_CODES.Q)
-class VigilShieldInCallService : InCallService() {
+class CallShieldInCallService : InCallService() {
 
     companion object {
-        private const val TAG = "VigilShieldInCall"
+        private const val TAG = "CallShieldInCall"
         
         // Active singleton instance reference for UI bridge communication
-        var instance: VigilShieldInCallService? = null
+        var instance: CallShieldInCallService? = null
             private set
             
         // Thread-safe map of active Android Call objects indexed by unique Call ID
@@ -92,7 +92,7 @@ class VigilShieldInCallService : InCallService() {
     override fun onCreate() {
         super.onCreate()
         instance = this
-        Log.i(TAG, "VigilShield InCallService instantiated and bound by Android Telecom.")
+        Log.i(TAG, "CallShield InCallService instantiated and bound by Android Telecom.")
     }
 
     override fun onDestroy() {
@@ -100,7 +100,7 @@ class VigilShieldInCallService : InCallService() {
         activeCalls.clear()
         callCallbacks.clear()
         instance = null
-        Log.i(TAG, "VigilShield InCallService destroyed.")
+        Log.i(TAG, "CallShield InCallService destroyed.")
     }
 
     override fun onCallAdded(call: Call) {
