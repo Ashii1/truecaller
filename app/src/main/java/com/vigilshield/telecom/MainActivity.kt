@@ -170,6 +170,7 @@ class MainActivity : AppCompatActivity() {
         val action = current.getStringExtra("notification_action") ?: current.action ?: ""
         val isIncoming = isIncomingCallIntent(current)
         val phoneSurface = current.getBooleanExtra("phone_surface", false)
+        bridge.dispatchWebEvent("PHONE_SURFACE_CHANGED", JSONObject().put("phoneOnly", phoneSurface))
         hideLoading()
         hideError()
         if (!callId.isNullOrBlank() || !number.isNullOrBlank() || !tab.isNullOrBlank() || isIncoming) {
