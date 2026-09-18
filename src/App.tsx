@@ -34,7 +34,7 @@ const INITIAL_TIMELINE_EVENTS: SecurityTimelineEvent[] = [];
 type Sim='SIM 1 (Personal)'|'SIM 2 (Work)';
 
 export default function App(){
- const [activeTab,setActiveTab]=useState<TabId>('dialer'); const [selectedSim,setSelectedSim]=useState<Sim>('SIM 1 (Personal)');
+ const [activeTab,setActiveTab]=useState<TabId>('dialer'); const [phoneOnly,setPhoneOnly]=useState(false); const [selectedSim,setSelectedSim]=useState<Sim>('SIM 1 (Personal)');
  const safeParse=<T,>(key:string,fallback:T):T=>{try{const raw=localStorage.getItem(key);return raw?JSON.parse(raw) as T:fallback}catch{return fallback}};
  const safeStore=<T,>(key:string,value:T):void=>{try{localStorage.setItem(key,JSON.stringify(value))}catch(err){console.warn(`Storage quota or write failed for ${key}:`,err)}};
  const [settings,setSettings]=useState<ShieldSettings>(()=>safeParse('vigilshield_settings',INITIAL_SETTINGS));
@@ -177,7 +177,6 @@ export default function App(){
  }, []);
 
  useEffect(()=>{const handler=(e:any)=>{e.preventDefault();setDeferredPrompt(e)};window.addEventListener('beforeinstallprompt',handler);return()=>window.removeEventListener('beforeinstallprompt',handler)},[]);
- useEffect(()=>{const unsub=telecomBridge.onDialIntent(n=>{setActiveTab('dialer');setDialerInitialNumber(n)});return unsub},[]);
  useEffect(()=>{const handleCallsUpdate=(e:any)=>{if(e.detail&&Array.isArray(e.detail)){setCalls(e.detail)}else{const fresh=safeParse<CallLogItem[]>('vigilshield_calls',[]);if(fresh?.length)setCalls(fresh)}};window.addEventListener('vigilshield_calls_updated',handleCallsUpdate as EventListener);externalDirectoryService.batchEnrichLocalCalls();return()=>window.removeEventListener('vigilshield_calls_updated',handleCallsUpdate as EventListener)},[]);
   useEffect(() => { safeStore('vigilshield_settings', settings); }, [settings]);
   useEffect(() => { safeStore('vigilshield_rules', rules); }, [rules]);
@@ -234,6 +233,7 @@ export default function App(){
         const callId = payload?.callId || '';
         const tab = payload?.tab || 'recents';
         const isIncoming = Boolean(payload?.isIncoming);
+        if (payload?.phoneSurface) setPhoneOnly(true);
 
         if (isIncoming && number) {
           const p = lookupTruecallerDirectory(number, rules, whitelist);
@@ -726,7 +726,7 @@ export default function App(){
 
   return <div className="min-h-screen bg-[#070b10] text-white">
    <Header settings={settings} isDefaultDialer={isDefaultDialer} onRequestDefaultDialer={handleRequestDefaultDialer} onOpenPermissionCenter={()=>setIsPermissionCenterOpen(true)} onSyncDatabase={handleSyncDeviceData} isSyncing={isSyncing} autoCancelEnabled={autoCancelEnabled} onToggleAutoCancel={()=>setAutoCancelEnabled(v=>!v)} onOpenInstallModal={()=>setIsInstallModalOpen(true)} onOpenDataSources={()=>setIsDataSourcesModalOpen(true)} onOpenDiagnostics={()=>setIsDiagnosticsModalOpen(true)} recentSpamCalls={recentSpamCalls} onSelectCall={openCaller} onOpenRecents={()=>setActiveTab('recents')} onOpenProtection={()=>setActiveTab('protection')} density={density} onDensityChange={handleDensityChange}/>
-   <Navigation activeTab={activeTab} onChangeTab={setActiveTab} spamCallsCount={spamCallsCount} activeRulesCount={activeRulesCount} assistantAlertsCount={3}/>
+   <Navigation activeTab={activeTab} onChangeTab={setActiveTab} spamCallsCount={spamCallsCount} activeRulesCount={activeRulesCount} assistantAlertsCount={3} phoneOnly={phoneOnly}/>
    <main className="mx-auto w-full max-w-4xl px-3 py-3 pb-28 sm:pb-32">
     {activeTab==='dialer'&&<DialerTab contacts={contacts} recentCalls={calls} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onOpenCallerDetail={handleOpenCallerDetail} onSaveContact={(n,nm)=>handleUpdateCallerName(n,nm)} selectedSim={selectedSim} onChangeSim={setSelectedSim} initialNumber={dialerInitialNumber} density={density}/>} 
     {activeTab==='recents'&&<RecentsTab calls={calls} rules={rules} whitelist={whitelist} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onSelectCall={openCaller} onBlockNumber={handleBlockNumber} onWhitelistNumber={handleWhitelistNumber} onDeleteCall={handleDeleteCall} onClearAllCalls={handleClearAllCalls} onSyncDeviceCalls={handleSyncDeviceData} density={density}/>} 
