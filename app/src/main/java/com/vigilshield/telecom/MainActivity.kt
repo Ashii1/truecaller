@@ -92,8 +92,8 @@ class MainActivity : AppCompatActivity() {
                 syncWebSettingsToNative()
                 scheduleReactMountCheck(view)
             }
-            override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: android.webkit.WebResourceError?) { if (request?.isForMainFrame != false) showError("The VigilShield screen could not load.\n\n${error?.description ?: "Unknown WebView error"}") }
-            @Suppress("DEPRECATION") override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) { showError("The VigilShield screen could not load.\n\n${description ?: "WebView error $errorCode"}") }
+            override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: android.webkit.WebResourceError?) { if (request?.isForMainFrame != false) showError("The CallShield screen could not load.\n\n${error?.description ?: "Unknown WebView error"}") }
+            @Suppress("DEPRECATION") override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) { showError("The CallShield screen could not load.\n\n${description ?: "WebView error $errorCode"}") }
         }
         webView.webChromeClient = object : WebChromeClient() { override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean { if (consoleMessage.messageLevel() == ConsoleMessage.MessageLevel.ERROR) lastConsoleError = "${consoleMessage.message()} (line ${consoleMessage.lineNumber()})"; return true } }
         webView.loadUrl(APP_ASSET_URL)
@@ -245,7 +245,7 @@ class MainActivity : AppCompatActivity() {
             if (result?.contains("READY") == true) {
                 onReactUiReady()
             } else if (startupCheckAttempts >= 10) {
-                showError("VigilShield UI did not finish starting.\n\n${lastConsoleError ?: "The interface took too long to mount."}")
+                showError("CallShield UI did not finish starting.\n\n${lastConsoleError ?: "The interface took too long to mount."}")
             }
         }
     }
@@ -255,7 +255,7 @@ class MainActivity : AppCompatActivity() {
         val icon = android.widget.ImageView(this@MainActivity).apply {
             setImageResource(R.drawable.ic_vigilshield)
             scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
-            contentDescription = "VigilShield"
+            contentDescription = "CallShield"
             alpha = 0f
         }
         addView(icon, FrameLayout.LayoutParams(88, 88, Gravity.CENTER))
@@ -264,7 +264,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun createErrorView(): View {
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setBackgroundColor(Color.rgb(2, 6, 23)); setPadding(32, 32, 32, 32) }
-        box.addView(TextView(this).apply { text = "VigilShield couldn't start"; textSize = 24f; setTextColor(Color.WHITE); gravity = Gravity.CENTER })
+        box.addView(TextView(this).apply { text = "CallShield couldn't start"; textSize = 24f; setTextColor(Color.WHITE); gravity = Gravity.CENTER })
         errorText = TextView(this).apply { textSize = 15f; setTextColor(Color.LTGRAY); gravity = Gravity.CENTER; setPadding(0, 20, 0, 24) }
         box.addView(errorText)
         box.addView(Button(this).apply { text = "Retry"; setOnClickListener { hideError(); showLoading(); webView.reload() } })
