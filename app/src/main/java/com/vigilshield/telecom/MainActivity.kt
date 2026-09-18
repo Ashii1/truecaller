@@ -52,6 +52,17 @@ class MainActivity : AppCompatActivity() {
         private const val DIALER_ROLE_REQ = 7001
         private const val SCREENING_ROLE_REQ = 7003
         private const val APP_ASSET_URL = "https://appassets.androidplatform.net/index.html"
+        @Volatile var isAppVisible: Boolean = false
+    }
+
+    override fun onStart() {
+        super.onStart()
+        isAppVisible = true
+    }
+
+    override fun onStop() {
+        isAppVisible = false
+        super.onStop()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
