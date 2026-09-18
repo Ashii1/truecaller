@@ -18,7 +18,7 @@ import {
   HelpCircle,
   X
 } from 'lucide-react';
-import { CallLogItem, ContactItem, TruecallerDirectoryProfile, BlockRule } from '../types';
+import { CallLogItem, ContactItem, CallShieldDirectoryProfile, BlockRule } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import { useI18n } from '../i18n/LanguageContext';
 
@@ -26,7 +26,7 @@ interface AssistantTabProps {
   calls: CallLogItem[];
   contacts: ContactItem[];
   rules: BlockRule[];
-  lookupProfile: (num: string) => TruecallerDirectoryProfile;
+  lookupProfile: (num: string) => CallShieldDirectoryProfile;
   onInitiateCall: (number: string, name?: string) => void;
   onAddRule: (rule: Omit<BlockRule, 'id' | 'hitCount' | 'createdAt'>) => void;
 }
@@ -43,7 +43,7 @@ function AssistantTab({
   const [investigateInput, setInvestigateInput] = useState('');
   const [analyzedResult, setAnalyzedResult] = useState<{
     number: string;
-    profile: TruecallerDirectoryProfile;
+    profile: CallShieldDirectoryProfile;
     analysis: string[];
     riskScore: number;
     verdict: string;
