@@ -211,7 +211,6 @@ export default function App(){
       }
     }
 
-    telecomBridge.notifyUiReady();
     telecomBridge.syncActiveCalls();
 
     const handleFocus = () => {
@@ -444,6 +443,8 @@ export default function App(){
       setDialerInitialNumber(num);
       initiateCallRef.current(num);
     });
+
+    telecomBridge.notifyUiReady();
 
     return () => {
       unsub();
@@ -732,7 +733,7 @@ export default function App(){
 
   return <div className="min-h-screen bg-[#070b10] text-white">
    {!phoneOnly && <Header settings={settings} isDefaultDialer={isDefaultDialer} onRequestDefaultDialer={handleRequestDefaultDialer} onOpenPermissionCenter={()=>setIsPermissionCenterOpen(true)} onSyncDatabase={handleSyncDeviceData} isSyncing={isSyncing} autoCancelEnabled={autoCancelEnabled} onToggleAutoCancel={()=>setAutoCancelEnabled(v=>!v)} onOpenInstallModal={()=>setIsInstallModalOpen(true)} onOpenDataSources={()=>setIsDataSourcesModalOpen(true)} onOpenDiagnostics={()=>setIsDiagnosticsModalOpen(true)} recentSpamCalls={recentSpamCalls} onSelectCall={openCaller} onOpenRecents={()=>setActiveTab('recents')} onOpenProtection={()=>setActiveTab('protection')} density={density} onDensityChange={handleDensityChange}/>} 
-   {!phoneOnly && <Navigation activeTab={activeTab} onChangeTab={setActiveTab} spamCallsCount={spamCallsCount} activeRulesCount={activeRulesCount} assistantAlertsCount={3} phoneOnly={phoneOnly}/>} 
+   <Navigation activeTab={activeTab} onChangeTab={setActiveTab} spamCallsCount={spamCallsCount} activeRulesCount={activeRulesCount} assistantAlertsCount={3} phoneOnly={phoneOnly}/> 
    <main className={phoneOnly ? "min-h-screen w-full" : "mx-auto w-full max-w-4xl px-3 py-3 pb-28 sm:pb-32"}>
     {activeTab==='dialer'&&<DialerTab contacts={contacts} recentCalls={calls} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onOpenCallerDetail={handleOpenCallerDetail} onSaveContact={(n,nm)=>handleUpdateCallerName(n,nm)} selectedSim={selectedSim} onChangeSim={setSelectedSim} initialNumber={dialerInitialNumber} density={density}/>} 
     {activeTab==='recents'&&<RecentsTab calls={calls} rules={rules} whitelist={whitelist} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onSelectCall={openCaller} onBlockNumber={handleBlockNumber} onWhitelistNumber={handleWhitelistNumber} onDeleteCall={handleDeleteCall} onClearAllCalls={handleClearAllCalls} onSyncDeviceCalls={handleSyncDeviceData} density={density}/>} 
