@@ -1,5 +1,5 @@
 {
-  "name": "VigilShield",
+  "name": "CallShield",
   "description": "Intelligent Caller Protection & Spam Blocking platform featuring 4-tier risk classification, number series cluster blocking, authorized directory lookup, and privacy-first call management.",
   "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
