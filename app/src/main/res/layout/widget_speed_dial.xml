@@ -14,5 +14,5 @@
         android:adjustViewBounds="true"
         android:contentDescription="VigilShield"
         android:scaleType="fitCenter"
-        android:src="@drawable/ic_vigilshield" />
+        android:src="@drawable/ic_callshield" />
 </FrameLayout>
