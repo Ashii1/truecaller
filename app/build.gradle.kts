@@ -1,35 +1,22 @@
 import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.Exec
 
-// Versioning configuration for seamless in-place updates:
-// 1. Android strictly blocks APK updates if the new versionCode <= installed versionCode (INSTALL_FAILED_VERSION_DOWNGRADE).
-// 2. Base version code is set to 200 so it comfortably supersedes all previous test/CI builds (1..6).
-// 3. In CI, GITHUB_RUN_NUMBER is added to ensure every subsequent commit/action run is monotonically higher.
+// CI release builds use an ephemeral keystore reconstructed from GitHub Actions secrets.
+// Never keep signing credentials in source control.
 val baseVersionCode = 202
 val ciRunNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
 val finalVersionCode = baseVersionCode + ciRunNumber
 val finalVersionName = "1.5.2"
 
-// Signing configuration for seamless in-place updates:
-// Android REQUIRES every update to be signed by the exact same cryptographic key as the installed version.
-// We support custom CI environment variables, but fall back seamlessly to the project's bundled release-keystore.jks
-// so local builds, CI builds, debug builds, and release builds all share the identical signing certificate.
 val envKeystorePath = System.getenv("VIGILSHIELD_KEYSTORE_FILE")
 val envKeystorePassword = System.getenv("VIGILSHIELD_KEYSTORE_PASSWORD")
 val envKeyAlias = System.getenv("VIGILSHIELD_KEY_ALIAS")
 val envKeyPassword = System.getenv("VIGILSHIELD_KEY_PASSWORD")
 
-val bundledKeystoreFile = when {
-    !envKeystorePath.isNullOrBlank() && file(envKeystorePath).exists() -> file(envKeystorePath)
-    file("release-keystore.jks").exists() -> file("release-keystore.jks")
-    rootProject.file("release-keystore.jks").exists() -> rootProject.file("release-keystore.jks")
-    rootProject.file("android/release-keystore.jks").exists() -> rootProject.file("android/release-keystore.jks")
-    else -> null
-}
-
-val finalStorePassword = envKeystorePassword?.takeIf { it.isNotBlank() } ?: "vigilshield123"
-val finalKeyAlias = envKeyAlias?.takeIf { it.isNotBlank() } ?: "vigilshield-key"
-val finalKeyPassword = envKeyPassword?.takeIf { it.isNotBlank() } ?: "vigilshield123"
+val releaseKeystoreFile = envKeystorePath?.takeIf { it.isNotBlank() }?.let { file(it) }
+val releaseStorePassword = envKeystorePassword?.takeIf { it.isNotBlank() }
+val releaseKeyAlias = envKeyAlias?.takeIf { it.isNotBlank() }
+val releaseKeyPassword = envKeyPassword?.takeIf { it.isNotBlank() }
 
 plugins {
     id("com.android.application")
@@ -48,31 +35,27 @@ android {
     }
 
     signingConfigs {
-        create("unifiedSigning") {
-            if (bundledKeystoreFile != null && bundledKeystoreFile.exists()) {
-                storeFile = bundledKeystoreFile
-                storePassword = finalStorePassword
-                keyAlias = finalKeyAlias
-                keyPassword = finalKeyPassword
+        create("ciRelease") {
+            if (releaseKeystoreFile != null && releaseStorePassword != null && releaseKeyAlias != null && releaseKeyPassword != null) {
+                storeFile = releaseKeystoreFile
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
             }
         }
     }
 
     buildTypes {
         debug {
-            // CRITICAL: Use the unified signing key for debug builds as well.
-            // This prevents "INSTALL_FAILED_UPDATE_INCOMPATIBLE" errors when updating
-            // between debug testing APKs and release distribution APKs.
-            if (bundledKeystoreFile != null && bundledKeystoreFile.exists()) {
-                signingConfig = signingConfigs.getByName("unifiedSigning")
-            }
+            // Debug builds use the standard Android debug signing key.
         }
         release {
-            isMinifyEnabled = false
-            if (bundledKeystoreFile != null && bundledKeystoreFile.exists()) {
-                signingConfig = signingConfigs.getByName("unifiedSigning")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            if (releaseKeystoreFile != null && releaseStorePassword != null && releaseKeyAlias != null && releaseKeyPassword != null && releaseKeystoreFile.exists()) {
+                signingConfig = signingConfigs.getByName("ciRelease")
             } else {
-                throw GradleException("Release keystore file not found. Ensure release-keystore.jks is present in project root.")
+                throw GradleException("Release signing credentials are missing. Configure the VIGILSHIELD_* GitHub Actions secrets.")
             }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
