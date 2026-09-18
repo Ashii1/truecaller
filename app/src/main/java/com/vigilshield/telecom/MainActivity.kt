@@ -85,7 +85,8 @@ class MainActivity : AppCompatActivity() {
         }
         webView.webChromeClient = object : WebChromeClient() { override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean { if (consoleMessage.messageLevel() == ConsoleMessage.MessageLevel.ERROR) lastConsoleError = "${consoleMessage.message()} (line ${consoleMessage.lineNumber()})"; return true } }
         webView.loadUrl(APP_ASSET_URL)
-        requestDefaultDialerIfAvailable()
+        // Default Phone role is requested only from an explicit user action in the UI.
+        // Do not interrupt widget/phone-surface launches with a system role dialog.
     }
 
     private fun hasActiveOrRingingCall(): Boolean {
