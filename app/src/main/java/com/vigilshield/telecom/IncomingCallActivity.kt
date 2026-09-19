@@ -23,7 +23,7 @@ class IncomingCallActivity : Activity() {
     private val monitor = object : Runnable {
         override fun run() {
             if (isFinishing) return
-            val call = NativeInCallService.activeCalls[callId]
+            val call = VigilShieldInCallService.activeCalls[callId]
             if (call == null || call.state != android.telecom.Call.STATE_RINGING) {
                 finish()
                 return
@@ -101,14 +101,14 @@ class IncomingCallActivity : Activity() {
         val decline = Button(this).apply {
             text = "Decline"
             setOnClickListener {
-                NativeInCallService.activeCalls[callId]?.reject(false, null)
+                VigilShieldInCallService.activeCalls[callId]?.reject(false, null)
                 finish()
             }
         }
         val answer = Button(this).apply {
             text = "Answer"
             setOnClickListener {
-                NativeInCallService.activeCalls[callId]?.answer(android.telecom.VideoProfile.STATE_AUDIO_ONLY)
+                VigilShieldInCallService.activeCalls[callId]?.answer(android.telecom.VideoProfile.STATE_AUDIO_ONLY)
                 finish()
             }
         }
