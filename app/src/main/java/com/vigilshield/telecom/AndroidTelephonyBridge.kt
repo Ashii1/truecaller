@@ -218,12 +218,22 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
     @JavascriptInterface fun lookupContactName(number: String): String = lookupName(number).orEmpty()
     @JavascriptInterface fun answerCall(id: String): Boolean = NativeInCallService.activeCalls[id]?.let { it.answer(0); NativeInCallService.stopRinging(); CallNotificationHelper.clearCall(activity.applicationContext, id); true } ?: false
     @JavascriptInterface fun rejectCall(id: String, reason: String?): Boolean { NativeInCallService.stopRinging(); CallNotificationHelper.clearCall(activity.applicationContext, id); CallNotificationHelper.clearAllCallNotifications(activity.applicationContext); return NativeInCallService.activeCalls[id]?.let { it.reject(false, reason ?: "Declined"); true } ?: false }
-    @JavascriptInterface fun disconnectCall(id: String): Boolean {
-        val call = NativeInCallService.activeCalls[id] ?: NativeInCallService.activeCalls.values.singleOrNull() ?: return false
+    @JavascriptInterface fun disconnectCall(id: String, number: String? = null): Boolean {
+        val normalizedNumber = number.orEmpty().filter { it.isDigit() }
+        val call = NativeInCallService.activeCalls[id]
+            ?: NativeInCallService.activeCalls.values.firstOrNull { active ->
+                normalizedNumber.isNotBlank() &&
+                    active.details.handle?.schemeSpecificPart.orEmpty().filter { it.isDigit() } == normalizedNumber
+            }
+            ?: NativeInCallService.activeCalls.values.singleOrNull()
+            ?: return false
+        val resolvedId = NativeInCallService.activeCalls.entries.firstOrNull { it.value == call }?.key ?: id
         NativeInCallService.stopRinging()
         return runCatching {
-            call.disconnect()
-            CallNotificationHelper.clearCall(activity.applicationContext, id)
+            if (call.state != Call.STATE_DISCONNECTED && call.state != Call.STATE_DISCONNECTING) {
+                call.disconnect()
+            }
+            CallNotificationHelper.clearCall(activity.applicationContext, resolvedId)
             CallNotificationHelper.clearAllCallNotifications(activity.applicationContext)
             true
         }.getOrDefault(false)
