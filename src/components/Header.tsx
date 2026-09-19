@@ -64,8 +64,8 @@ type PrivacySettings = {
 
 const PRIVACY_DEFAULTS: PrivacySettings = {
   callRecordingEnabled: false,
-  showCallerDetailsInNotifications: false,
-  privacyMode: true,
+  showCallerDetailsInNotifications: true,
+  privacyMode: false,
   clipboardPasteDetection: true,
   emergencyRepeatEnabled: true,
   emergencyRepeatThreshold: 3,
