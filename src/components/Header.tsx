@@ -470,9 +470,9 @@ function Header({
 
       {/* Main Settings Modal */}
       {showSettings && (
-        <div className="fixed inset-0 z-[70] bg-black/60 p-0 sm:p-4" onClick={() => setShowSettings(false)} role="presentation">
+        <div className="fixed inset-0 z-[110] bg-black/60 p-0 sm:p-4" onClick={() => setShowSettings(false)} role="presentation">
           <section
-            className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto border-l border-slate-700 bg-slate-950 shadow-2xl sm:relative sm:mx-auto sm:my-8 sm:h-auto sm:max-h-[calc(100vh-4rem)] sm:rounded-3xl sm:border"
+            className="absolute right-0 top-0 h-full w-full max-w-md max-h-[100dvh] overflow-y-auto border-l border-slate-700 bg-slate-950 shadow-2xl sm:relative sm:mx-auto sm:my-8 sm:h-auto sm:max-h-[calc(100vh-4rem)] sm:rounded-3xl sm:border"
             onMouseDown={e => e.stopPropagation()}
             onClick={e => e.stopPropagation()}
             onPointerDown={e => e.stopPropagation()}
@@ -591,7 +591,7 @@ function Header({
                     <select
                       value={privacy.emergencyRepeatThreshold}
                       onChange={e => updatePrivacy('emergencyRepeatThreshold', Number(e.target.value) as 3 | 4 | 5)}
-                      className="mt-1 w-full rounded-lg bg-slate-800 px-2 py-2 text-sm font-semibold text-white outline-none"
+                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-2 text-sm font-semibold text-white outline-none" style={{ colorScheme: 'dark' }}
                     >
                       <option value={3}>{t('calls_count_3')}</option>
                       <option value={4}>{t('calls_count_4')}</option>
@@ -603,7 +603,7 @@ function Header({
                     <select
                       value={privacy.emergencyRepeatWindow}
                       onChange={e => updatePrivacy('emergencyRepeatWindow', Number(e.target.value) as 3 | 5 | 10)}
-                      className="mt-1 w-full rounded-lg bg-slate-800 px-2 py-2 text-sm font-semibold text-white outline-none"
+                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-2 py-2 text-sm font-semibold text-white outline-none" style={{ colorScheme: 'dark' }}
                     >
                       <option value={3}>{t('time_window_3')}</option>
                       <option value={5}>{t('time_window_5')}</option>
