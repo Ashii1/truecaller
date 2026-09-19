@@ -14,8 +14,8 @@ import { externalDirectoryService } from '../services/externalDirectoryService';
  * Normalizes phone numbers to comparable digits (and optional leading +)
  */
 export function normalizePhoneNumber(rawNumber: string): string {
-  if (!rawNumber) return '';
-  const trimmed = rawNumber.trim();
+  if (rawNumber == null) return '';
+  const trimmed = String(rawNumber).trim();
   const hasPlus = trimmed.startsWith('+');
   const digitsOnly = trimmed.replace(/\D/g, '');
   return hasPlus ? `+${digitsOnly}` : digitsOnly;
@@ -25,13 +25,15 @@ export function normalizePhoneNumber(rawNumber: string): string {
  * Formats a phone string for CallShield-standard display
  */
 export function formatPhoneNumber(num: string): string {
-  if (!num) return 'Unknown';
-  const lower = String(num ?? '').toLowerCase().trim();
-  if (lower === 'private' || lower === 'anonymous' || num === '0' || lower === 'unknown') {
+  if (num == null) return 'Unknown';
+  const value = String(num);
+  if (!value) return 'Unknown';
+  const lower = value.toLowerCase().trim();
+  if (lower === 'private' || lower === 'anonymous' || value === '0' || lower === 'unknown') {
     return 'Private / Hidden';
   }
 
-  const digits = num.replace(/\D/g, '');
+  const digits = value.replace(/\D/g, '');
 
   // 1. Indian TRAI 140 Telemarketing Series (10 digits starting with 140)
   if (digits.length === 10 && digits.startsWith('140')) {
