@@ -40,7 +40,7 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
     private var lastCallRequestNumber: String = ""
     private var lastCallRequestAt: Long = 0L
 
-    init { NativeInCallService.bridge = this; NativeInCallService.appContext = activity.applicationContext; CallNotificationHelper.ensureChannel(activity.applicationContext) }
+    init { VigilShieldInCallService.bridge = this; VigilShieldInCallService.appContext = activity.applicationContext; CallNotificationHelper.ensureChannel(activity.applicationContext) }
 
     @JavascriptInterface fun checkDefaultDialerStatus(): String = roleStatus().toString()
     @JavascriptInterface fun requestDefaultDialerRole(): Boolean { if (Build.VERSION.SDK_INT < 29) return false; val manager = activity.getSystemService(RoleManager::class.java); if (!manager.isRoleAvailable(RoleManager.ROLE_DIALER)) return false; if (manager.isRoleHeld(RoleManager.ROLE_DIALER)) return true; activity.startActivityForResult(manager.createRequestRoleIntent(RoleManager.ROLE_DIALER), 7001); return true }
@@ -100,13 +100,13 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
             .put("isDefaultDialer", isDefaultDialer())
             .put("isDialerRoleAvailable", Build.VERSION.SDK_INT >= 29 && activity.getSystemService(RoleManager::class.java).isRoleAvailable(RoleManager.ROLE_DIALER))
             .put("isCallScreeningRoleHeld", Build.VERSION.SDK_INT >= 29 && activity.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_CALL_SCREENING))
-            .put("isInCallServiceBound", NativeInCallService.instance != null)
+            .put("isInCallServiceBound", VigilShieldInCallService.instance != null)
             .put("hasSim", accounts.isNotEmpty())
             .put("isAirplaneMode", false)
             .put("isNetworkAvailable", true)
             .put("networkOperatorName", accounts.firstOrNull()?.componentName?.packageName ?: "Unknown")
             .put("simCarrierIdName", accounts.firstOrNull()?.componentName?.packageName ?: "Unknown")
-            .put("activeCallsCount", NativeInCallService.activeCalls.size)
+            .put("activeCallsCount", VigilShieldInCallService.activeCalls.size)
             .put("callLogPermission", hasCallLogPermission())
             .put("contactsPermission", hasContactsPermission())
             .put("callPhonePermission", hasPermission(Manifest.permission.CALL_PHONE))
@@ -145,7 +145,7 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
             return JSONObject().put("success", false).put("message", "Call is already being started").toString()
         }
         val normalized = clean.filter { it.isDigit() }
-        if (NativeInCallService.activeCalls.values.any { call ->
+        if (VigilShieldInCallService.activeCalls.values.any { call ->
                 call.details.handle?.schemeSpecificPart?.filter { it.isDigit() } == normalized
             }) {
             return JSONObject().put("success", false).put("message", "A call to this number is already active").toString()
@@ -161,14 +161,14 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
             account?.let { extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, it) }
             extras.putBoolean(TelecomManager.EXTRA_START_CALL_WITH_SPEAKERPHONE, false)
 
-            // The real Telecom call id is assigned by NativeInCallService.onCallAdded().
+            // The real Telecom call id is assigned by VigilShieldInCallService.onCallAdded().
             // Do not invent a second id: the UI will switch to the native id from the
             // CALL_STATE_CHANGED event, and disconnectCall() can safely use its fallback
             // during the short dialing window.
             val callId = ""
             val callerName = lookupName(clean).orEmpty().ifBlank { clean }
 
-            // Do not launch a second activity here. NativeInCallService.onCallAdded()
+            // Do not launch a second activity here. VigilShieldInCallService.onCallAdded()
             // owns the in-call UI lifecycle after Telecom accepts the call.
 
             // Once CallShield owns ROLE_DIALER, Android Telecom is the single call entry point.
@@ -216,19 +216,19 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
     @JavascriptInterface fun fetchRealCallLogs(limit: Int): String = readCallLogs(limit).toString()
     @JavascriptInterface fun fetchDeviceCallLogs(limit: Int): String = readCallLogs(limit).toString()
     @JavascriptInterface fun lookupContactName(number: String): String = lookupName(number).orEmpty()
-    @JavascriptInterface fun answerCall(id: String): Boolean = NativeInCallService.activeCalls[id]?.let { it.answer(0); NativeInCallService.stopRinging(); CallNotificationHelper.clearCall(activity.applicationContext, id); true } ?: false
-    @JavascriptInterface fun rejectCall(id: String, reason: String?): Boolean { NativeInCallService.stopRinging(); CallNotificationHelper.clearCall(activity.applicationContext, id); CallNotificationHelper.clearAllCallNotifications(activity.applicationContext); return NativeInCallService.activeCalls[id]?.let { it.reject(false, reason ?: "Declined"); true } ?: false }
+    @JavascriptInterface fun answerCall(id: String): Boolean = VigilShieldInCallService.activeCalls[id]?.let { it.answer(0); VigilShieldInCallService.stopRinging(); CallNotificationHelper.clearCall(activity.applicationContext, id); true } ?: false
+    @JavascriptInterface fun rejectCall(id: String, reason: String?): Boolean { VigilShieldInCallService.stopRinging(); CallNotificationHelper.clearCall(activity.applicationContext, id); CallNotificationHelper.clearAllCallNotifications(activity.applicationContext); return VigilShieldInCallService.activeCalls[id]?.let { it.reject(false, reason ?: "Declined"); true } ?: false }
     @JavascriptInterface fun disconnectCall(id: String, number: String? = null): Boolean {
         val normalizedNumber = number.orEmpty().filter { it.isDigit() }
-        val call = NativeInCallService.activeCalls[id]
-            ?: NativeInCallService.activeCalls.values.firstOrNull { active ->
+        val call = VigilShieldInCallService.activeCalls[id]
+            ?: VigilShieldInCallService.activeCalls.values.firstOrNull { active ->
                 normalizedNumber.isNotBlank() &&
                     active.details.handle?.schemeSpecificPart.orEmpty().filter { it.isDigit() } == normalizedNumber
             }
-            ?: NativeInCallService.activeCalls.values.singleOrNull()
+            ?: VigilShieldInCallService.activeCalls.values.singleOrNull()
             ?: return false
-        val resolvedId = NativeInCallService.activeCalls.entries.firstOrNull { it.value == call }?.key ?: id
-        NativeInCallService.stopRinging()
+        val resolvedId = VigilShieldInCallService.activeCalls.entries.firstOrNull { it.value == call }?.key ?: id
+        VigilShieldInCallService.stopRinging()
         return runCatching {
             if (call.state != Call.STATE_DISCONNECTED && call.state != Call.STATE_DISCONNECTING) {
                 call.disconnect()
@@ -238,20 +238,20 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
             true
         }.getOrDefault(false)
     }
-    @JavascriptInterface fun setMuted(muted: Boolean): Boolean = runCatching { NativeInCallService.instance?.setMuted(muted); true }.getOrDefault(false)
-    @JavascriptInterface fun setSpeakerRoute(enabled: Boolean): Boolean = runCatching { NativeInCallService.instance?.setSpeaker(enabled) ?: false }.getOrDefault(false)
+    @JavascriptInterface fun setMuted(muted: Boolean): Boolean = runCatching { VigilShieldInCallService.instance?.setMuted(muted); true }.getOrDefault(false)
+    @JavascriptInterface fun setSpeakerRoute(enabled: Boolean): Boolean = runCatching { VigilShieldInCallService.instance?.setSpeaker(enabled) ?: false }.getOrDefault(false)
     @JavascriptInterface fun sendDtmfTone(id: String, digit: String): Boolean = runCatching {
-        val call = NativeInCallService.activeCalls[id] ?: NativeInCallService.activeCalls.values.singleOrNull() ?: return false
+        val call = VigilShieldInCallService.activeCalls[id] ?: VigilShieldInCallService.activeCalls.values.singleOrNull() ?: return false
         val tone = digit.firstOrNull() ?: return false
         call.playDtmfTone(tone)
         call.stopDtmfTone()
         true
     }.getOrDefault(false)
-    @JavascriptInterface fun holdCall(id: String): Boolean = runCatching { (NativeInCallService.activeCalls[id] ?: NativeInCallService.activeCalls.values.singleOrNull())?.hold() ?: return false; true }.getOrDefault(false)
-    @JavascriptInterface fun unholdCall(id: String): Boolean = runCatching { (NativeInCallService.activeCalls[id] ?: NativeInCallService.activeCalls.values.singleOrNull())?.unhold() ?: return false; true }.getOrDefault(false)
-    @JavascriptInterface fun swapCalls(): Boolean = NativeInCallService.swapCalls()
-    @JavascriptInterface fun mergeCalls(): Boolean = NativeInCallService.mergeCalls()
-    @JavascriptInterface fun clearStaleCallNotifications(): Boolean { CallNotificationHelper.clearAllCallNotifications(activity.applicationContext); NativeInCallService.stopRinging(); return true }
+    @JavascriptInterface fun holdCall(id: String): Boolean = runCatching { (VigilShieldInCallService.activeCalls[id] ?: VigilShieldInCallService.activeCalls.values.singleOrNull())?.hold() ?: return false; true }.getOrDefault(false)
+    @JavascriptInterface fun unholdCall(id: String): Boolean = runCatching { (VigilShieldInCallService.activeCalls[id] ?: VigilShieldInCallService.activeCalls.values.singleOrNull())?.unhold() ?: return false; true }.getOrDefault(false)
+    @JavascriptInterface fun swapCalls(): Boolean = VigilShieldInCallService.swapCalls()
+    @JavascriptInterface fun mergeCalls(): Boolean = VigilShieldInCallService.mergeCalls()
+    @JavascriptInterface fun clearStaleCallNotifications(): Boolean { CallNotificationHelper.clearAllCallNotifications(activity.applicationContext); VigilShieldInCallService.stopRinging(); return true }
     fun isDefaultDialer(): Boolean = if (Build.VERSION.SDK_INT >= 29) activity.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_DIALER) else telecom.defaultDialerPackage == activity.packageName
     fun hasPermission(permission: String): Boolean = ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED
     fun hasCallLogPermission(): Boolean = hasPermission(Manifest.permission.READ_CALL_LOG)
@@ -266,12 +266,12 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
     fun dispatchCallEvent(type: String, data: JSONObject) = dispatchWebEvent(type, data)
     private fun readContacts(limit: Int): JSONArray { val result = JSONArray(); if (!hasContactsPermission()) return result; val projection = arrayOf(ContactsContract.CommonDataKinds.Phone.CONTACT_ID, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER, ContactsContract.CommonDataKinds.Phone.STARRED); activity.contentResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, projection, null, null, "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} ASC")?.use { cursor -> var count = 0; while (cursor.moveToNext() && count < limit.coerceIn(1, 2000)) { result.put(JSONObject().put("id", cursor.getString(0).orEmpty()).put("name", cursor.getString(1).orEmpty()).put("number", cursor.getString(2).orEmpty()).put("isFavorite", cursor.getInt(3) == 1)); count++ } }; return result }
     fun lookupName(number: String): String? { if (!hasContactsPermission() || number.isBlank()) return null; return activity.contentResolver.query(Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number)), arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME), null, null, null)?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null } }
-    private fun readCallLogs(limit: Int): JSONArray { val result = JSONArray(); if (!hasCallLogPermission()) { NativeInCallService.readHistory(limit).forEach(result::put); return result }; val uri = CallLog.Calls.CONTENT_URI.buildUpon().appendQueryParameter(CallLog.Calls.LIMIT_PARAM_KEY, limit.coerceIn(1, 500).toString()).build(); val projection = arrayOf(CallLog.Calls._ID, CallLog.Calls.NUMBER, CallLog.Calls.CACHED_NAME, CallLog.Calls.TYPE, CallLog.Calls.DATE, CallLog.Calls.DURATION); activity.contentResolver.query(uri, projection, null, null, "${CallLog.Calls.DATE} DESC")?.use { cursor -> while (cursor.moveToNext()) { val number = cursor.getString(1).orEmpty(); val name = cursor.getString(2)?.trim().orEmpty().ifBlank { number.ifBlank { "Unknown caller" } }; result.put(JSONObject().put("id", cursor.getString(0).orEmpty()).put("number", number).put("callerName", name).put("type", when (cursor.getInt(3)) { CallLog.Calls.INCOMING_TYPE -> "INCOMING"; CallLog.Calls.OUTGOING_TYPE -> "OUTGOING"; CallLog.Calls.MISSED_TYPE -> "MISSED"; CallLog.Calls.REJECTED_TYPE -> "REJECTED"; CallLog.Calls.BLOCKED_TYPE -> "BLOCKED_CANCELLED"; else -> "UNKNOWN" }).put("timestamp", cursor.getLong(4)).put("durationSeconds", cursor.getLong(5)).put("isContact", name.isNotBlank() && name != number)) } }; return result }
+    private fun readCallLogs(limit: Int): JSONArray { val result = JSONArray(); if (!hasCallLogPermission()) { VigilShieldInCallService.readHistory(limit).forEach(result::put); return result }; val uri = CallLog.Calls.CONTENT_URI.buildUpon().appendQueryParameter(CallLog.Calls.LIMIT_PARAM_KEY, limit.coerceIn(1, 500).toString()).build(); val projection = arrayOf(CallLog.Calls._ID, CallLog.Calls.NUMBER, CallLog.Calls.CACHED_NAME, CallLog.Calls.TYPE, CallLog.Calls.DATE, CallLog.Calls.DURATION); activity.contentResolver.query(uri, projection, null, null, "${CallLog.Calls.DATE} DESC")?.use { cursor -> while (cursor.moveToNext()) { val number = cursor.getString(1).orEmpty(); val name = cursor.getString(2)?.trim().orEmpty().ifBlank { number.ifBlank { "Unknown caller" } }; result.put(JSONObject().put("id", cursor.getString(0).orEmpty()).put("number", number).put("callerName", name).put("type", when (cursor.getInt(3)) { CallLog.Calls.INCOMING_TYPE -> "INCOMING"; CallLog.Calls.OUTGOING_TYPE -> "OUTGOING"; CallLog.Calls.MISSED_TYPE -> "MISSED"; CallLog.Calls.REJECTED_TYPE -> "REJECTED"; CallLog.Calls.BLOCKED_TYPE -> "BLOCKED_CANCELLED"; else -> "UNKNOWN" }).put("timestamp", cursor.getLong(4)).put("durationSeconds", cursor.getLong(5)).put("isContact", name.isNotBlank() && name != number)) } }; return result }
 }
 
-class NativeInCallService : InCallService() {
+class VigilShieldInCallService : InCallService() {
     companion object {
-        var instance: NativeInCallService? = null
+        var instance: VigilShieldInCallService? = null
         var bridge: AndroidTelephonyBridge? = null
         var appContext: Context? = null
         val activeCalls: MutableMap<String, Call> = mutableMapOf()
