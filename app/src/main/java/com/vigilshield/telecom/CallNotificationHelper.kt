@@ -181,9 +181,26 @@ object CallNotificationHelper {
         val openIntent = PendingIntent.getActivity(context, REPEATED_ID, Intent(context, MainActivity::class.java).putExtra("open_tab", "recents").putExtra("search_number", number).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val callbackIntent = PendingIntent.getActivity(context, (REPEATED_ID.toString() + number + "callback").hashCode(), Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(number)}")), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val countLabel = if (callCount == 1) "1 time" else "$callCount times"
-        val text = if (privacyMode(context)) "A caller called $countLabel within 10 minutes" else "$identityText$detail called $countLabel within 10 minutes"
-        val body = if (privacyMode(context)) "A caller called $countLabel within 10 minutes. Review it from Recents if needed." else "$identityText called $countLabel within 10 minutes."
-        val notification = applyPrivacy(NotificationCompat.Builder(context, SECURITY_CHANNEL_ID).setSmallIcon(com.vigilshield.telecom.R.drawable.ic_callshield).setContentTitle("Repeated call needs your attention").setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(body)).setCategory(NotificationCompat.CATEGORY_STATUS).setPriority(NotificationCompat.PRIORITY_HIGH).setAutoCancel(true).setContentIntent(openIntent).addAction(0, "Call back", callbackIntent), context).build()
+        val callerLabel = if (privacyMode(context)) "Private caller" else identityText
+        val text = "$callerLabel called $countLabel within 10 minutes"
+        val body = if (privacyMode(context)) {
+            "This caller has called $countLabel within 10 minutes."
+        } else {
+            "$identityText called $countLabel within 10 minutes."
+        }
+        val notification = applyPrivacy(
+            NotificationCompat.Builder(context, SECURITY_CHANNEL_ID)
+                .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_callshield)
+                .setContentTitle("Repeated call: $callerLabel")
+                .setContentText(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .setContentIntent(openIntent)
+                .addAction(0, "Call back", callbackIntent),
+            context
+        ).build()
         context.getSystemService(NotificationManager::class.java).notify(REPEATED_ID, notification)
     }
 
