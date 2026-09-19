@@ -154,6 +154,7 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
         lastCallRequestAt = now
 
         return try {
+            // The default Phone role must stay on CallShield; use Telecom only and never launch ACTION_CALL.
             val extras = Bundle()
             val accounts = runCatching { telecom.callCapablePhoneAccounts }.getOrNull().orEmpty()
             val account = accounts.firstOrNull { it.id == accountHandleId } ?: accounts.firstOrNull()
