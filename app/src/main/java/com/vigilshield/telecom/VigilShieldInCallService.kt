@@ -226,6 +226,13 @@ class VigilShieldInCallService : InCallService() {
         Log.i(TAG, "Microphone mute state set to: $muted")
     }
 
+    fun setSpeaker(enabled: Boolean): Boolean {
+        return runCatching {
+            setAudioRoute(if (enabled) CallAudioState.ROUTE_SPEAKER else CallAudioState.ROUTE_EARPIECE)
+            true
+        }.getOrDefault(false)
+    }
+
     fun setSpeakerRoute(enabled: Boolean) {
         val targetRoute = if (enabled) {
             CallAudioState.ROUTE_SPEAKER
