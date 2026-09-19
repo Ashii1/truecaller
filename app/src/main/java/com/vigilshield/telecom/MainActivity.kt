@@ -120,7 +120,6 @@ class MainActivity : AppCompatActivity() {
     private fun isCallIntent(value: Intent?): Boolean {
         return isIncomingCallIntent(value) ||
                value?.action == "com.vigilshield.telecom.OPEN_OUTGOING_CALL" ||
-               value?.action == Intent.ACTION_CALL ||
                !value?.getStringExtra("open_call_id").isNullOrBlank()
     }
 
@@ -205,15 +204,7 @@ class MainActivity : AppCompatActivity() {
             }
             if (!number.isNullOrBlank()) {
                 val quoted = JSONObject.quote(number)
-                if (current.action == Intent.ACTION_CALL) {
-                    val normalizedNumber = number.filter { it.isDigit() }
-                    val alreadyActive = NativeInCallService.activeCalls.values.any { call ->
-                        call.details.handle?.schemeSpecificPart?.filter { it.isDigit() } == normalizedNumber
-                    }
-                    if (!alreadyActive) {
-                        webView.post { webView.evaluateJavascript("if(window.__onAndroidCallIntent){window.__onAndroidCallIntent($quoted);}", null) }
-                    }
-                } else if (current.action == Intent.ACTION_DIAL || current.action == Intent.ACTION_VIEW) {
+                if (current.action == Intent.ACTION_DIAL || current.action == Intent.ACTION_VIEW) {
                     webView.post { webView.evaluateJavascript("if(window.__onAndroidDialIntent){window.__onAndroidDialIntent($quoted);}", null) }
                 }
             }
