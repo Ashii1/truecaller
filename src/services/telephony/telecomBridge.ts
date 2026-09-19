@@ -15,7 +15,7 @@ declare global {
       checkDefaultDialerStatus:()=>string; requestDefaultDialerRole:()=>boolean; requestCallScreeningRole?:()=>boolean; requestDevicePermissions?:()=>boolean; openAppSettings?:()=>boolean;
       requestIgnoreBatteryOptimizations?:()=>boolean;
       getPhoneAccounts:()=>string; getTelephonyDiagnostics:()=>string; placeRealCall:(number:string,accountHandleId?:string)=>string;
-      answerCall:(callId:string)=>boolean; rejectCall:(callId:string,reason?:string)=>boolean; disconnectCall:(callId:string)=>boolean;
+      answerCall:(callId:string)=>boolean; rejectCall:(callId:string,reason?:string)=>boolean; disconnectCall:(callId:string,number?:string)=>boolean;
       setMuted:(muted:boolean)=>boolean; setSpeakerRoute:(enabled:boolean)=>boolean; sendDtmfTone:(callId:string,digit:string)=>boolean;
       holdCall:(callId:string)=>boolean; unholdCall:(callId:string)=>boolean; swapCalls:()=>boolean; mergeCalls:()=>boolean;
       fetchRealCallLogs:(limit:number)=>string; fetchRealContacts:(limit:number)=>string; lookupContactName?:(number:string)=>string;
@@ -110,7 +110,7 @@ class TelecomBridgeService {
   }
   public answerCall(id:string){if(!this.native())return false;return window.AndroidTelecomBridge!.answerCall(id);}
   public rejectCall(id:string,reason?:string){if(!this.native())return false;const res=window.AndroidTelecomBridge!.rejectCall(id,reason);this.clearStaleCallNotifications();return res;}
-  public disconnectCall(id:string){if(!this.native())return false;const res=window.AndroidTelecomBridge!.disconnectCall(id);this.clearStaleCallNotifications();return res;}
+  public disconnectCall(id:string,number?:string){if(!this.native())return false;const res=window.AndroidTelecomBridge!.disconnectCall(id,number);this.clearStaleCallNotifications();return res;}
   public silenceRinger(){if(!this.native()||!window.AndroidTelecomBridge?.silenceRinger)return false;try{return window.AndroidTelecomBridge.silenceRinger();}catch{return false;}}
   public isDeviceLocked():boolean{if(!this.native()||!window.AndroidTelecomBridge?.isDeviceLocked)return false;try{return Boolean(window.AndroidTelecomBridge.isDeviceLocked());}catch{return false;}}
   public requestDeviceUnlock():boolean{if(!this.native()||!window.AndroidTelecomBridge?.requestDeviceUnlock)return false;try{return Boolean(window.AndroidTelecomBridge.requestDeviceUnlock());}catch{return false;}}
