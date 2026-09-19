@@ -68,13 +68,20 @@ object CallNotificationHelper {
         return builder
     }
 
+    private fun incomingCallActivityIntent(context: Context, callId: String, displayName: String, number: String): Intent = Intent(context, IncomingCallActivity::class.java).apply {
+        putExtra("open_call_id", callId)
+        putExtra("open_call_number", number)
+        putExtra("display_name", displayName)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+    }
+
     private fun callActivityIntent(context: Context, callId: String, name: String, number: String): Intent = Intent(context, MainActivity::class.java).apply {
-        action = "com.vigilshield.telecom.OPEN_INCOMING_CALL"
+        action = "com.vigilshield.telecom.OPEN_OUTGOING_CALL"
         putExtra("open_call_id", callId)
         putExtra("open_call_number", number)
         putExtra("open_call_name", name)
-        putExtra("is_incoming_call", true)
-        putExtra("open_tab", "incoming")
+        putExtra("is_incoming_call", false)
+        putExtra("open_tab", "dialer")
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
     }
 
@@ -113,11 +120,11 @@ object CallNotificationHelper {
         val notifId = INCOMING_CALL_ID
         activeNotificationIds.add(notifId)
         activeNotificationIds.add(callId.hashCode())
-        val openIntent = PendingIntent.getActivity(context, callId.hashCode(), callActivityIntent(context, callId, name, number), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val display = identityWithNumber(context, name, number)
+        val openIntent = PendingIntent.getActivity(context, callId.hashCode(), incomingCallActivityIntent(context, callId, display, number), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val answer = PendingIntent.getBroadcast(context, callId.hashCode() + 1, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_ANSWER).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val decline = PendingIntent.getBroadcast(context, callId.hashCode() + 2, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_DECLINE).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val dismiss = PendingIntent.getBroadcast(context, callId.hashCode() + 4, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_DISMISS).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val display = identityWithNumber(context, name, number)
         val person = Person.Builder().setName(display).setImportant(true).build()
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_callshield)
