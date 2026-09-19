@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import org.json.JSONArray
 import org.json.JSONObject
+import android.provider.CallLog
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -36,6 +37,8 @@ class VigilShieldInCallService : InCallService() {
         // Active singleton instance reference for UI bridge communication
         var instance: VigilShieldInCallService? = null
             private set
+        var bridge: AndroidTelephonyBridge? = null
+        var appContext: Context? = null
             
         // Thread-safe map of active Android Call objects indexed by unique Call ID
         val activeCalls = ConcurrentHashMap<String, Call>()
@@ -44,6 +47,12 @@ class VigilShieldInCallService : InCallService() {
         var callEventListener: CallEventListener? = null
         
         fun isServiceBound(): Boolean = instance != null
+        fun stopRinging() { runCatching { appContext?.getSystemService(android.telecom.TelecomManager::class.java)?.silenceRinger() } }
+        fun isRinging(): Boolean = activeCalls.values.any { it.state == Call.STATE_RINGING }
+        fun emitActiveCalls() { activeCalls.forEach { (id, call) -> instance?.let { svc -> val d = svc.extractCallDetails(call, id); bridge?.dispatchCallEvent("CALL_STATE_CHANGED", JSONObject().put("callId", id).put("details", d.toJson())) } } }
+        fun swapCalls(): Boolean = instance?.swapCallsInternal() ?: false
+        fun mergeCalls(): Boolean = instance?.mergeCallsInternal() ?: false
+        fun readHistory(limit: Int): List<JSONObject> { val out = mutableListOf<JSONObject>(); runCatching { val a = JSONArray(appContext?.getSharedPreferences("vigilshield", Context.MODE_PRIVATE)?.getString("call_history", "[]") ?: "[]"); for (i in 0 until minOf(a.length(), limit.coerceIn(1, 500))) out += a.getJSONObject(i) }; return out }
     }
 
     interface CallEventListener {
@@ -92,6 +101,8 @@ class VigilShieldInCallService : InCallService() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        appContext = applicationContext
+        CallNotificationHelper.ensureChannel(applicationContext)
         Log.i(TAG, "CallShield InCallService instantiated and bound by Android Telecom.")
     }
 
@@ -116,6 +127,7 @@ class VigilShieldInCallService : InCallService() {
                 Log.d(TAG, "Call $callId state changed to: $stateName")
                 val details = extractCallDetails(call, callId)
                 callEventListener?.onCallStateChanged(callId, stateName, details)
+                bridge?.dispatchCallEvent(if (state == Call.STATE_DISCONNECTED) "CALL_DISCONNECTED" else "CALL_STATE_CHANGED", JSONObject().put("callId", callId).put("details", details.toJson()))
                 
                 // If call disconnected, persist to device call log if needed
                 if (state == Call.STATE_DISCONNECTED) {
@@ -142,6 +154,7 @@ class VigilShieldInCallService : InCallService() {
 
         val initialDetails = extractCallDetails(call, callId)
         callEventListener?.onCallAdded(callId, initialDetails)
+        bridge?.dispatchCallEvent(if (call.state == Call.STATE_RINGING) "CALL_ADDED" else "CALL_STATE_CHANGED", JSONObject().put("callId", callId).put("details", initialDetails.toJson()))
     }
 
     override fun onCallRemoved(call: Call) {
@@ -157,6 +170,7 @@ class VigilShieldInCallService : InCallService() {
         val disconnectReason = call.details.disconnectCause?.description?.toString() ?: "Call ended"
         Log.i(TAG, "onCallRemoved: $callId, reason: $disconnectReason")
         callEventListener?.onCallRemoved(callId, details, disconnectReason)
+        bridge?.dispatchCallEvent("CALL_DISCONNECTED", JSONObject().put("callId", callId).put("details", details.toJson()))
     }
 
     override fun onCallAudioStateChanged(audioState: CallAudioState?) {
@@ -276,6 +290,9 @@ class VigilShieldInCallService : InCallService() {
         return false
     }
 
+    private fun swapCallsInternal(): Boolean { val active = activeCalls.values.firstOrNull { it.state == Call.STATE_ACTIVE } ?: return false; val held = activeCalls.values.firstOrNull { it.state == Call.STATE_HOLDING } ?: return false; active.hold(); held.unhold(); return true }
+    private fun mergeCallsInternal(): Boolean { val active = activeCalls.values.firstOrNull { it.state == Call.STATE_ACTIVE } ?: return false; val other = active.conferenceableCalls?.firstOrNull() ?: activeCalls.values.firstOrNull { it !== active } ?: return false; return runCatching { active.conference(other); true }.getOrDefault(false) }
+
     // Helper functions
     private fun getCallIdentifier(call: Call): String {
         val handle = call.details?.handle?.schemeSpecificPart ?: "unknown"
@@ -294,7 +311,7 @@ class VigilShieldInCallService : InCallService() {
         val duration = if (connectTime > 0) (System.currentTimeMillis() - connectTime) / 1000 else 0L
         val simAccount = details?.accountHandle?.id
         val verificationStatus = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            details?.callerVerificationStatus ?: 0
+            0
         } else {
             0
         }
