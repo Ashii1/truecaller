@@ -339,6 +339,7 @@ class NativeInCallService : InCallService() {
         activeCalls[id] = call
         val callback = object : Call.Callback() {
             override fun onStateChanged(c: Call, state: Int) {
+                runCatching {
                 if (state == Call.STATE_RINGING && c.details.callDirection == Call.Details.DIRECTION_INCOMING) {
                     startRinging()
                     wakeScreenUp(applicationContext)
@@ -361,6 +362,7 @@ class NativeInCallService : InCallService() {
                 }
                 emit(c, state)
                 persist(c)
+                }
             }
         }
         callbacks[id] = callback
