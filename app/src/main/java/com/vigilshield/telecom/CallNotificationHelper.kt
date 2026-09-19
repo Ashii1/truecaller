@@ -129,7 +129,8 @@ object CallNotificationHelper {
     }
 
     fun showOngoingCall(context: Context, callId: String, name: String, number: String, state: String, connectTimeMillis: Long, riskLevel: String? = null) {
-        if (!callAlertsEnabled(context)) return
+        // Ongoing call status is a core phone-function notification, not an optional
+        // security alert. Keep it visible even when security-call alerts are disabled.
         ensureChannel(context)
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.cancel(INCOMING_CALL_ID)
