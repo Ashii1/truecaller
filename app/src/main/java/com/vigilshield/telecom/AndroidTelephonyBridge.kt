@@ -385,7 +385,7 @@ class VigilShieldInCallService : InCallService() {
                     val number = c.details.handle?.schemeSpecificPart.orEmpty()
                     val name = bridge?.lookupName(number).orEmpty().ifBlank { c.details.callerDisplayName.orEmpty() }.ifBlank { number.ifBlank { "Unknown caller" } }
                     CallNotificationHelper.showIncomingCall(applicationContext, id, name, number)
-                    if (!MainActivity.isAppVisible) launchIncomingCallActivity(applicationContext, id, name, number)
+                    // The incoming-call notification owns the full-screen caller surface.\n                    // Do not launch MainActivity here; doing so opens the main app behind/over the caller UI.
                 } else if (state == Call.STATE_DIALING || state == Call.STATE_CONNECTING || state == Call.STATE_ACTIVE) {
                     stopRinging()
                     val number = c.details.handle?.schemeSpecificPart.orEmpty()
@@ -416,7 +416,7 @@ class VigilShieldInCallService : InCallService() {
             startRinging()
             wakeScreenUp(applicationContext)
             CallNotificationHelper.showIncomingCall(applicationContext, id, name, number)
-            if (!MainActivity.isAppVisible) launchIncomingCallActivity(applicationContext, id, name, number)
+            // The incoming-call notification owns the full-screen caller surface.\n            // Do not launch MainActivity here.
         } else {
             // Publish the ongoing-call notification immediately from InCallService.
             // It must remain available after the user leaves CallShield for the launcher.
