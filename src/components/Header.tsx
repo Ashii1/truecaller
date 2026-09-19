@@ -49,6 +49,7 @@ interface HeaderProps {
   onOpenProtection?: () => void;
   density?: DisplayDensity;
   onDensityChange?: (density: DisplayDensity) => void;
+  closeSettingsSignal?: number;
 }
 
 type PrivacySettings = {
@@ -100,6 +101,7 @@ function Header({
   onOpenProtection,
   density = 'comfortable',
   onDensityChange,
+  closeSettingsSignal = 0,
 }: HeaderProps) {
   const { t } = useI18n();
   const [showSettings, setShowSettings] = useState(false);
@@ -115,6 +117,12 @@ function Header({
       return [];
     }
   });
+
+  useEffect(() => {
+    setShowSettings(false);
+    setShowTheme(false);
+    setShowNotifications(false);
+  }, [closeSettingsSignal]);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
