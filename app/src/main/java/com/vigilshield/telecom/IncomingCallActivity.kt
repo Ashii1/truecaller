@@ -48,12 +48,16 @@ class IncomingCallActivity : Activity() {
                 WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
         )
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true)
-            setTurnScreenOn(true)
+            runCatching {
+                setShowWhenLocked(true)
+                setTurnScreenOn(true)
+            }
         }
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            val km = getSystemService(android.app.KeyguardManager::class.java)
-            km?.requestDismissKeyguard(this, null)
+            runCatching {
+                val km = getSystemService(android.app.KeyguardManager::class.java)
+                km?.requestDismissKeyguard(this, null)
+            }
         }
         window.statusBarColor = Color.rgb(2, 6, 23)
         window.navigationBarColor = Color.rgb(2, 6, 23)

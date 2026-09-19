@@ -33,6 +33,25 @@ export default function AudioRecordingPlayer({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [downloadedNotice, setDownloadedNotice] = useState(false);
+  const [audioSrc, setAudioSrc] = useState<string | null>(
+    recording.dataUri && recording.dataUri.trim() !== '' ? recording.dataUri : null
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+    if (recording.dataUri && recording.dataUri.trim() !== '') {
+      setAudioSrc(recording.dataUri);
+    } else {
+      callRecordingService.getAudioDataUri(recording).then((uri) => {
+        if (isMounted && uri && uri.trim() !== '') {
+          setAudioSrc(uri);
+        }
+      });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [recording.id, recording.dataUri]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -58,9 +77,9 @@ export default function AudioRecordingPlayer({
       audio.removeEventListener('loadedmetadata', onLoadedMetadata);
       audio.removeEventListener('ended', onEnded);
     };
-  }, []);
+  }, [audioSrc]);
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     const audio = audioRef.current;
     if (!audio) return;
 
@@ -68,6 +87,11 @@ export default function AudioRecordingPlayer({
       audio.pause();
       setIsPlaying(false);
     } else {
+      if (!audioSrc) {
+        const uri = await callRecordingService.getAudioDataUri(recording);
+        setAudioSrc(uri);
+        audio.src = uri;
+      }
       audio.play().then(() => setIsPlaying(true)).catch((err) => {
         console.warn('Playback error:', err);
       });
@@ -127,7 +151,11 @@ export default function AudioRecordingPlayer({
   return (
     <div className="w-full rounded-2xl border border-emerald-500/20 bg-gradient-to-b from-[#0e1724] to-[#0a1017] p-3.5 shadow-lg shadow-black/40 transition-all">
       {/* Hidden native audio element */}
-      <audio ref={audioRef} src={recording.dataUri} preload="metadata" />
+      {audioSrc ? (
+        <audio ref={audioRef} src={audioSrc} preload="metadata" />
+      ) : (
+        <audio ref={audioRef} preload="metadata" />
+      )}
 
       {/* Header Info */}
       <div className="flex items-start justify-between gap-2">

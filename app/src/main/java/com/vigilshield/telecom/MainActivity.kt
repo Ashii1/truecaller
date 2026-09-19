@@ -69,11 +69,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        ensureRingerNotMuted()
-        window.statusBarColor = Color.rgb(11, 15, 20)
-        window.navigationBarColor = Color.rgb(11, 15, 20)
-        registerLockStateListener()
-        configureLockscreenWindow(hasActiveOrRingingCall() || isIncomingCallIntent(intent))
+        runCatching { ensureRingerNotMuted() }
+        runCatching {
+            window.statusBarColor = Color.rgb(11, 15, 20)
+            window.navigationBarColor = Color.rgb(11, 15, 20)
+        }
+        runCatching { registerLockStateListener() }
+        runCatching { configureLockscreenWindow(hasActiveOrRingingCall() || isIncomingCallIntent(intent)) }
         val root = FrameLayout(this)
         webView = WebView(this); root.addView(webView, FrameLayout.LayoutParams(-1, -1))
         loadingView = createLoadingView(); root.addView(loadingView, FrameLayout.LayoutParams(-1, -1))
@@ -130,13 +132,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     internal fun hasActiveOrRingingCall(): Boolean {
-        return VigilShieldInCallService.activeCalls.values.any {
-            it.state == android.telecom.Call.STATE_RINGING ||
-            it.state == android.telecom.Call.STATE_ACTIVE ||
-            it.state == android.telecom.Call.STATE_DIALING ||
-            it.state == android.telecom.Call.STATE_CONNECTING ||
-            it.state == android.telecom.Call.STATE_HOLDING
-        }
+        return runCatching {
+            VigilShieldInCallService.activeCalls.values.any {
+                it.state == android.telecom.Call.STATE_RINGING ||
+                it.state == android.telecom.Call.STATE_ACTIVE ||
+                it.state == android.telecom.Call.STATE_DIALING ||
+                it.state == android.telecom.Call.STATE_CONNECTING ||
+                it.state == android.telecom.Call.STATE_HOLDING
+            }
+        }.getOrDefault(false)
     }
 
     private fun isIncomingCallIntent(value: Intent?): Boolean {
@@ -159,46 +163,48 @@ class MainActivity : AppCompatActivity() {
     }
 
     internal fun configureLockscreenWindow(isIncomingOrActiveCall: Boolean) {
-        val showOnLock = isWindowShowOnLockConfigured()
-        if (isIncomingOrActiveCall && showOnLock) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                setShowWhenLocked(true)
-                setTurnScreenOn(true)
-            }
-            @Suppress("DEPRECATION")
-            window.addFlags(
-                android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                android.view.WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
-                android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-            )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                window.setDecorFitsSystemWindows(false)
-            } else {
+        runCatching {
+            val showOnLock = isWindowShowOnLockConfigured()
+            if (isIncomingOrActiveCall && showOnLock) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    setShowWhenLocked(true)
+                    setTurnScreenOn(true)
+                }
                 @Suppress("DEPRECATION")
-                window.decorView.systemUiVisibility = (
-                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                window.addFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                    android.view.WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+                    android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
                 )
-            }
-        } else {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                setShowWhenLocked(false)
-                setTurnScreenOn(false)
-            }
-            @Suppress("DEPRECATION")
-            window.clearFlags(
-                android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                android.view.WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
-                android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-            )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                window.setDecorFitsSystemWindows(true)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    window.setDecorFitsSystemWindows(false)
+                } else {
+                    @Suppress("DEPRECATION")
+                    window.decorView.systemUiVisibility = (
+                        View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    )
+                }
             } else {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    setShowWhenLocked(false)
+                    setTurnScreenOn(false)
+                }
                 @Suppress("DEPRECATION")
-                window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+                window.clearFlags(
+                    android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                    android.view.WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+                    android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                )
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    window.setDecorFitsSystemWindows(true)
+                } else {
+                    @Suppress("DEPRECATION")
+                    window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+                }
             }
         }
     }
@@ -481,10 +487,12 @@ class MainActivity : AppCompatActivity() {
         if (lockStateReceiver == null) {
             lockStateReceiver = object : android.content.BroadcastReceiver() {
                 override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
-                    val km = getSystemService(KeyguardManager::class.java)
-                    val isLocked = km?.isKeyguardLocked == true
-                    if (::bridge.isInitialized) {
-                        bridge.dispatchWebEvent("DEVICE_LOCK_STATE_CHANGED", JSONObject().put("isLocked", isLocked).put("state", if (isLocked) "locked" else "unlocked"))
+                    runCatching {
+                        val km = getSystemService(KeyguardManager::class.java)
+                        val isLocked = km?.isKeyguardLocked == true
+                        if (::bridge.isInitialized) {
+                            bridge.dispatchWebEvent("DEVICE_LOCK_STATE_CHANGED", JSONObject().put("isLocked", isLocked).put("state", if (isLocked) "locked" else "unlocked"))
+                        }
                     }
                 }
             }
@@ -493,32 +501,40 @@ class MainActivity : AppCompatActivity() {
                 addAction(android.content.Intent.ACTION_SCREEN_ON)
                 addAction(android.content.Intent.ACTION_SCREEN_OFF)
             }
-            try {
-                registerReceiver(lockStateReceiver, filter)
-            } catch (_: Exception) {}
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && keyguardLockedListener == null) {
-            val km = getSystemService(KeyguardManager::class.java)
-            val listener = KeyguardManager.KeyguardLockedStateListener { isLocked ->
-                if (::bridge.isInitialized) {
-                    bridge.dispatchWebEvent("DEVICE_LOCK_STATE_CHANGED", JSONObject().put("isLocked", isLocked).put("state", if (isLocked) "locked" else "unlocked"))
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    registerReceiver(lockStateReceiver, filter, Context.RECEIVER_EXPORTED)
+                } else {
+                    registerReceiver(lockStateReceiver, filter)
                 }
             }
-            keyguardLockedListener = listener
-            km?.addKeyguardLockedStateListener(mainExecutor, listener)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && keyguardLockedListener == null) {
+            runCatching {
+                val km = getSystemService(KeyguardManager::class.java)
+                val listener = KeyguardManager.KeyguardLockedStateListener { isLocked ->
+                    if (::bridge.isInitialized) {
+                        bridge.dispatchWebEvent("DEVICE_LOCK_STATE_CHANGED", JSONObject().put("isLocked", isLocked).put("state", if (isLocked) "locked" else "unlocked"))
+                    }
+                }
+                keyguardLockedListener = listener
+                km?.addKeyguardLockedStateListener(mainExecutor, listener)
+            }
         }
     }
 
     private fun unregisterLockStateListener() {
         lockStateReceiver?.let {
-            try { unregisterReceiver(it) } catch (_: Exception) {}
+            runCatching { unregisterReceiver(it) }
             lockStateReceiver = null
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val listener = keyguardLockedListener as? KeyguardManager.KeyguardLockedStateListener
             if (listener != null) {
-                val km = getSystemService(KeyguardManager::class.java)
-                try { km?.removeKeyguardLockedStateListener(listener) } catch (_: Exception) {}
+                runCatching {
+                    val km = getSystemService(KeyguardManager::class.java)
+                    km?.removeKeyguardLockedStateListener(listener)
+                }
                 keyguardLockedListener = null
             }
         }

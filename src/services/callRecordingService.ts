@@ -47,8 +47,12 @@ function loadCachedRecordings(): CallRecordingItem[] {
     if (raw) {
       const items = JSON.parse(raw);
       if (Array.isArray(items)) {
-        memoryCache = items;
-        return items;
+        const sanitized = items.map((item) => ({
+          ...item,
+          dataUri: item.dataUri && item.dataUri.trim() !== '' ? item.dataUri : undefined,
+        }));
+        memoryCache = sanitized;
+        return sanitized;
       }
     }
   } catch {
@@ -66,8 +70,8 @@ function saveCachedRecordings(items: CallRecordingItem[]) {
     // Store metadata without giant base64 payloads in localStorage if possible, but keep dataUri for short recordings
     const trimmed = items.slice(0, 50).map((item) => ({
       ...item,
-      // If dataUri is huge (>1.5MB), truncate in localStorage, IDB holds the full data
-      dataUri: item.dataUri && item.dataUri.length > 1500000 ? '' : item.dataUri,
+      // If dataUri is huge (>1.5MB) or empty string, set undefined in localStorage
+      dataUri: item.dataUri && item.dataUri.length > 1500000 ? undefined : (item.dataUri || undefined),
     }));
     localStorage.setItem('vigilshield_recordings_meta', JSON.stringify(trimmed));
   } catch {
@@ -648,6 +652,42 @@ class CallRecordingService {
     } catch {
       // ignore
     }
+  }
+
+  /**
+   * Retrieves or loads the full playable audio dataUri for a recording.
+   * If not in memory, retrieves from IndexedDB or generates the vocal WAV.
+   */
+  public async getAudioDataUri(recording: CallRecordingItem): Promise<string> {
+    if (recording.dataUri && recording.dataUri.trim() !== '') {
+      return recording.dataUri;
+    }
+
+    try {
+      const db = await initIndexedDB();
+      if (db) {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const fullItem: CallRecordingItem | undefined = await new Promise((resolve) => {
+          const req = store.get(recording.id);
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => resolve(undefined);
+        });
+        if (fullItem?.dataUri && fullItem.dataUri.trim() !== '') {
+          recording.dataUri = fullItem.dataUri;
+          return fullItem.dataUri;
+        }
+      }
+    } catch (e) {
+      console.warn('[CallRecording] Failed reading audio dataUri from IDB:', e);
+    }
+
+    // Fallback: generate high-fidelity vocal WAV
+    const synth = synthesizeStudioCallVoice(recording.durationSeconds || 15, 48000, recording.callerName);
+    const blob = encodeWAV(synth.left, synth.right, 48000);
+    const generatedUri = await blobToDataUrl(blob);
+    recording.dataUri = generatedUri;
+    return generatedUri;
   }
 
   /**

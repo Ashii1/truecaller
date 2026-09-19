@@ -3,10 +3,10 @@ import org.gradle.api.tasks.Exec
 
 // CI release builds use an ephemeral keystore reconstructed from GitHub Actions secrets.
 // Never keep signing credentials in source control.
-val baseVersionCode = 203
+val baseVersionCode = 204
 val ciRunNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
 val finalVersionCode = baseVersionCode + ciRunNumber
-val finalVersionName = "1.5.3"
+val finalVersionName = "1.5.4"
 
 val envKeystorePath = System.getenv("VIGILSHIELD_KEYSTORE_FILE")
 val envKeystorePassword = System.getenv("VIGILSHIELD_KEYSTORE_PASSWORD")

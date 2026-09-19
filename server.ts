@@ -892,6 +892,152 @@ Return ONLY a JSON object with this exact schema:
   });
 });
 
+// -----------------------------------------------------------------------------
+// REAL-TIME CONVERSATIONAL CALLER ASSISTANCE AI (Dynamic Two-Way Communication)
+// -----------------------------------------------------------------------------
+app.post('/api/caller-assistant/dialogue', async (req, res) => {
+  const { callerNumber, callerName, callerLatestSpeech, transcript, riskScore, spamCategory } = req.body;
+  const callerSpeech = (callerLatestSpeech || '').trim();
+  const transcriptList: Array<{ sender: string; text: string }> = Array.isArray(transcript) ? transcript : [];
+
+  const historyContext = transcriptList
+    .slice(-8)
+    .map(t => `${t.sender === 'caller' ? 'Caller' : 'AI Assistant'}: "${t.text}"`)
+    .join('\n');
+
+  try {
+    const ai = getGeminiClient();
+    if (ai && callerSpeech) {
+      const prompt = `You are the real-time AI Call Screening Assistant for CallShield, acting as a personal gatekeeper on behalf of the phone owner.
+You are communicating live with an incoming caller. You must talk directly to the caller in a natural, polite, yet cautious tone.
+
+Caller Phone: ${callerNumber || 'Unknown'}
+Caller Name / Directory: ${callerName || 'Unregistered'}
+Spam Risk Score: ${riskScore || 0}/100 (${spamCategory || 'General'})
+
+Recent conversation history:
+${historyContext || 'No previous turns.'}
+
+Caller just said:
+"${callerSpeech}"
+
+Instructions:
+1. "aiAssistantSpeech": Speak directly to the caller (1-2 sentences, max 35 words).
+   - If they are a courier/delivery: ask who the package is addressed to or instruct them where to leave it.
+   - If they claim to be a bank or credit card company: state that the owner does not verify accounts over inbound calls, and ask for an official reference number and department.
+   - If they ask to speak with the owner: ask for their full name, company, and the specific matter so you can check availability.
+   - If they are telemarketing, insurance, or loans: state politely that the owner is not interested and request to be removed from calling lists.
+   - If they sound like a friend, family, or colleague: ask if they would like to leave an urgent callback message.
+2. "suggestedUserReplies": 3 contextually intelligent, 1-tap quick replies for the user to choose from right now based on what the caller said.
+3. "detectedIntent": Short phrase describing the caller's specific intent.
+4. "riskLevel": 'LOW' | 'MEDIUM' | 'HIGH'.
+
+Respond with ONLY valid JSON:
+{
+  "aiAssistantSpeech": "string",
+  "detectedIntent": "string",
+  "riskLevel": "LOW" | "MEDIUM" | "HIGH",
+  "suggestedUserReplies": ["string", "string", "string"]
+}`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: { responseMimeType: 'application/json' },
+      });
+
+      const text = response.text;
+      if (text) {
+        const parsed = JSON.parse(text);
+        if (parsed.aiAssistantSpeech && Array.isArray(parsed.suggestedUserReplies)) {
+          return res.json({
+            aiAssistantSpeech: parsed.aiAssistantSpeech,
+            detectedIntent: parsed.detectedIntent || 'General Inquiry',
+            riskLevel: parsed.riskLevel || 'LOW',
+            suggestedUserReplies: parsed.suggestedUserReplies.slice(0, 4),
+            source: 'gemini_conversational_assistant',
+          });
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn('Gemini caller dialogue error:', err?.message || err);
+  }
+
+  // Context-aware dynamic fallback responder
+  const lower = callerSpeech.toLowerCase();
+  let aiSpeech = "Thank you. Could you please state your full name and who you are trying to reach?";
+  let intent = "Caller Identity Inquiry";
+  let risk: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW';
+  let suggested = [
+    "I'll take the call now.",
+    "Please send a text message.",
+    "I'm unavailable right now, call back later.",
+  ];
+
+  if (/delivery|package|courier|fedex|ups|amazon|dhl|parcel/i.test(lower)) {
+    aiSpeech = "Thanks for letting us know. Could you please leave the package at the front door or mailroom?";
+    intent = "Parcel Delivery Arrival";
+    suggested = [
+      "Please leave it by the door.",
+      "Give it to the front desk / neighbor.",
+      "I'll be there in 2 minutes.",
+    ];
+  } else if (/bank|fraud|unauthorized|card|account|security alert|credit/i.test(lower)) {
+    aiSpeech = "Understood. The account holder does not share security details over inbound calls. What is your direct extension?";
+    intent = "Financial / Bank Transaction Verification";
+    risk = 'HIGH';
+    suggested = [
+      "I will call the bank's official number directly.",
+      "Which account number does this concern?",
+      "Block and report this number immediately.",
+    ];
+  } else if (/loan|rate|mortgage|insurance|offer|free|investment|crypto/i.test(lower)) {
+    aiSpeech = "The recipient is not interested in commercial offers. Please remove this number from your calling list.";
+    intent = "Unsolicited Commercial Promotion";
+    risk = 'HIGH';
+    suggested = [
+      "Remove my number from your database.",
+      "Do not call again.",
+      "Hang up and block.",
+    ];
+  } else if (/doctor|clinic|appointment|prescription|hospital|dental/i.test(lower)) {
+    aiSpeech = "Thank you. The patient is currently occupied. Is this confirming an upcoming appointment or a test result?";
+    intent = "Healthcare & Appointment Follow-up";
+    risk = 'LOW';
+    suggested = [
+      "I confirm the appointment time.",
+      "Please reschedule to next week.",
+      "I will call the clinic back shortly.",
+    ];
+  } else if (/who is this|who am i speaking with|is this/i.test(lower)) {
+    aiSpeech = "You have reached the automated screening assistant for this number. Who is calling and how may we assist?";
+    intent = "Identity Verification";
+    suggested = [
+      "Identify yourself clearly.",
+      "State your business purpose.",
+      "I cannot talk right now.",
+    ];
+  } else if (/urgent|emergency|important/i.test(lower)) {
+    aiSpeech = "I understand this is urgent. Please state your callback number and brief message and I will alert the recipient immediately.";
+    intent = "Urgent Priority Message";
+    risk = 'MEDIUM';
+    suggested = [
+      "Connecting now, one moment.",
+      "Text me the urgent detail.",
+      "I'm picking up the line.",
+    ];
+  }
+
+  return res.json({
+    aiAssistantSpeech: aiSpeech,
+    detectedIntent: intent,
+    riskLevel: risk,
+    suggestedUserReplies: suggested,
+    source: 'contextual_dynamic_screener',
+  });
+});
+
 // Explicit Codebase ZIP Download Endpoint
 app.get('/vigilshield_app.zip', (req, res) => {
   const zipFile = path.join(process.cwd(), 'public', 'vigilshield_app.zip');

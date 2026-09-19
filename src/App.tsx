@@ -748,7 +748,7 @@ export default function App(){
   const activeRulesCount = useMemo(() => rules.filter(r => r.enabled).length, [rules]);
 
   return <div className="min-h-screen bg-[#070b10] text-white">
-   {!phoneOnly && <Header closeSettingsSignal={navigationSignal} settings={settings} isDefaultDialer={isDefaultDialer} onRequestDefaultDialer={handleRequestDefaultDialer} onOpenPermissionCenter={()=>setIsPermissionCenterOpen(true)} onSyncDatabase={handleSyncDeviceData} isSyncing={isSyncing} autoCancelEnabled={autoCancelEnabled} onToggleAutoCancel={()=>setAutoCancelEnabled(v=>!v)} onOpenInstallModal={()=>setIsInstallModalOpen(true)} onOpenDataSources={()=>setIsDataSourcesModalOpen(true)} onOpenDiagnostics={()=>setIsDiagnosticsModalOpen(true)} recentSpamCalls={recentSpamCalls} onSelectCall={openCaller} onOpenRecents={()=>setActiveTab('recents')} onOpenProtection={()=>setActiveTab('protection')} density={density} onDensityChange={handleDensityChange}/>} 
+   {!phoneOnly && <Header closeSettingsSignal={navigationSignal} settings={settings} isDefaultDialer={isDefaultDialer} onRequestDefaultDialer={handleRequestDefaultDialer} onOpenPermissionCenter={()=>setIsPermissionCenterOpen(true)} onSyncDatabase={handleSyncDeviceData} isSyncing={isSyncing} autoCancelEnabled={autoCancelEnabled} onToggleAutoCancel={()=>setAutoCancelEnabled(v=>!v)} onOpenInstallModal={()=>setIsInstallModalOpen(true)} onOpenDataSources={()=>setIsDataSourcesModalOpen(true)} onOpenDiagnostics={()=>setIsDiagnosticsModalOpen(true)} recentSpamCalls={recentSpamCalls} onSelectCall={openCaller} onOpenRecents={()=>setActiveTab('recents')} onOpenProtection={()=>setActiveTab('protection')} density={density} onDensityChange={handleDensityChange} calls={calls} contacts={contacts} onInitiateCall={handleInitiateCall}/>} 
    <Navigation activeTab={activeTab} onChangeTab={(tab) => { setNavigationSignal(v => v + 1); setActiveTab(tab); }} spamCallsCount={spamCallsCount} activeRulesCount={activeRulesCount} assistantAlertsCount={3} phoneOnly={phoneOnly}/> 
    <main className={phoneOnly ? "min-h-screen w-full" : "mx-auto w-full max-w-4xl px-3 py-3 pb-28 sm:pb-32"}>
     {activeTab==='dialer'&&<DialerTab contacts={contacts} recentCalls={calls} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onOpenCallerDetail={handleOpenCallerDetail} onSaveContact={(n,nm)=>handleUpdateCallerName(n,nm)} selectedSim={selectedSim} onChangeSim={setSelectedSim} initialNumber={dialerInitialNumber} density={density}/>} 
@@ -887,7 +887,21 @@ export default function App(){
     }}
   />
   <ActiveCallModal session={activeCallSession} onEndCall={handleEndCall} lookupProfile={handleLookupProfile} onAddCall={n=>handleInitiateCall(n)}/>
-  <PostCallModal postCall={postCallState} onDismiss={()=>setPostCallState(null)} onAddContact={handleAddContact} onBlockNumber={handleBlockNumber} onReportSpam={handleReportSpam} onSaveNote={(number,note)=>{const c=calls.find(x=>x.number.replace(/\D/g,'')===number.replace(/\D/g,''));if(c)handleSaveNote(c.id,note)}}/>
+  <PostCallModal
+    postCall={postCallState}
+    onDismiss={() => setPostCallState(null)}
+    onAddContact={handleAddContact}
+    onBlockNumber={handleBlockNumber}
+    onReportSpam={handleReportSpam}
+    onSaveNote={(number, note) => {
+      const c = calls.find(x => x.number.replace(/\D/g, '') === number.replace(/\D/g, ''));
+      if (c) handleSaveNote(c.id, note);
+    }}
+    onInitiateCall={handleInitiateCall}
+    onMarkSafe={handleWhitelistNumber}
+    contacts={contacts}
+    calls={calls}
+  />
   <FastReportModal isOpen={isFastReportOpen} initialNumber={fastReportNumber} onClose={()=>setIsFastReportOpen(false)} onSubmitReport={handleReportSpam}/>
   <DisputeModal isOpen={isDisputeOpen} initialNumber={disputeNumber} initialName={disputeName} onClose={()=>setIsDisputeOpen(false)} onSubmitDispute={()=>{setIsDisputeOpen(false);showToast('Dispute request saved for review','success')}}/>
   <DataSourcesModal isOpen={isDataSourcesModalOpen} onClose={()=>setIsDataSourcesModalOpen(false)} onClearAllData={handleClearAllData}/>

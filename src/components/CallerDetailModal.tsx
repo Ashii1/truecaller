@@ -136,13 +136,13 @@ export default function CallerDetailModal({
               fileName: `REC_${normalizePhoneNumber(c.number)}_${new Date(c.timestamp).toISOString().slice(0, 10)}.wav`,
               fileSizeBytes: 128000,
               mimeType: 'audio/wav',
-              dataUri: c.recordingUri || '',
+              dataUri: c.recordingUri || undefined,
               quality: '48 kHz Studio HD',
             }));
 
           const combined = [
             ...items,
-            ...callsWithRecs.filter((c) => !items.some((it) => it.dataUri === c.dataUri)),
+            ...callsWithRecs.filter((c) => !items.some((it) => (it.dataUri && it.dataUri === c.dataUri) || it.callId === c.callId)),
           ];
           setRecordings(combined);
         });

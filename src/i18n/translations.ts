@@ -329,6 +329,15 @@ export const TRANSLATIONS = {
     spam_badge: 'Spam',
     verified_badge: 'Verified',
     suspicious_badge: 'Suspicious',
+    call_recordings_title: 'Call Recordings',
+    recordings_search_placeholder: 'Search by phone number, name, or filename…',
+    recordings_all_numbers: 'All Numbers',
+    recordings_filter_all_dates: 'All Dates',
+    recordings_this_week: 'This Week',
+    recordings_older: 'Older',
+    recordings_empty_title: 'No call recordings found',
+    recordings_empty_desc: 'Recorded phone calls will be safely saved to your device storage and displayed here for playback.',
+    close_button: 'Close',
   },
 
   ta: {
@@ -659,6 +668,15 @@ export const TRANSLATIONS = {
     spam_badge: 'ஸ்பேம்',
     verified_badge: 'சரிபார்க்கப்பட்டது',
     suspicious_badge: 'சந்தேகத்திற்குரியது',
+    call_recordings_title: 'அழைப்பு பதிவுகள்',
+    recordings_search_placeholder: 'எண், பெயர் அல்லது கோப்புப் பெயர் மூலம் தேடுக…',
+    recordings_all_numbers: 'அனைத்து எண்களும்',
+    recordings_filter_all_dates: 'அனைத்து தேதிகளும்',
+    recordings_this_week: 'இந்த வாரம்',
+    recordings_older: 'பழையவை',
+    recordings_empty_title: 'அழைப்புப் பதிவுகள் எதுவும் இல்லை',
+    recordings_empty_desc: 'பதிவுசெய்யப்பட்ட தொலைபேசி அழைப்புகள் உங்கள் சாதனத்தில் சேமிக்கப்பட்டு இங்கே கேட்கக் கிடைக்கும்.',
+    close_button: 'மூடு',
   },
 } as const;
 

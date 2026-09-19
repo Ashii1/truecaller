@@ -120,3 +120,86 @@ export function generateLocalScreeningSummary(
     source: 'on_device_heuristic_screener',
   };
 }
+
+export interface CallerDialogueRequest {
+  callerNumber: string;
+  callerName?: string;
+  callerLatestSpeech: string;
+  transcript: ScreeningTranscriptEntry[];
+  riskScore?: number;
+  spamCategory?: string;
+}
+
+export interface CallerDialogueResponse {
+  aiAssistantSpeech: string;
+  detectedIntent: string;
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  suggestedUserReplies: string[];
+  source: string;
+}
+
+/**
+ * Sends caller speech to the server-side Gemini conversational assistant.
+ * Returns dynamic, intelligent spoken response and contextually tailored suggested replies.
+ */
+export async function getAiCallerDialogue(
+  req: CallerDialogueRequest
+): Promise<CallerDialogueResponse> {
+  try {
+    const res = await fetch('/api/caller-assistant/dialogue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.aiAssistantSpeech) {
+        return {
+          aiAssistantSpeech: data.aiAssistantSpeech,
+          detectedIntent: data.detectedIntent || 'Spoken Screening',
+          riskLevel: data.riskLevel || 'LOW',
+          suggestedUserReplies: Array.isArray(data.suggestedUserReplies) ? data.suggestedUserReplies : [],
+          source: data.source || 'gemini_conversational_assistant',
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Network call to /api/caller-assistant/dialogue failed, using local dialogue fallback:', err);
+  }
+
+  // Fallback if network or server unavailable
+  const lower = (req.callerLatestSpeech || '').toLowerCase();
+  let aiSpeech = "Thank you. Could you please specify who is calling and what this is regarding?";
+  let intent = "Identity Inquiry";
+  let risk: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW';
+  let suggested = [
+    "I'll take the call now.",
+    "Please send a text message.",
+    "The recipient is currently unavailable.",
+  ];
+
+  if (/delivery|package|courier|fedex|ups|amazon|dhl|parcel/i.test(lower)) {
+    aiSpeech = "Thanks for letting us know. Please leave the package at the front door or with reception.";
+    intent = "Parcel Delivery Arrival";
+    suggested = ["Leave it by the door.", "Give it to reception.", "I'll be there in 2 minutes."];
+  } else if (/bank|fraud|unauthorized|card|account|security alert|credit/i.test(lower)) {
+    aiSpeech = "The cardholder does not confirm account credentials on incoming calls. Please state your reference ticket.";
+    intent = "Bank Transaction Verification";
+    risk = 'HIGH';
+    suggested = ["I'll call the bank directly.", "Which account is this?", "Block and report number."];
+  } else if (/loan|rate|mortgage|insurance|offer|crypto/i.test(lower)) {
+    aiSpeech = "We are not interested in commercial solicitations. Please remove this number from your list.";
+    intent = "Telemarketing Promotion";
+    risk = 'HIGH';
+    suggested = ["Do not call again.", "Remove my number.", "Hang up."];
+  }
+
+  return {
+    aiAssistantSpeech: aiSpeech,
+    detectedIntent: intent,
+    riskLevel: risk,
+    suggestedUserReplies: suggested,
+    source: 'local_conversational_fallback',
+  };
+}

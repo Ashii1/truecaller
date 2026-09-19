@@ -24,7 +24,7 @@ export interface CallRecordingItem {
   fileName: string;   // e.g. "REC_9876543210_20260916_1224.wav"
   fileSizeBytes: number;
   mimeType: string;
-  dataUri: string;
+  dataUri?: string;
   quality: string;    // "48 kHz Studio Lossless"
 }
 

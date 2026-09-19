@@ -5,6 +5,7 @@ import {
   CheckCheck,
   Clock,
   Database,
+  Disc,
   Download,
   LockKeyhole,
   Maximize2,
@@ -22,9 +23,11 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { CallLogItem, DisplayDensity, ShieldSettings } from '../types';
+import { CallLogItem, DisplayDensity, ShieldSettings, ContactItem } from '../types';
 import { telecomBridge } from '../services/telephony/telecomBridge';
+import { callRecordingService } from '../services/callRecordingService';
 import ThemeCustomizerModal from './ThemeCustomizerModal';
+import RecordingsModal from './RecordingsModal';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useI18n } from '../i18n/LanguageContext';
 import { formatPhoneNumber } from '../utils/spamEngine';
@@ -50,6 +53,9 @@ interface HeaderProps {
   density?: DisplayDensity;
   onDensityChange?: (density: DisplayDensity) => void;
   closeSettingsSignal?: number;
+  calls?: CallLogItem[];
+  contacts?: ContactItem[];
+  onInitiateCall?: (number: string, name?: string) => void;
 }
 
 type PrivacySettings = {
@@ -102,11 +108,16 @@ function Header({
   density = 'comfortable',
   onDensityChange,
   closeSettingsSignal = 0,
+  calls = [],
+  contacts = [],
+  onInitiateCall,
 }: HeaderProps) {
   const { t } = useI18n();
   const [showSettings, setShowSettings] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showTheme, setShowTheme] = useState(false);
+  const [showRecordings, setShowRecordings] = useState(false);
+  const [recordingsCount, setRecordingsCount] = useState<number>(0);
   const [widgetFeedback, setWidgetFeedback] = useState<string | null>(null);
   const [privacy, setPrivacy] = useState<PrivacySettings>(readPrivacySettings);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<string[]>(() => {
@@ -122,6 +133,7 @@ function Header({
     setShowSettings(false);
     setShowTheme(false);
     setShowNotifications(false);
+    setShowRecordings(false);
   }, [closeSettingsSignal]);
 
   useEffect(() => {
@@ -130,9 +142,25 @@ function Header({
       setShowSettings(false);
       setShowNotifications(false);
       setShowTheme(false);
+      setShowRecordings(false);
     };
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
+  }, []);
+
+  // Track saved recordings count
+  useEffect(() => {
+    let isMounted = true;
+    callRecordingService.getAllRecordings().then(list => {
+      if (isMounted) setRecordingsCount(list.length);
+    });
+    const unsub = callRecordingService.subscribe(list => {
+      if (isMounted) setRecordingsCount(list.length);
+    });
+    return () => {
+      isMounted = false;
+      unsub();
+    };
   }, []);
 
   useEffect(() => {
@@ -245,6 +273,27 @@ function Header({
                 </button>
               </div>
             )}
+
+            {/* Call Recordings Modal Button */}
+            <button
+              id="header-recordings-panel-btn"
+              type="button"
+              onClick={() => setShowRecordings(prev => !prev)}
+              className={`relative grid h-8 w-8 place-items-center rounded-lg border transition-all ${
+                showRecordings
+                  ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-400'
+                  : 'border-slate-700/80 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+              aria-label={t('call_recordings_title')}
+              title={`${t('call_recordings_title')} (${recordingsCount})`}
+            >
+              <Disc className={`h-3.5 w-3.5 ${showRecordings ? 'animate-spin' : ''}`} />
+              {recordingsCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 text-[8px] font-black text-white shadow-sm ring-2 ring-[#0b0f14]">
+                  {recordingsCount > 9 ? '9+' : recordingsCount}
+                </span>
+              )}
+            </button>
 
             {/* Notification Panel Button */}
             <button
@@ -550,6 +599,27 @@ function Header({
                 onChange={v => updatePrivacy('callRecordingEnabled', v)}
                 danger={privacy.callRecordingEnabled}
               />
+
+              {/* Shortcut to Recordings Modal from Settings */}
+              <div className="pl-9 pr-2 pb-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSettings(false);
+                    setShowRecordings(true);
+                  }}
+                  className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20 active:scale-98 transition w-full sm:w-auto"
+                >
+                  <Disc className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>{t('call_recordings_title')}</span>
+                  {recordingsCount > 0 && (
+                    <span className="rounded-full bg-emerald-500/30 px-1.5 py-0.2 text-[10px] font-bold text-emerald-200">
+                      {recordingsCount}
+                    </span>
+                  )}
+                  <span className="text-[10px] text-slate-400 ml-auto sm:ml-2">Browse files →</span>
+                </button>
+              </div>
               <SettingRow
                 icon={<Settings className="h-4 w-4" />}
                 title={t('clipboard_paste_title')}
@@ -762,6 +832,14 @@ function Header({
         </div>
       )}
       <ThemeCustomizerModal isOpen={showTheme} onClose={() => setShowTheme(false)} />
+      <RecordingsModal
+        isOpen={showRecordings}
+        onClose={() => setShowRecordings(false)}
+        contacts={contacts}
+        calls={calls}
+        onInitiateCall={onInitiateCall}
+        onSelectCall={onSelectCall}
+      />
     </>
   );
 }

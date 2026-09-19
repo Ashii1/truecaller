@@ -30,7 +30,7 @@ export default function InstallApkModal({
   onTriggerInstall,
 }: InstallApkModalProps) {
   const [activeTab, setActiveTab] = useState<'INSTALL' | 'PWABUILDER' | 'QR' | 'CLI' | 'UPDATES'>('INSTALL');
-  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const currentUrl = typeof window !== 'undefined' ? window.location.origin : '';
@@ -254,7 +254,7 @@ npx cap open android # Opens Android Studio to click "Build APK"`;
               <div className="flex flex-col sm:flex-row items-center gap-6 p-6 rounded-2xl bg-slate-950/70 border border-slate-800">
                 {/* QR Code */}
                 <div className="bg-white p-3 rounded-2xl shrink-0 shadow-lg">
-                  {qrDataUrl ? (
+                  {qrDataUrl && qrDataUrl.trim() !== '' ? (
                     <img src={qrDataUrl} alt="Scan to install on Android" className="w-48 h-48 block" />
                   ) : (
                     <div className="w-48 h-48 bg-slate-200 animate-pulse rounded-xl" />
@@ -366,7 +366,7 @@ npx cap open android # Opens Android Studio to click "Build APK"`;
                     Android blocks any APK whose internal <code className="text-amber-400 font-mono">versionCode</code> is equal to or lower than the installed version (<code className="text-amber-400 font-mono">INSTALL_FAILED_VERSION_DOWNGRADE</code>).
                   </p>
                   <div className="text-[11px] text-emerald-400 bg-emerald-950/30 p-2 rounded-xl border border-emerald-500/20 font-medium">
-                    ✓ Fixed: Base <code className="font-mono">versionCode</code> bumped to 203+ and auto-increments with each build.
+                    ✓ Fixed: Base <code className="font-mono">versionCode</code> bumped to 204+ and auto-increments with each build.
                   </div>
                 </div>
               </div>
@@ -375,7 +375,7 @@ npx cap open android # Opens Android Studio to click "Build APK"`;
                 <h5 className="text-xs font-bold text-slate-200">How to transition your current device:</h5>
                 <ol className="text-xs text-slate-400 space-y-1.5 list-decimal list-inside leading-relaxed">
                   <li><strong>One-time step:</strong> If you previously installed an old build signed with an incompatible debug key, uninstall it once from your device to clear the conflicting certificate.</li>
-                  <li><strong>Install the new unified build:</strong> Install the new APK (v1.5.3, versionCode 203+).</li>
+                  <li><strong>Install the new unified build:</strong> Install the new APK (v1.5.4, versionCode 204+).</li>
                   <li><strong>Future updates work seamlessly:</strong> Every subsequent APK built locally or via GitHub CI uses this exact same signing certificate and a higher versionCode, updating directly in-place without uninstallation!</li>
                 </ol>
               </div>
@@ -387,7 +387,7 @@ npx cap open android # Opens Android Studio to click "Build APK"`;
         <div className="px-6 py-3.5 bg-slate-850 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center space-x-1.5">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>CallShield Native Android & PWA v1.5.3</span>
+            <span>CallShield Native Android & PWA v1.5.4</span>
           </div>
           <button
             onClick={onClose}
