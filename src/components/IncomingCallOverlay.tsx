@@ -193,7 +193,7 @@ export default function IncomingCallOverlay({ call, autoCancelEnabled, onCancelC
           {call.callerName || t('unknown_caller')}
         </h2>
         <p className="mt-2 font-mono text-lg text-slate-300 tracking-wider">
-          {formatPhoneNumber(call.number)}
+          {formatPhoneNumber(typeof call.number === 'string' ? call.number : String(call.number ?? ''))}
         </p>
 
         <div className="mt-2 flex items-center justify-center gap-2 text-xs text-slate-400 font-medium">
