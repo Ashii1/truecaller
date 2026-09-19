@@ -127,7 +127,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun hasActiveOrRingingCall(): Boolean {
-        return NativeInCallService.activeCalls.values.any {
+        return VigilShieldInCallService.activeCalls.values.any {
             it.state == android.telecom.Call.STATE_RINGING ||
             it.state == android.telecom.Call.STATE_ACTIVE ||
             it.state == android.telecom.Call.STATE_DIALING ||
@@ -244,7 +244,7 @@ class MainActivity : AppCompatActivity() {
         syncWebSettingsToNative()
         dispatchLaunchIntent()
         requestPermissionsIfNeeded()
-        NativeInCallService.emitActiveCalls()
+        VigilShieldInCallService.emitActiveCalls()
     }
 
     private fun scheduleReactMountCheck(view: WebView?) {
@@ -338,13 +338,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun isRingingOrIncoming(): Boolean {
-        return NativeInCallService.isRinging() ||
-               NativeInCallService.activeCalls.values.any { it.state == android.telecom.Call.STATE_RINGING } ||
+        return VigilShieldInCallService.isRinging() ||
+               VigilShieldInCallService.activeCalls.values.any { it.state == android.telecom.Call.STATE_RINGING } ||
                intent?.getBooleanExtra("is_incoming_call", false) == true
     }
 
     private fun silenceIncomingRinger() {
-        NativeInCallService.stopRinging()
+        VigilShieldInCallService.stopRinging()
         runCatching {
             val telecom = getSystemService(TelecomManager::class.java)
             telecom?.silenceRinger()
@@ -372,9 +372,9 @@ class MainActivity : AppCompatActivity() {
         hideLoading()
         hideError()
 
-        if (NativeInCallService.activeCalls.isEmpty()) {
+        if (VigilShieldInCallService.activeCalls.isEmpty()) {
             CallNotificationHelper.clearAllCallNotifications(this)
-            NativeInCallService.stopRinging()
+            VigilShieldInCallService.stopRinging()
         }
 
         if (::bridge.isInitialized) {
