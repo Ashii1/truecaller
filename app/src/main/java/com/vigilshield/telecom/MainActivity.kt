@@ -66,6 +66,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Android Telecom may bring the default-dialer activity forward while a call is
+        // ringing. The dedicated IncomingCallActivity is the only incoming-call surface;
+        // never open the main CallShield UI automatically because a call became active.
+        if (savedInstanceState == null && shouldSuppressMainUiForCall(intent)) {
+            finish()
+            return
+        }
         super.onCreate(savedInstanceState)
         window.statusBarColor = Color.rgb(11, 15, 20)
         window.navigationBarColor = Color.rgb(11, 15, 20)
@@ -99,6 +106,24 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl(APP_ASSET_URL)
         // Default Phone role is requested only from an explicit user action in the UI.
         // Do not interrupt widget/phone-surface launches with a system role dialog.
+    }
+
+    private fun shouldSuppressMainUiForCall(value: Intent?): Boolean {
+        if (!hasActiveOrRingingCall()) return false
+        if (value == null) return true
+
+        // Explicit user launches must still work while a call is active.
+        val action = value.action
+        val categories = value.categories.orEmpty()
+        if (action == Intent.ACTION_MAIN && categories.contains(Intent.CATEGORY_LAUNCHER)) return false
+        if (action == Intent.ACTION_DIAL || action == Intent.ACTION_VIEW || action == Intent.ACTION_CALL) return false
+        if (action == "com.vigilshield.telecom.OPEN_OUTGOING_CALL") return false
+        if (value.getBooleanExtra("phone_surface", false)) return false
+        if (!value.getStringExtra("open_call_id").isNullOrBlank()) return false
+
+        // A system-created/empty launch while the phone is ringing must not open
+        // the normal CallShield application screen.
+        return action.isNullOrBlank() || action == "com.vigilshield.telecom.OPEN_INCOMING_CALL"
     }
 
     private fun hasActiveOrRingingCall(): Boolean {
