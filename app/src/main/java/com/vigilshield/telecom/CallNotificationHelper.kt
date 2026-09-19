@@ -18,6 +18,7 @@ object CallNotificationHelper {
     private const val MISSED_ID = 4101
     private const val REPEATED_ID = 4102
     private const val ENDED_ID = 4103
+    private const val ONGOING_CALL_ID = 4104
     private const val PREFS = "vigilshield"
     private val activeNotificationIds = java.util.Collections.synchronizedSet(mutableSetOf<Int>())
 
@@ -148,15 +149,22 @@ object CallNotificationHelper {
         activeNotificationIds.remove(INCOMING_CALL_ID)
         activeNotificationIds.add(callId.hashCode())
         val display = identity(context, name, number)
+        val numberDetail = if (privacyMode(context)) "" else number.takeIf { it.isNotBlank() } ?: ""
         val openIntent = PendingIntent.getActivity(context, callId.hashCode(), callActivityIntent(context, callId, name, number), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val end = PendingIntent.getBroadcast(context, callId.hashCode() + 3, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_END).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId).putExtra(CallActionReceiver.EXTRA_CALL_NUMBER, number), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val status = when (state) { "ACTIVE" -> "Ongoing call"; "HOLDING" -> "Call on hold"; "DIALING" -> "Calling…"; "CONNECTING" -> "Connecting…"; else -> "Call in progress" }
         val riskText = when (riskLevel) { "HIGH_RISK" -> " · High risk"; "SUSPICIOUS" -> " · Suspicious"; else -> "" }
-        val detail = if (privacyMode(context)) "$status$riskText · Tap to return to call" else "$display$riskText · $status · Tap to return to call"
+        val detail = if (privacyMode(context)) "$status$riskText · Tap to return to call" else buildString {
+            append(display)
+            if (numberDetail.isNotBlank() && numberDetail != display) append(" · ").append(numberDetail)
+            append(riskText).append(" · ").append(status).append(" · Tap to return to call")
+        }
         val person = Person.Builder().setName(display).setImportant(true).build()
         val builder = applyPrivacy(NotificationCompat.Builder(context, CHANNEL_ID).setSmallIcon(com.vigilshield.telecom.R.drawable.ic_callshield).setContentTitle(display).setContentText(detail).setSubText(status).setCategory(NotificationCompat.CATEGORY_CALL).setPriority(NotificationCompat.PRIORITY_HIGH).setOngoing(true).setOnlyAlertOnce(true).setContentIntent(openIntent).setWhen(if (connectTimeMillis > 0L) connectTimeMillis else System.currentTimeMillis()).setUsesChronometer(state == "ACTIVE" || state == "HOLDING").setStyle(NotificationCompat.BigTextStyle().bigText(detail + if (state == "ACTIVE" || state == "HOLDING") "\nCall controls are available when you return to CallShield." else "")).addAction(0, "End call", end), context)
         if (Build.VERSION.SDK_INT >= 31) builder.setStyle(NotificationCompat.CallStyle.forOngoingCall(person, end))
-        manager.notify(callId.hashCode(), builder.build())
+        val ongoingNotification = builder.build()
+        manager.notify(ONGOING_CALL_ID, ongoingNotification)
+        manager.notify(callId.hashCode(), ongoingNotification)
     }
 
     fun showCallEnded(context: Context) {}
@@ -210,14 +218,17 @@ object CallNotificationHelper {
     fun clearCall(context: Context, callId: String) {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.cancel(INCOMING_CALL_ID)
+        manager.cancel(ONGOING_CALL_ID)
         manager.cancel(callId.hashCode())
         activeNotificationIds.remove(callId.hashCode())
         activeNotificationIds.remove(INCOMING_CALL_ID)
+        activeNotificationIds.remove(ONGOING_CALL_ID)
     }
 
     fun clearAllCallNotifications(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.cancel(INCOMING_CALL_ID)
+        manager.cancel(ONGOING_CALL_ID)
         manager.cancel(ENDED_ID)
         val copy = synchronized(activeNotificationIds) { activeNotificationIds.toList() }
         for (id in copy) manager.cancel(id)
