@@ -50,6 +50,13 @@
                 android:resource="@xml/security_widget_info" />
         </receiver>
 
+        <activity android:name=".IncomingCallActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:launchMode="singleTop" />
+
         <activity android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
