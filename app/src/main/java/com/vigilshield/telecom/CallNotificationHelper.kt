@@ -176,22 +176,25 @@ object CallNotificationHelper {
     fun showRepeatedCallAttention(context: Context, name: String, number: String, callCount: Int) {
         if (!notificationsEnabled(context)) return
         ensureChannel(context)
-        val identityText = if (privacyMode(context)) "The same caller" else identity(context, name, number)
-        val detail = if (privacyMode(context)) "" else if (detailedNotifications(context) && number.isNotBlank()) " · $number" else ""
+        // Repeated-call alerts should immediately show who is calling and how many times.
+        val callerLabel = when {
+            name.isNotBlank() && name != number -> name
+            number.isNotBlank() -> number
+            else -> "Unknown caller"
+        }
         val openIntent = PendingIntent.getActivity(context, REPEATED_ID, Intent(context, MainActivity::class.java).putExtra("open_tab", "recents").putExtra("search_number", number).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val callbackIntent = PendingIntent.getActivity(context, (REPEATED_ID.toString() + number + "callback").hashCode(), Intent(Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(number)}")), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val countLabel = if (callCount == 1) "1 time" else "$callCount times"
-        val callerLabel = if (privacyMode(context)) "Private caller" else identityText
-        val text = "$callerLabel called $countLabel within 10 minutes"
-        val body = if (privacyMode(context)) {
-            "This caller has called $countLabel within 10 minutes."
+        val text = "$callerLabel called $countLabel in the last 10 minutes"
+        val body = if (number.isNotBlank() && callerLabel != number) {
+            "$callerLabel called $countLabel in the last 10 minutes.\n$number"
         } else {
-            "$identityText called $countLabel within 10 minutes."
+            text
         }
         val notification = applyPrivacy(
             NotificationCompat.Builder(context, SECURITY_CHANNEL_ID)
                 .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_callshield)
-                .setContentTitle("Repeated call: $callerLabel")
+                .setContentTitle(callerLabel)
                 .setContentText(text)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(body))
                 .setCategory(NotificationCompat.CATEGORY_STATUS)
