@@ -240,7 +240,8 @@ export default function App(){
         return;
       }
       if (eventType === 'OPEN_CALL_FROM_NOTIFICATION') {
-        const number = (payload?.number || '').trim();
+        const rawNumber = payload?.number;
+        const number = typeof rawNumber === 'string' ? rawNumber.trim() : rawNumber != null ? String(rawNumber).trim() : '';
         const callId = payload?.callId || '';
         const tab = payload?.tab || 'recents';
         const isIncoming = Boolean(payload?.isIncoming);
@@ -304,9 +305,12 @@ export default function App(){
       }
 
       const callId = payload?.callId || `call-${Date.now()}`;
-      const details = payload?.details;
-      const number = details?.number || '';
-      const state = details?.state || 'RINGING';
+      const details = payload?.details && typeof payload.details === 'object' ? payload.details : {};
+      const rawDetailsNumber = details?.number;
+      const number = typeof rawDetailsNumber === 'string'
+        ? rawDetailsNumber.trim()
+        : rawDetailsNumber != null ? String(rawDetailsNumber).trim() : '';
+      const state = typeof details?.state === 'string' ? details.state : 'RINGING';
       const incoming = details?.isIncoming ?? (state === 'RINGING');
 
       if (eventType === 'PERMISSIONS_CHANGED') {
@@ -759,7 +763,7 @@ export default function App(){
 
   <CallerDetailModal call={selectedCall} calls={calls} contacts={contacts} profile={selectedProfile} isOpen={isCallerModalOpen} onClose={()=>setIsCallerModalOpen(false)} onBlockNumber={handleBlockNumber} onMarkSafe={handleWhitelistNumber} onInitiateCall={(number, name, sim, isPrivate) => { setIsCallerModalOpen(false); handleInitiateCall(number, name, sim, isPrivate); }} onOpenReportModal={n=>{setFastReportNumber(n);setIsFastReportOpen(true)}} onOpenDisputeModal={(n,nm)=>{setDisputeNumber(n);setDisputeName(nm);setIsDisputeOpen(true)}} onUpdateCallerName={handleUpdateCallerName} onAddContact={handleAddContact} onSaveNote={handleSaveNote}/>
   <IncomingCallOverlay
-    call={appInForeground ? null : activeIncomingCall}
+    call={activeIncomingCall}
     autoCancelEnabled={autoCancelEnabled}
     onCancelCall={(reason, block, screeningData) => {
       if (activeIncomingCall?.callId) {
