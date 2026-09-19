@@ -48,7 +48,7 @@ object CallNotificationHelper {
     private fun detailedNotifications(context: Context): Boolean = prefs(context).getBoolean("notification_caller_details", false)
     private fun notificationsEnabled(context: Context): Boolean = prefs(context).getBoolean("security_notifications", true)
     private fun callAlertsEnabled(context: Context): Boolean = prefs(context).getBoolean("security_call_alerts", true)
-    private fun privateLockScreen(context: Context): Boolean = prefs(context).getBoolean("security_privacy_lock_screen", true) || privacyMode(context)
+    private fun privateLockScreen(context: Context): Boolean = prefs(context).getBoolean("security_privacy_lock_screen", false) || privacyMode(context)
 
     private fun identity(context: Context, name: String, number: String): String {
         if (privacyMode(context)) return "Private caller"
@@ -105,7 +105,7 @@ object CallNotificationHelper {
         val answer = PendingIntent.getBroadcast(context, callId.hashCode() + 1, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_ANSWER).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val decline = PendingIntent.getBroadcast(context, callId.hashCode() + 2, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_DECLINE).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val dismiss = PendingIntent.getBroadcast(context, callId.hashCode() + 4, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_DISMISS).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val display = identity(context, name, number)
+        val display = identityWithNumber(context, name, number)
         val person = Person.Builder().setName(display).setImportant(true).build()
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_callshield)
