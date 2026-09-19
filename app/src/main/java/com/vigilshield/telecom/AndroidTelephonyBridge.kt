@@ -141,8 +141,14 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
         // Guard against duplicate ACTION_CALL/UI events arriving within the same
         // short window. Android Telecom itself is the single source of truth.
         val now = System.currentTimeMillis()
-        if (clean == lastCallRequestNumber && now - lastCallRequestAt < 1500L) {
+        if (clean == lastCallRequestNumber && now - lastCallRequestAt < 5000L) {
             return JSONObject().put("success", false).put("message", "Call is already being started").toString()
+        }
+        val normalized = clean.filter { it.isDigit() }
+        if (NativeInCallService.activeCalls.values.any { call ->
+                call.details.handle?.schemeSpecificPart?.filter { it.isDigit() } == normalized
+            }) {
+            return JSONObject().put("success", false).put("message", "A call to this number is already active").toString()
         }
         lastCallRequestNumber = clean
         lastCallRequestAt = now
