@@ -757,7 +757,7 @@ export default function App(){
     {activeTab==='assistant'&&<AssistantTab calls={calls} contacts={contacts} rules={rules} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onAddRule={handleAddRule}/>} 
    </main>
 
-  <CallerDetailModal call={selectedCall} calls={calls} contacts={contacts} profile={selectedProfile} isOpen={isCallerModalOpen} onClose={()=>setIsCallerModalOpen(false)} onBlockNumber={handleBlockNumber} onMarkSafe={handleWhitelistNumber} onInitiateCall={handleInitiateCall} onOpenReportModal={n=>{setFastReportNumber(n);setIsFastReportOpen(true)}} onOpenDisputeModal={(n,nm)=>{setDisputeNumber(n);setDisputeName(nm);setIsDisputeOpen(true)}} onUpdateCallerName={handleUpdateCallerName} onAddContact={handleAddContact} onSaveNote={handleSaveNote}/>
+  <CallerDetailModal call={selectedCall} calls={calls} contacts={contacts} profile={selectedProfile} isOpen={isCallerModalOpen} onClose={()=>setIsCallerModalOpen(false)} onBlockNumber={handleBlockNumber} onMarkSafe={handleWhitelistNumber} onInitiateCall={(number, name, sim, isPrivate) => { setIsCallerModalOpen(false); handleInitiateCall(number, name, sim, isPrivate); }} onOpenReportModal={n=>{setFastReportNumber(n);setIsFastReportOpen(true)}} onOpenDisputeModal={(n,nm)=>{setDisputeNumber(n);setDisputeName(nm);setIsDisputeOpen(true)}} onUpdateCallerName={handleUpdateCallerName} onAddContact={handleAddContact} onSaveNote={handleSaveNote}/>
   <IncomingCallOverlay
     call={appInForeground ? null : activeIncomingCall}
     autoCancelEnabled={autoCancelEnabled}
