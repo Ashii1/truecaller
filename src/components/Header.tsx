@@ -474,6 +474,8 @@ function Header({
           <section
             className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto border-l border-slate-700 bg-slate-950 shadow-2xl sm:relative sm:mx-auto sm:my-8 sm:h-auto sm:max-h-[calc(100vh-4rem)] sm:rounded-3xl sm:border"
             onMouseDown={e => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
+            onPointerDown={e => e.stopPropagation()}
           >
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-slate-950/95 px-5 pb-4 safe-top-modal sm:pt-5 backdrop-blur">
               <div>
