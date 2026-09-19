@@ -285,12 +285,10 @@ class NativeInCallService : InCallService() {
             ringtone = null
             if (vibrating) runCatching { vibrator?.cancel() }
             vibrating = false
+            // Let Android Telecom stop its own ringing. Do not mute the device's
+            // ring stream here: that permanently silences subsequent incoming calls.
             runCatching {
-                val context = appContext
-                val tm = context?.getSystemService(TelecomManager::class.java)
-                tm?.silenceRinger()
-                val am = context?.getSystemService(AudioManager::class.java)
-                am?.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_MUTE, 0)
+                appContext?.getSystemService(TelecomManager::class.java)?.silenceRinger()
             }
             bridge?.dispatchWebEvent("SILENCE_RINGER", JSONObject())
         }
@@ -300,7 +298,7 @@ class NativeInCallService : InCallService() {
                 instance?.emit(call, call.state)
             }
         }
-        private fun startRinging() { stopRinging(); val context = appContext ?: return; val audio = context.getSystemService(AudioManager::class.java); when (audio.ringerMode) { AudioManager.RINGER_MODE_SILENT -> Unit; AudioManager.RINGER_MODE_VIBRATE -> { vibrator = context.getSystemService(Vibrator::class.java); val pattern = longArrayOf(0, 450, 350, 450, 700); if (Build.VERSION.SDK_INT >= 26) vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0)) else @Suppress("DEPRECATION") vibrator?.vibrate(pattern, 0); vibrating = true }; else -> { val uri = RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE) ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE); ringtone = RingtoneManager.getRingtone(context, uri); ringtone?.audioAttributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build(); ringtone?.play() } } }
+        private fun startRinging() { stopRinging(); val context = appContext ?: return; val audio = context.getSystemService(AudioManager::class.java); val uri = RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE) ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE); when (audio.ringerMode) { AudioManager.RINGER_MODE_VIBRATE -> { vibrator = context.getSystemService(Vibrator::class.java); val pattern = longArrayOf(0, 450, 350, 450, 700); if (Build.VERSION.SDK_INT >= 26) vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0)) else @Suppress("DEPRECATION") vibrator?.vibrate(pattern, 0); vibrating = true }; AudioManager.RINGER_MODE_SILENT -> { ringtone = RingtoneManager.getRingtone(context, uri); ringtone?.audioAttributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build(); ringtone?.play() }; else -> { ringtone = RingtoneManager.getRingtone(context, uri); ringtone?.audioAttributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build(); ringtone?.play() } } }
         fun wakeScreenUp(context: Context) {
             runCatching {
                 val pm = context.getSystemService(PowerManager::class.java) ?: return
