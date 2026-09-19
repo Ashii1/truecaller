@@ -410,13 +410,55 @@ class NativeInCallService : InCallService() {
             CallNotificationHelper.showIncomingCall(applicationContext, id, name, number)
             launchIncomingCallActivity(applicationContext, id, name, number)
         } else {
-            // OUTGOING CALL OR ACTIVE CALL: Keep CallShield in front!
+            // Publish the ongoing-call notification immediately from InCallService.
+            // It must remain available after the user leaves CallShield for the launcher.
+            val initialState = when (call.state) {
+                Call.STATE_ACTIVE -> "ACTIVE"
+                Call.STATE_HOLDING -> "HOLDING"
+                Call.STATE_CONNECTING -> "CONNECTING"
+                Call.STATE_DIALING -> "DIALING"
+                else -> "DIALING"
+            }
+            CallNotificationHelper.showOngoingCall(
+                applicationContext,
+                id,
+                name.ifBlank { number.ifBlank { "Unknown caller" } },
+                number,
+                initialState,
+                call.details.connectTimeMillis
+            )
             launchActiveCallActivity(applicationContext, id, name, number, call.state)
         }
         emit(call, call.state)
     }
     private fun emit(call: Call, state: Int) { val id = ids[call] ?: return; val rawNum = call.details.handle?.schemeSpecificPart.orEmpty(); val isRestricted = call.details.handlePresentation == TelecomManager.PRESENTATION_RESTRICTED || rawNum.isBlank() || rawNum.equals("private", ignoreCase = true) || rawNum.equals("unknown", ignoreCase = true) || rawNum == "0"; val number = if (isRestricted) "Private Number" else rawNum; val incoming = call.details.callDirection == Call.Details.DIRECTION_INCOMING; val name = if (isRestricted) "Private / Withheld Number" else bridge?.lookupName(number).orEmpty().ifBlank { call.details.callerDisplayName.orEmpty() }.ifBlank { number }; val stateName = when (state) { Call.STATE_NEW -> "NEW"; Call.STATE_RINGING -> "RINGING"; Call.STATE_DIALING -> "DIALING"; Call.STATE_CONNECTING -> "CONNECTING"; Call.STATE_ACTIVE -> "ACTIVE"; Call.STATE_HOLDING -> "HOLDING"; Call.STATE_DISCONNECTED -> "DISCONNECTED"; else -> "UNKNOWN" }; val details = JSONObject().put("number", number).put("callerDisplayName", name).put("state", stateName).put("isIncoming", incoming).put("durationSeconds", if (call.details.connectTimeMillis > 0) ((System.currentTimeMillis() - call.details.connectTimeMillis) / 1000).coerceAtLeast(0) else 0).put("isHolding", state == Call.STATE_HOLDING).put("phoneAccountId", call.details.accountHandle?.id); if (state == Call.STATE_ACTIVE || state == Call.STATE_HOLDING || state == Call.STATE_DIALING || state == Call.STATE_CONNECTING) { CallNotificationHelper.showOngoingCall(applicationContext, id, name.ifBlank { number.ifBlank { "Unknown caller" } }, number, stateName, call.details.connectTimeMillis, null) }; bridge?.dispatchCallEvent(if (state == Call.STATE_DISCONNECTED) "CALL_DISCONNECTED" else if (state == Call.STATE_RINGING && incoming) "CALL_ADDED" else "CALL_STATE_CHANGED", JSONObject().put("callId", id).put("details", details)) }
-    override fun onCallRemoved(call: Call) { val id = ids[call] ?: activeCalls.entries.firstOrNull { it.value == call }?.key; if (id == null) { stopRinging(); CallNotificationHelper.clearAllCallNotifications(applicationContext); super.onCallRemoved(call); return }; val incoming = call.details.callDirection == Call.Details.DIRECTION_INCOMING; val number = call.details.handle?.schemeSpecificPart.orEmpty(); val name = bridge?.lookupName(number).orEmpty().ifBlank { call.details.callerDisplayName.orEmpty() }.ifBlank { number.ifBlank { "Unknown caller" } }; if (incoming && call.details.connectTimeMillis <= 0L) CallNotificationHelper.showMissedCall(applicationContext, name, number); CallNotificationHelper.clearCall(applicationContext, id); CallNotificationHelper.clearAllCallNotifications(applicationContext); persist(call); activeCalls.remove(id); callbacks.remove(id)?.let { call.unregisterCallback(it) }; ids.remove(call); stopRinging(); if (activeCalls.isEmpty()) { instance = null; CallNotificationHelper.clearAllCallNotifications(applicationContext) }; super.onCallRemoved(call) }
+    override fun onCallRemoved(call: Call) {
+        val id = ids[call] ?: activeCalls.entries.firstOrNull { it.value == call }?.key
+        if (id == null) {
+            stopRinging()
+            super.onCallRemoved(call)
+            return
+        }
+        val incoming = call.details.callDirection == Call.Details.DIRECTION_INCOMING
+        val number = call.details.handle?.schemeSpecificPart.orEmpty()
+        val name = bridge?.lookupName(number).orEmpty()
+            .ifBlank { call.details.callerDisplayName.orEmpty() }
+            .ifBlank { number.ifBlank { "Unknown caller" } }
+        if (incoming && call.details.connectTimeMillis <= 0L) {
+            CallNotificationHelper.showMissedCall(applicationContext, name, number)
+        }
+        CallNotificationHelper.clearCall(applicationContext, id)
+        persist(call)
+        activeCalls.remove(id)
+        callbacks.remove(id)?.let { call.unregisterCallback(it) }
+        ids.remove(call)
+        stopRinging()
+        if (activeCalls.isEmpty()) {
+            instance = null
+            CallNotificationHelper.clearAllCallNotifications(applicationContext)
+        }
+        super.onCallRemoved(call)
+    }
     fun setSpeaker(enabled: Boolean): Boolean {
         return runCatching {
             // Telecom owns the audio route. Use the explicit earpiece route when speaker
