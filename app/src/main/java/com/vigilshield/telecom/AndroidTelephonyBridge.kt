@@ -297,6 +297,9 @@ class NativeInCallService : InCallService() {
             }
         }
         fun launchActiveCallActivity(context: Context, callId: String, name: String, number: String, state: Int = Call.STATE_DIALING) {
+            // Do not recreate/reorder MainActivity from a Telecom callback when CallShield is already visible.
+            // Re-entering the WebView activity during call setup can race the UI lifecycle and trigger a fallback to the system Phone UI.
+            if (MainActivity.isAppVisible) return
             runCatching {
                 val intent = Intent(context, MainActivity::class.java).apply {
                     action = "com.vigilshield.telecom.OPEN_OUTGOING_CALL"
