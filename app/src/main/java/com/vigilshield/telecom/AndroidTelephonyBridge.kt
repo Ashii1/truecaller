@@ -312,24 +312,6 @@ class VigilShieldInCallService : InCallService() {
                 wakeLock.acquire(15_000L)
             }
         }
-        fun launchIncomingCallActivity(context: Context, callId: String, name: String, number: String) {
-            runCatching {
-                val intent = Intent(context, MainActivity::class.java).apply {
-                    action = "com.vigilshield.telecom.OPEN_INCOMING_CALL"
-                    putExtra("open_call_id", callId)
-                    putExtra("open_call_number", number)
-                    putExtra("open_call_name", name)
-                    putExtra("is_incoming_call", true)
-                    putExtra("open_tab", "incoming")
-                    addFlags(
-                        Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP
-                    )
-                }
-                context.startActivity(intent)
-            }
-        }
         fun launchActiveCallActivity(context: Context, callId: String, name: String, number: String, state: Int = Call.STATE_DIALING) {
             // If CallShield is already visible, React owns the in-call surface and
             // receives the Telecom state event below. Reordering MainActivity here can
