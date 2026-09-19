@@ -377,7 +377,7 @@ class NativeInCallService : InCallService() {
                     val number = c.details.handle?.schemeSpecificPart.orEmpty()
                     val name = bridge?.lookupName(number).orEmpty().ifBlank { c.details.callerDisplayName.orEmpty() }.ifBlank { number.ifBlank { "Unknown caller" } }
                     CallNotificationHelper.showIncomingCall(applicationContext, id, name, number)
-                    launchIncomingCallActivity(applicationContext, id, name, number)
+                    if (!MainActivity.isAppVisible) launchIncomingCallActivity(applicationContext, id, name, number)
                 } else if (state == Call.STATE_DIALING || state == Call.STATE_CONNECTING || state == Call.STATE_ACTIVE) {
                     stopRinging()
                     val number = c.details.handle?.schemeSpecificPart.orEmpty()
@@ -408,7 +408,7 @@ class NativeInCallService : InCallService() {
             startRinging()
             wakeScreenUp(applicationContext)
             CallNotificationHelper.showIncomingCall(applicationContext, id, name, number)
-            launchIncomingCallActivity(applicationContext, id, name, number)
+            if (!MainActivity.isAppVisible) launchIncomingCallActivity(applicationContext, id, name, number)
         } else {
             // Publish the ongoing-call notification immediately from InCallService.
             // It must remain available after the user leaves CallShield for the launcher.
