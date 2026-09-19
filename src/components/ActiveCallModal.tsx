@@ -254,7 +254,7 @@ export default function ActiveCallModal({
   const callerProfile = lookupProfile(session.number);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+    <div className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
       <div className="w-full max-w-sm bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 text-white text-center relative overflow-hidden max-h-[95vh] overflow-y-auto">
         {/* Top Status & SIM info */}
         <div className="flex items-center justify-between text-xs text-slate-400">
