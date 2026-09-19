@@ -214,7 +214,29 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
     @JavascriptInterface fun lookupContactName(number: String): String = lookupName(number).orEmpty()
     @JavascriptInterface fun answerCall(id: String): Boolean = NativeInCallService.activeCalls[id]?.let { it.answer(0); NativeInCallService.stopRinging(); CallNotificationHelper.clearCall(activity.applicationContext, id); true } ?: false
     @JavascriptInterface fun rejectCall(id: String, reason: String?): Boolean { NativeInCallService.stopRinging(); CallNotificationHelper.clearCall(activity.applicationContext, id); CallNotificationHelper.clearAllCallNotifications(activity.applicationContext); return NativeInCallService.activeCalls[id]?.let { it.reject(false, reason ?: "Declined"); true } ?: false }
-    @JavascriptInterface fun disconnectCall(id: String): Boolean { NativeInCallService.stopRinging(); CallNotificationHelper.clearCall(activity.applicationContext, id); CallNotificationHelper.clearAllCallNotifications(activity.applicationContext); return NativeInCallService.activeCalls[id]?.let { it.disconnect(); true } ?: false }
+    @JavascriptInterface fun disconnectCall(id: String): Boolean {
+        val call = NativeInCallService.activeCalls[id] ?: NativeInCallService.activeCalls.values.singleOrNull() ?: return false
+        NativeInCallService.stopRinging()
+        return runCatching {
+            call.disconnect()
+            CallNotificationHelper.clearCall(activity.applicationContext, id)
+            CallNotificationHelper.clearAllCallNotifications(activity.applicationContext)
+            true
+        }.getOrDefault(false)
+    }
+    @JavascriptInterface fun setMuted(muted: Boolean): Boolean = runCatching { NativeInCallService.instance?.setMuted(muted); true }.getOrDefault(false)
+    @JavascriptInterface fun setSpeakerRoute(enabled: Boolean): Boolean = runCatching { NativeInCallService.instance?.setSpeaker(enabled) ?: false }.getOrDefault(false)
+    @JavascriptInterface fun sendDtmfTone(id: String, digit: String): Boolean = runCatching {
+        val call = NativeInCallService.activeCalls[id] ?: NativeInCallService.activeCalls.values.singleOrNull() ?: return false
+        val tone = digit.firstOrNull() ?: return false
+        call.playDtmfTone(tone)
+        call.stopDtmfTone()
+        true
+    }.getOrDefault(false)
+    @JavascriptInterface fun holdCall(id: String): Boolean = runCatching { (NativeInCallService.activeCalls[id] ?: NativeInCallService.activeCalls.values.singleOrNull())?.hold() ?: return false; true }.getOrDefault(false)
+    @JavascriptInterface fun unholdCall(id: String): Boolean = runCatching { (NativeInCallService.activeCalls[id] ?: NativeInCallService.activeCalls.values.singleOrNull())?.unhold() ?: return false; true }.getOrDefault(false)
+    @JavascriptInterface fun swapCalls(): Boolean = NativeInCallService.swapCalls()
+    @JavascriptInterface fun mergeCalls(): Boolean = NativeInCallService.mergeCalls()
     @JavascriptInterface fun clearStaleCallNotifications(): Boolean { CallNotificationHelper.clearAllCallNotifications(activity.applicationContext); NativeInCallService.stopRinging(); return true }
     fun isDefaultDialer(): Boolean = if (Build.VERSION.SDK_INT >= 29) activity.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_DIALER) else telecom.defaultDialerPackage == activity.packageName
     fun hasPermission(permission: String): Boolean = ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED
