@@ -318,20 +318,20 @@ const DialerTab = memo(function DialerTab({
       </div>
 
       {/* STRICTLY ANCHORED Keypad Grid: 3 columns, stationary coordinates */}
-      <div className={`mx-auto w-full shrink-0 transition-all ${isCompact ? 'max-w-[245px] sm:max-w-[265px]' : 'max-w-[270px] sm:max-w-[290px]'}`}>
+      <div className={`mx-auto w-full shrink-0 transition-all ${isCompact ? 'max-w-[270px] sm:max-w-[285px]' : 'max-w-[300px] sm:max-w-[315px]'}`}>
         <div className={`grid grid-cols-3 transition-all ${isCompact ? 'gap-1.5 sm:gap-2' : 'gap-2.5 sm:gap-3'}`}>
           {KEYPAD.map(([digit, letters]) => (
             <button
               type="button"
               key={digit}
               onClick={() => press(digit)}
-              className={`mx-auto flex flex-col items-center justify-center rounded-full bg-[#151c24] ring-1 ring-white/5 transition hover:bg-[#1a232e] active:scale-95 shrink-0 ${
+              className={`mx-auto flex flex-col items-center justify-center rounded-full border border-white/[0.08] bg-gradient-to-b from-[#1b2530] to-[#10161d] shadow-[0_5px_14px_rgba(0,0,0,0.35)] ring-1 ring-black/20 transition hover:from-[#202c38] hover:to-[#141c25] active:scale-90 shrink-0 ${
                 isCompact
-                  ? 'h-[46px] w-[46px] sm:h-[48px] sm:w-[48px]'
-                  : 'h-[54px] w-[54px] sm:h-[58px] sm:w-[58px]'
+                  ? 'h-[52px] w-[52px] sm:h-[56px] sm:w-[56px]'
+                  : 'h-[60px] w-[60px] sm:h-[64px] sm:w-[64px]'
               }`}
             >
-              <span className={`font-normal leading-none text-white transition-all ${isCompact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl'}`}>{digit}</span>
+              <span className={`font-normal leading-none text-white transition-all ${isCompact ? 'text-xl sm:text-[22px]' : 'text-[22px] sm:text-[24px]'}`}>{digit}</span>
               {letters && (
                 <span className={`-mt-0.5 font-medium tracking-[.18em] text-slate-400 transition-all ${isCompact ? 'text-[7.5px]' : 'text-[8px] sm:text-[9px]'}`}>
                   {letters}
