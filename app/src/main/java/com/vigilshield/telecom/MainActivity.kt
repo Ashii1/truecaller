@@ -206,7 +206,13 @@ class MainActivity : AppCompatActivity() {
             if (!number.isNullOrBlank()) {
                 val quoted = JSONObject.quote(number)
                 if (current.action == Intent.ACTION_CALL) {
-                    webView.post { webView.evaluateJavascript("if(window.__onAndroidCallIntent){window.__onAndroidCallIntent($quoted);}", null) }
+                    val normalizedNumber = number.filter { it.isDigit() }
+                    val alreadyActive = NativeInCallService.activeCalls.values.any { call ->
+                        call.details.handle?.schemeSpecificPart?.filter { it.isDigit() } == normalizedNumber
+                    }
+                    if (!alreadyActive) {
+                        webView.post { webView.evaluateJavascript("if(window.__onAndroidCallIntent){window.__onAndroidCallIntent($quoted);}", null) }
+                    }
                 } else if (current.action == Intent.ACTION_DIAL || current.action == Intent.ACTION_VIEW) {
                     webView.post { webView.evaluateJavascript("if(window.__onAndroidDialIntent){window.__onAndroidDialIntent($quoted);}", null) }
                 }
