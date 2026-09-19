@@ -52,6 +52,7 @@ class VigilShieldInCallService : InCallService() {
         fun emitActiveCalls() { activeCalls.forEach { (id, call) -> instance?.let { svc -> val d = svc.extractCallDetails(call, id); bridge?.dispatchCallEvent("CALL_STATE_CHANGED", JSONObject().put("callId", id).put("details", d.toJson())) } } }
         fun swapCalls(): Boolean = instance?.swapCallsInternal() ?: false
         fun mergeCalls(): Boolean = instance?.mergeCallsInternal() ?: false
+        fun setSpeaker(enabled: Boolean): Boolean = instance?.setSpeakerRoute(enabled) != null
         fun readHistory(limit: Int): List<JSONObject> { val out = mutableListOf<JSONObject>(); runCatching { val a = JSONArray(appContext?.getSharedPreferences("vigilshield", Context.MODE_PRIVATE)?.getString("call_history", "[]") ?: "[]"); for (i in 0 until minOf(a.length(), limit.coerceIn(1, 500))) out += a.getJSONObject(i) }; return out }
     }
 
