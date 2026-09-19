@@ -329,6 +329,10 @@ class NativeInCallService : InCallService() {
     override fun onCreate() { super.onCreate(); instance = this; appContext = applicationContext; CallNotificationHelper.ensureChannel(applicationContext) }
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
+        runCatching { handleCallAdded(call) }.onFailure { runCatching { CallNotificationHelper.clearAllCallNotifications(applicationContext) } }
+    }
+
+    private fun handleCallAdded(call: Call) {
         instance = this
         val id = "call-${System.identityHashCode(call)}-${System.currentTimeMillis()}"
         ids[call] = id
