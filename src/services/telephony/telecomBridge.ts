@@ -71,7 +71,7 @@ class TelecomBridgeService {
   private refreshStatus(){if(!this.native()){this.defaultDialerConfirmed=false;return;}try{this.defaultDialerConfirmed=!!JSON.parse(window.AndroidTelecomBridge!.checkDefaultDialerStatus()).isDefaultDialer;}catch{this.defaultDialerConfirmed=false;}}
   private initEvents(){
     if(typeof window==='undefined')return;
-    window.__onAndroidTelecomEvent=(type,payload)=>{if(type==='ROLE_STATUS_CHANGED'){this.defaultDialerConfirmed=!!payload?.isDefaultDialer;this.diagnosticsCache=null;}this.listeners.forEach(l=>{try{l(type,payload);}catch(e){console.error(e);}});};
+    window.__onAndroidTelecomEvent=(type,payload)=>{if(type==='CALL_ADDED'||type==='CALL_STATE_CHANGED'||type==='OPEN_CALL_FROM_NOTIFICATION'){if(payload&&typeof payload==='object'){if(payload.number!=null)payload.number=String(payload.number);if(payload.name!=null)payload.name=String(payload.name);if(payload.details&&typeof payload.details==='object'){if(payload.details.number!=null)payload.details.number=String(payload.details.number);if(payload.details.callerDisplayName!=null)payload.details.callerDisplayName=String(payload.details.callerDisplayName);}}}if(type==='ROLE_STATUS_CHANGED'){this.defaultDialerConfirmed=!!payload?.isDefaultDialer;this.diagnosticsCache=null;}this.listeners.forEach(l=>{try{l(type,payload);}catch(e){console.error(e);}});};
     window.__onAndroidDialIntent=n=>this.notifyDialIntent(n);
     window.__onAndroidCallIntent=n=>this.notifyCallIntent(n);
   }
