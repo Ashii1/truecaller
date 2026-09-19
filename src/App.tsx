@@ -649,7 +649,7 @@ export default function App(){
   }, [deferredPrompt]);
 
   const handleEndCall = useCallback((recordingItem?: CallRecordingItem | null, callDuration?: number, callerNotes?: string) => {
-    if (activeCallSession?.id) telecomBridge.disconnectCall(activeCallSession.id);
+    if (activeCallSession?.id) telecomBridge.disconnectCall(activeCallSession.id, activeCallSession.number);
     else telecomBridge.clearStaleCallNotifications();
     if (activeCallSession) {
       const dur = callDuration || activeCallSession.durationSeconds || 1;
