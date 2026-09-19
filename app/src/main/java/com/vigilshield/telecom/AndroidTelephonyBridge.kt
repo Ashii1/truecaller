@@ -319,9 +319,9 @@ class NativeInCallService : InCallService() {
             }
         }
         fun launchActiveCallActivity(context: Context, callId: String, name: String, number: String, state: Int = Call.STATE_DIALING) {
-            // Do not recreate/reorder MainActivity from a Telecom callback when CallShield is already visible.
-            // Re-entering the WebView activity during call setup can race the UI lifecycle and trigger a fallback to the system Phone UI.
-            if (MainActivity.isAppVisible) return
+            // Always bring CallShield's in-call surface to the front. If the user started
+            // the call from Contacts/Recents, leaving the current tab visible would make
+            // the real call run behind the contacts screen.
             runCatching {
                 val intent = Intent(context, MainActivity::class.java).apply {
                     action = "com.vigilshield.telecom.OPEN_OUTGOING_CALL"
@@ -411,5 +411,12 @@ class NativeInCallService : InCallService() {
     }
     private fun emit(call: Call, state: Int) { val id = ids[call] ?: return; val rawNum = call.details.handle?.schemeSpecificPart.orEmpty(); val isRestricted = call.details.handlePresentation == TelecomManager.PRESENTATION_RESTRICTED || rawNum.isBlank() || rawNum.equals("private", ignoreCase = true) || rawNum.equals("unknown", ignoreCase = true) || rawNum == "0"; val number = if (isRestricted) "Private Number" else rawNum; val incoming = call.details.callDirection == Call.Details.DIRECTION_INCOMING; val name = if (isRestricted) "Private / Withheld Number" else bridge?.lookupName(number).orEmpty().ifBlank { call.details.callerDisplayName.orEmpty() }.ifBlank { number }; val stateName = when (state) { Call.STATE_NEW -> "NEW"; Call.STATE_RINGING -> "RINGING"; Call.STATE_DIALING -> "DIALING"; Call.STATE_CONNECTING -> "CONNECTING"; Call.STATE_ACTIVE -> "ACTIVE"; Call.STATE_HOLDING -> "HOLDING"; Call.STATE_DISCONNECTED -> "DISCONNECTED"; else -> "UNKNOWN" }; val details = JSONObject().put("number", number).put("callerDisplayName", name).put("state", stateName).put("isIncoming", incoming).put("durationSeconds", if (call.details.connectTimeMillis > 0) ((System.currentTimeMillis() - call.details.connectTimeMillis) / 1000).coerceAtLeast(0) else 0).put("isHolding", state == Call.STATE_HOLDING).put("phoneAccountId", call.details.accountHandle?.id); if (state == Call.STATE_ACTIVE || state == Call.STATE_HOLDING || state == Call.STATE_DIALING || state == Call.STATE_CONNECTING) { CallNotificationHelper.showOngoingCall(applicationContext, id, name.ifBlank { number.ifBlank { "Unknown caller" } }, number, stateName, call.details.connectTimeMillis, null) }; bridge?.dispatchCallEvent(if (state == Call.STATE_DISCONNECTED) "CALL_DISCONNECTED" else if (state == Call.STATE_RINGING && incoming) "CALL_ADDED" else "CALL_STATE_CHANGED", JSONObject().put("callId", id).put("details", details)) }
     override fun onCallRemoved(call: Call) { val id = ids[call] ?: activeCalls.entries.firstOrNull { it.value == call }?.key; if (id == null) { stopRinging(); CallNotificationHelper.clearAllCallNotifications(applicationContext); super.onCallRemoved(call); return }; val incoming = call.details.callDirection == Call.Details.DIRECTION_INCOMING; val number = call.details.handle?.schemeSpecificPart.orEmpty(); val name = bridge?.lookupName(number).orEmpty().ifBlank { call.details.callerDisplayName.orEmpty() }.ifBlank { number.ifBlank { "Unknown caller" } }; if (incoming && call.details.connectTimeMillis <= 0L) CallNotificationHelper.showMissedCall(applicationContext, name, number); CallNotificationHelper.clearCall(applicationContext, id); CallNotificationHelper.clearAllCallNotifications(applicationContext); persist(call); activeCalls.remove(id); callbacks.remove(id)?.let { call.unregisterCallback(it) }; ids.remove(call); stopRinging(); if (activeCalls.isEmpty()) { instance = null; CallNotificationHelper.clearAllCallNotifications(applicationContext) }; super.onCallRemoved(call) }
-    @Suppress("DEPRECATION") fun setSpeaker(enabled: Boolean): Boolean { setAudioRoute(if (enabled) CallAudioState.ROUTE_SPEAKER else CallAudioState.ROUTE_WIRED_OR_EARPIECE); return true }
+    fun setSpeaker(enabled: Boolean): Boolean {
+        return runCatching {
+            // Telecom owns the audio route. Use the explicit earpiece route when speaker
+            // is turned off; ROUTE_WIRED_OR_EARPIECE can leave some devices without audio.
+            setAudioRoute(if (enabled) CallAudioState.ROUTE_SPEAKER else CallAudioState.ROUTE_EARPIECE)
+            true
+        }.getOrDefault(false)
+    }
 }
