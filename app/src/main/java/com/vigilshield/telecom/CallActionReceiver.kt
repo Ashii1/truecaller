@@ -16,7 +16,7 @@ class CallActionReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val id = intent.getStringExtra(EXTRA_CALL_ID)
-        NativeInCallService.stopRinging()
+        VigilShieldInCallService.stopRinging()
 
         if (!id.isNullOrBlank()) {
             CallNotificationHelper.clearCall(context, id)
@@ -28,16 +28,16 @@ class CallActionReceiver : BroadcastReceiver() {
 
         val number = intent.getStringExtra(EXTRA_CALL_NUMBER).orEmpty().filter { it.isDigit() }
         val call = if (!id.isNullOrBlank()) {
-            NativeInCallService.activeCalls[id]
-                ?: NativeInCallService.activeCalls.values.firstOrNull { active ->
+            VigilShieldInCallService.activeCalls[id]
+                ?: VigilShieldInCallService.activeCalls.values.firstOrNull { active ->
                     active.details.handle?.schemeSpecificPart.orEmpty().filter { it.isDigit() } == number && number.isNotBlank()
                 }
         } else if (number.isNotBlank()) {
-            NativeInCallService.activeCalls.values.firstOrNull { active ->
+            VigilShieldInCallService.activeCalls.values.firstOrNull { active ->
                 active.details.handle?.schemeSpecificPart.orEmpty().filter { it.isDigit() } == number
             }
         } else {
-            NativeInCallService.activeCalls.values.singleOrNull()
+            VigilShieldInCallService.activeCalls.values.singleOrNull()
         }
         when (intent.action) {
             ACTION_ANSWER -> {
