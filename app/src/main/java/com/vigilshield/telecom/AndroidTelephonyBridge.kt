@@ -417,7 +417,6 @@ class VigilShieldInCallService : InCallService() {
                 initialState,
                 call.details.connectTimeMillis
             )
-            launchActiveCallActivity(applicationContext, id, name, number, call.state)
         }
         emit(call, call.state)
     }
