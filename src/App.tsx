@@ -504,6 +504,10 @@ export default function App(){
     const dialedNumber = isPrivate ? formatPrivateCallNumber(digits, settings.privateCallPrefix || '*67') : digits;
     const result = telecomBridge.placeRealCall(dialedNumber, target);
     if (!result.success) { showToast(result.message, 'error'); return; }
+    // A call started from Contacts/Recents must immediately replace the underlying
+    // list with the CallShield in-call surface. Native Telecom state will refine this
+    // session with the real call id as soon as the call is registered.
+    setActiveTab('dialer');
     if (isPrivate) { showToast(`Calling with caller ID masked (${settings.privateCallPrefix || '*67'})`, 'info'); }
     setActiveCallSession({
       id: result.callId || `call-${Date.now()}`,
