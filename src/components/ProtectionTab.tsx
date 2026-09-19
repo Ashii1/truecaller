@@ -34,6 +34,7 @@ import {
   SecurityTimelineEvent 
 } from '../types';
 import { useI18n } from '../i18n/LanguageContext';
+import { telecomBridge } from '../services/telephony/telecomBridge';
 
 interface ProtectionTabProps {
   settings: ShieldSettings;
@@ -72,6 +73,17 @@ function ProtectionTab({
   const [builderValue, setBuilderValue] = useState('');
   const [builderLabel, setBuilderLabel] = useState('');
   const [builderCategory, setBuilderCategory] = useState<SpamCategory>('TELEMARKETING');
+
+  // AI Screening state & handler
+  const isAiScreeningOn = settings.aiScreeningEnabled !== false && settings.smartCallScreeningEnabled !== false;
+  const handleToggleAiScreening = (enabled: boolean) => {
+    onUpdateSettings({
+      ...settings,
+      aiScreeningEnabled: enabled,
+      smartCallScreeningEnabled: enabled,
+    });
+    telecomBridge.setAiScreeningEnabled(enabled);
+  };
 
   // Firewall level handler
   const handleSetSensitivity = (level: SensitivityLevel) => {
@@ -359,32 +371,54 @@ function ProtectionTab({
           {onTriggerScreeningDemo && (
             <button
               type="button"
-              onClick={onTriggerScreeningDemo}
+              onClick={() => {
+                if (!isAiScreeningOn) {
+                  handleToggleAiScreening(true);
+                }
+                onTriggerScreeningDemo();
+              }}
               className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-600/30 px-3.5 py-1.5 text-xs font-bold text-indigo-200 hover:bg-indigo-600 hover:text-white transition active:scale-95 shadow-sm"
+              title={isAiScreeningOn ? "Test live AI call screening simulation" : "Enable AI screening and launch test call"}
             >
               <Bot className="w-3.5 h-3.5" />
-              <span>Test AI Call Screener Demo</span>
+              <span>{isAiScreeningOn ? 'Test AI Call Screener Demo' : 'Enable & Test Screener'}</span>
             </button>
           )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-          {/* Feature 1: AI Call Screener */}
-          <div className="rounded-2xl border border-white/5 bg-[#121822] p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between">
+          {/* Feature 1: AI Screening Toggle */}
+          <div className={`rounded-2xl border p-3.5 space-y-2.5 transition-all ${isAiScreeningOn ? 'border-indigo-500/30 bg-[#121827] shadow-lg shadow-indigo-950/20' : 'border-slate-800 bg-[#0d121b]'}`}>
+            <div className="flex items-start justify-between gap-2">
               <div className="flex items-center space-x-2">
-                <Bot className="w-4 h-4 text-indigo-400" />
-                <span className="text-xs font-bold text-white">AI Call Screener (Screen Before Answering)</span>
+                <div className={`p-1.5 rounded-lg border ${isAiScreeningOn ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-400' : 'bg-slate-800/80 border-slate-700 text-slate-500'}`}>
+                  <Bot className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-white">AI Screening</span>
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold tracking-wide uppercase ${isAiScreeningOn ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}>
+                      {isAiScreeningOn ? 'Enabled' : 'Disabled'}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-400">Autonomous voice agent for incoming calls</p>
+                </div>
               </div>
-              <input
-                type="checkbox"
-                checked={settings.smartCallScreeningEnabled}
-                onChange={(e) => onUpdateSettings({ ...settings, smartCallScreeningEnabled: e.target.checked })}
-                className="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
-              />
+              <label className="relative inline-flex items-center cursor-pointer select-none">
+                <input
+                  id="toggle-ai-screening"
+                  type="checkbox"
+                  checked={isAiScreeningOn}
+                  onChange={(e) => handleToggleAiScreening(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+              </label>
             </div>
             <p className="text-[11px] leading-relaxed text-slate-400">
-              When unknown or suspicious numbers ring, tap "Screen Call" to let the voice assistant answer, ask the caller who is calling and why, and transcribe their response live on-screen.
+              {isAiScreeningOn
+                ? 'When enabled, the AI screening agent answers unknown or suspicious callers, challenges them for caller identity & intent, and provides real-time transcripts before you answer.'
+                : 'AI Screening is completely disabled. Incoming calls will ring straight through without voice assistant intervention or call screening prompts.'}
             </p>
           </div>
 

@@ -40,14 +40,20 @@ class IncomingCallActivity : Activity() {
             return
         }
 
+        @Suppress("DEPRECATION")
         window.addFlags(
             WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
                 WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
         )
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val km = getSystemService(android.app.KeyguardManager::class.java)
+            km?.requestDismissKeyguard(this, null)
         }
         window.statusBarColor = Color.rgb(2, 6, 23)
         window.navigationBarColor = Color.rgb(2, 6, 23)
@@ -101,6 +107,7 @@ class IncomingCallActivity : Activity() {
         val decline = Button(this).apply {
             text = "Decline"
             setOnClickListener {
+                CallRingerHelper.stopRinging(this@IncomingCallActivity)
                 VigilShieldInCallService.activeCalls[callId]?.reject(false, null)
                 finish()
             }
@@ -108,7 +115,19 @@ class IncomingCallActivity : Activity() {
         val answer = Button(this).apply {
             text = "Answer"
             setOnClickListener {
-                VigilShieldInCallService.activeCalls[callId]?.answer(android.telecom.VideoProfile.STATE_AUDIO_ONLY)
+                CallRingerHelper.stopRinging(this@IncomingCallActivity)
+                val call = VigilShieldInCallService.activeCalls[callId]
+                call?.answer(android.telecom.VideoProfile.STATE_AUDIO_ONLY)
+                val mainIntent = android.content.Intent(this@IncomingCallActivity, MainActivity::class.java).apply {
+                    action = "com.vigilshield.telecom.OPEN_OUTGOING_CALL"
+                    putExtra("open_call_id", callId)
+                    putExtra("open_call_number", number)
+                    putExtra("open_call_name", displayName)
+                    putExtra("is_incoming_call", false)
+                    putExtra("open_tab", "dialer")
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                }
+                startActivity(mainIntent)
                 finish()
             }
         }
@@ -118,6 +137,17 @@ class IncomingCallActivity : Activity() {
         root.addView(actions, LinearLayout.LayoutParams(-1, 64))
 
         setContentView(root)
+    }
+
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP) {
+            CallRingerHelper.silenceRinger(this)
+            runCatching {
+                getSystemService(android.telecom.TelecomManager::class.java)?.silenceRinger()
+            }
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     override fun onResume() {
@@ -131,6 +161,7 @@ class IncomingCallActivity : Activity() {
     }
 
     override fun onDestroy() {
+        CallRingerHelper.stopRinging(this)
         handler.removeCallbacks(monitor)
         super.onDestroy()
     }

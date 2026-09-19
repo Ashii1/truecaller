@@ -12,7 +12,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 
 object CallNotificationHelper {
-    private const val CHANNEL_ID = "calls"
+    private const val CHANNEL_ID = "calls_v2"
     private const val SECURITY_CHANNEL_ID = "security"
     const val INCOMING_CALL_ID = 4100
     private const val MISSED_ID = 4101
@@ -25,11 +25,25 @@ object CallNotificationHelper {
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < 26) return
         val manager = context.getSystemService(NotificationManager::class.java)
+        // Clean up legacy silent channel if it exists
+        runCatching {
+            if (manager.getNotificationChannel("calls") != null) {
+                manager.deleteNotificationChannel("calls")
+            }
+        }
         if (manager.getNotificationChannel(CHANNEL_ID) == null) {
+            val ringtoneUri = android.media.RingtoneManager.getActualDefaultRingtoneUri(context, android.media.RingtoneManager.TYPE_RINGTONE)
+                ?: android.provider.Settings.System.DEFAULT_RINGTONE_URI
+            val audioAttributes = android.media.AudioAttributes.Builder()
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                .build()
+
             manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Calls", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Incoming, ongoing and missed call alerts"
+                description = "Incoming, ongoing and missed call alerts with system ringtone"
                 enableVibration(true)
-                setSound(null, null)
+                vibrationPattern = longArrayOf(0, 1000, 1000)
+                setSound(ringtoneUri, audioAttributes)
                 lightColor = Color.BLUE
                 setShowBadge(true)
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
@@ -126,6 +140,8 @@ object CallNotificationHelper {
         val decline = PendingIntent.getBroadcast(context, callId.hashCode() + 2, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_DECLINE).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val dismiss = PendingIntent.getBroadcast(context, callId.hashCode() + 4, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_DISMISS).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val person = Person.Builder().setName(display).setImportant(true).build()
+        val ringtoneUri = android.media.RingtoneManager.getActualDefaultRingtoneUri(context, android.media.RingtoneManager.TYPE_RINGTONE)
+            ?: android.provider.Settings.System.DEFAULT_RINGTONE_URI
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(com.vigilshield.telecom.R.drawable.ic_callshield)
             .setContentTitle(display)
@@ -138,7 +154,9 @@ object CallNotificationHelper {
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setFullScreenIntent(openIntent, !MainActivity.isAppVisible)
+            .setSound(ringtoneUri)
+            .setVibrate(longArrayOf(0, 1000, 1000))
+            .setFullScreenIntent(openIntent, true)
         if (Build.VERSION.SDK_INT >= 31) builder.setStyle(NotificationCompat.CallStyle.forIncomingCall(person, decline, answer))
         else builder.setContentTitle(display).setContentText("Incoming call").addAction(0, "Decline", decline).addAction(0, "Answer", answer)
         val notif = builder.build()

@@ -366,7 +366,7 @@ npx cap open android # Opens Android Studio to click "Build APK"`;
                     Android blocks any APK whose internal <code className="text-amber-400 font-mono">versionCode</code> is equal to or lower than the installed version (<code className="text-amber-400 font-mono">INSTALL_FAILED_VERSION_DOWNGRADE</code>).
                   </p>
                   <div className="text-[11px] text-emerald-400 bg-emerald-950/30 p-2 rounded-xl border border-emerald-500/20 font-medium">
-                    ✓ Fixed: Base <code className="font-mono">versionCode</code> bumped to 200+ and auto-increments with each build.
+                    ✓ Fixed: Base <code className="font-mono">versionCode</code> bumped to 203+ and auto-increments with each build.
                   </div>
                 </div>
               </div>
@@ -375,7 +375,7 @@ npx cap open android # Opens Android Studio to click "Build APK"`;
                 <h5 className="text-xs font-bold text-slate-200">How to transition your current device:</h5>
                 <ol className="text-xs text-slate-400 space-y-1.5 list-decimal list-inside leading-relaxed">
                   <li><strong>One-time step:</strong> If you previously installed an old build signed with an incompatible debug key, uninstall it once from your device to clear the conflicting certificate.</li>
-                  <li><strong>Install the new unified build:</strong> Install the new APK (v1.5.1, versionCode 200+).</li>
+                  <li><strong>Install the new unified build:</strong> Install the new APK (v1.5.3, versionCode 203+).</li>
                   <li><strong>Future updates work seamlessly:</strong> Every subsequent APK built locally or via GitHub CI uses this exact same signing certificate and a higher versionCode, updating directly in-place without uninstallation!</li>
                 </ol>
               </div>
@@ -387,7 +387,7 @@ npx cap open android # Opens Android Studio to click "Build APK"`;
         <div className="px-6 py-3.5 bg-slate-850 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center space-x-1.5">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>CallShield Native Android & PWA v1.5.1</span>
+            <span>CallShield Native Android & PWA v1.5.3</span>
           </div>
           <button
             onClick={onClose}

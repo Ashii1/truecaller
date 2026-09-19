@@ -333,9 +333,6 @@ export default function App(){
             dataRef.current.settings.pingBackShieldEnabled !== false
               ? detectPingBackScam(number, details?.durationSeconds || 0, state === 'MISSED' ? 1 : 0)
               : { isPingBackScam: false, warningMessage: '' };
-          if (pingBackCheck.isPingBackScam) {
-            telecomBridge.silenceRinger();
-          }
           setActiveIncomingCall({
             callId,
             number,
@@ -765,6 +762,7 @@ export default function App(){
   <IncomingCallOverlay
     call={activeIncomingCall}
     autoCancelEnabled={autoCancelEnabled}
+    isDeviceLocked={isDeviceLocked}
     onCancelCall={(reason, block, screeningData) => {
       if (activeIncomingCall?.callId) {
         if (block) handleBlockNumber(activeIncomingCall.number, activeIncomingCall.callerName || activeIncomingCall.number);

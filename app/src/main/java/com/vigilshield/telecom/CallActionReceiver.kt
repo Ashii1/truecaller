@@ -16,6 +16,7 @@ class CallActionReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val id = intent.getStringExtra(EXTRA_CALL_ID)
+        CallRingerHelper.stopRinging(context)
         VigilShieldInCallService.stopRinging()
 
         if (!id.isNullOrBlank()) {

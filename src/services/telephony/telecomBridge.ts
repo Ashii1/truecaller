@@ -22,7 +22,12 @@ declare global {
       clearStaleCallNotifications?:()=>boolean;
       setSecuritySetting?:(key:string,value:boolean)=>boolean; syncBlockRules?:(json:string)=>boolean; createContact?:(number:string,name?:string)=>boolean;
       silenceRinger?:()=>boolean; isDeviceLocked?:()=>boolean; requestDeviceUnlock?:()=>boolean; onUiReady?:()=>void; syncActiveCalls?:()=>void;
+      canDrawOverlays?:()=>boolean; requestOverlayPermission?:()=>boolean; wakeDeviceScreen?:()=>boolean;
+      isAlwaysOnTopEnabled?:()=>boolean; setAlwaysOnTopEnabled?:(enabled:boolean)=>boolean;
       pinWidget?:(type:string)=>string; updateWidgetData?:(speedDialJson:string)=>boolean;
+      saveCallRecordingToDevice?:(fileName:string,base64Data:string,mimeType?:string)=>string;
+      hasRecordAudioPermission?:()=>boolean;
+      requestAudioPermission?:()=>boolean;
     };
     __onAndroidTelecomEvent?:(eventType:string,payload:any)=>void;
     __onAndroidDialIntent?:(number:string)=>void;
@@ -114,6 +119,11 @@ class TelecomBridgeService {
   public silenceRinger(){if(!this.native()||!window.AndroidTelecomBridge?.silenceRinger)return false;try{return window.AndroidTelecomBridge.silenceRinger();}catch{return false;}}
   public isDeviceLocked():boolean{if(!this.native()||!window.AndroidTelecomBridge?.isDeviceLocked)return false;try{return Boolean(window.AndroidTelecomBridge.isDeviceLocked());}catch{return false;}}
   public requestDeviceUnlock():boolean{if(!this.native()||!window.AndroidTelecomBridge?.requestDeviceUnlock)return false;try{return Boolean(window.AndroidTelecomBridge.requestDeviceUnlock());}catch{return false;}}
+  public canDrawOverlays():boolean{if(!this.native()||!window.AndroidTelecomBridge?.canDrawOverlays)return true;try{return Boolean(window.AndroidTelecomBridge.canDrawOverlays());}catch{return true;}}
+  public requestOverlayPermission():boolean{if(!this.native()||!window.AndroidTelecomBridge?.requestOverlayPermission)return false;try{return Boolean(window.AndroidTelecomBridge.requestOverlayPermission());}catch{return false;}}
+  public wakeDeviceScreen():boolean{if(!this.native()||!window.AndroidTelecomBridge?.wakeDeviceScreen)return false;try{return Boolean(window.AndroidTelecomBridge.wakeDeviceScreen());}catch{return false;}}
+  public isAlwaysOnTopEnabled():boolean{if(!this.native()||!window.AndroidTelecomBridge?.isAlwaysOnTopEnabled){try{const v=localStorage.getItem('callshield_always_on_top');return v===null?true:v==='true';}catch{return true;}}try{return Boolean(window.AndroidTelecomBridge.isAlwaysOnTopEnabled());}catch{return true;}}
+  public setAlwaysOnTopEnabled(enabled:boolean):boolean{try{localStorage.setItem('callshield_always_on_top',String(enabled));}catch{}if(!this.native()||!window.AndroidTelecomBridge?.setAlwaysOnTopEnabled)return true;try{return Boolean(window.AndroidTelecomBridge.setAlwaysOnTopEnabled(enabled));}catch{return false;}}
   public notifyUiReady(){if(!this.native()||!window.AndroidTelecomBridge?.onUiReady)return;try{window.AndroidTelecomBridge.onUiReady();}catch{}}
   public syncActiveCalls(){if(!this.native()||!window.AndroidTelecomBridge?.syncActiveCalls)return;try{window.AndroidTelecomBridge.syncActiveCalls();}catch{}}
   public clearStaleCallNotifications(){if(!this.native()||!window.AndroidTelecomBridge!.clearStaleCallNotifications)return false;try{return window.AndroidTelecomBridge!.clearStaleCallNotifications();}catch{return false;}}
@@ -233,6 +243,29 @@ class TelecomBridgeService {
     } catch {
       return false;
     }
+  }
+  public isAiScreeningEnabled(): boolean {
+    return true;
+  }
+  public setAiScreeningEnabled(enabled: boolean): boolean {
+    return this.setSecuritySetting('ai_screening_enabled', enabled);
+  }
+  public saveCallRecordingToDevice(fileName: string, base64Data: string, mimeType: string = 'audio/wav'): { success: boolean; path?: string; uri?: string; error?: string } {
+    if (this.native() && window.AndroidTelecomBridge?.saveCallRecordingToDevice) {
+      try {
+        const res = window.AndroidTelecomBridge.saveCallRecordingToDevice(fileName, base64Data, mimeType);
+        return JSON.parse(res);
+      } catch (e: any) {
+        return { success: false, error: e?.message || 'Native bridge save error' };
+      }
+    }
+    return { success: false, error: 'Android native storage unavailable' };
+  }
+  public hasRecordAudioPermission(): boolean {
+    return this.native() && Boolean(window.AndroidTelecomBridge?.hasRecordAudioPermission?.());
+  }
+  public requestAudioPermission(): boolean {
+    return this.native() && Boolean(window.AndroidTelecomBridge?.requestAudioPermission?.());
   }
 }
 export const telecomBridge=new TelecomBridgeService();

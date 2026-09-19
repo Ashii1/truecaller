@@ -13,6 +13,7 @@ export const INITIAL_SETTINGS: ShieldSettings = {
   tempProtection: 'DISABLED',
   scamShieldEnabled: true,
   smartCallScreeningEnabled: true,
+  aiScreeningEnabled: true,
   autoCancelSpamCalls: true,
   cancelDelaySeconds: 3,
   playRingtone: true,

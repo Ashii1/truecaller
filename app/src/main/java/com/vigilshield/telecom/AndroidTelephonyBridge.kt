@@ -46,7 +46,7 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
     @JavascriptInterface fun requestDefaultDialerRole(): Boolean { if (Build.VERSION.SDK_INT < 29) return false; val manager = activity.getSystemService(RoleManager::class.java); if (!manager.isRoleAvailable(RoleManager.ROLE_DIALER)) return false; if (manager.isRoleHeld(RoleManager.ROLE_DIALER)) return true; activity.startActivityForResult(manager.createRequestRoleIntent(RoleManager.ROLE_DIALER), 7001); return true }
     @JavascriptInterface fun requestCallScreeningRole(): Boolean { if (Build.VERSION.SDK_INT < 29) return false; val manager = activity.getSystemService(RoleManager::class.java); if (!manager.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING)) return false; if (manager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)) return true; activity.startActivityForResult(manager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING), 7003); return true }
     @JavascriptInterface fun requestDevicePermissions(): Boolean {
-        val requested = mutableListOf(Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE, Manifest.permission.ANSWER_PHONE_CALLS, Manifest.permission.READ_CALL_LOG)
+        val requested = mutableListOf(Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE, Manifest.permission.ANSWER_PHONE_CALLS, Manifest.permission.READ_CALL_LOG, Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= 33) requested += Manifest.permission.POST_NOTIFICATIONS
         val missing = requested.filter { ContextCompat.checkSelfPermission(activity, it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isEmpty()) return true
@@ -216,8 +216,104 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
     @JavascriptInterface fun fetchRealCallLogs(limit: Int): String = readCallLogs(limit).toString()
     @JavascriptInterface fun fetchDeviceCallLogs(limit: Int): String = readCallLogs(limit).toString()
     @JavascriptInterface fun lookupContactName(number: String): String = lookupName(number).orEmpty()
-    @JavascriptInterface fun answerCall(id: String): Boolean = VigilShieldInCallService.activeCalls[id]?.let { it.answer(0); VigilShieldInCallService.stopRinging(); CallNotificationHelper.clearCall(activity.applicationContext, id); true } ?: false
-    @JavascriptInterface fun rejectCall(id: String, reason: String?): Boolean { VigilShieldInCallService.stopRinging(); CallNotificationHelper.clearCall(activity.applicationContext, id); CallNotificationHelper.clearAllCallNotifications(activity.applicationContext); return VigilShieldInCallService.activeCalls[id]?.let { it.reject(false, reason ?: "Declined"); true } ?: false }
+    @JavascriptInterface fun answerCall(id: String): Boolean = VigilShieldInCallService.activeCalls[id]?.let { it.answer(0); CallRingerHelper.stopRinging(activity.applicationContext); VigilShieldInCallService.stopRinging(); CallNotificationHelper.clearCall(activity.applicationContext, id); true } ?: false
+    @JavascriptInterface fun rejectCall(id: String, reason: String?): Boolean { CallRingerHelper.stopRinging(activity.applicationContext); VigilShieldInCallService.stopRinging(); CallNotificationHelper.clearCall(activity.applicationContext, id); CallNotificationHelper.clearAllCallNotifications(activity.applicationContext); return VigilShieldInCallService.activeCalls[id]?.let { it.reject(false, reason ?: "Declined"); true } ?: false }
+    @JavascriptInterface fun silenceRinger(): Boolean { CallRingerHelper.silenceRinger(activity.applicationContext); VigilShieldInCallService.stopRinging(); return true }
+    @JavascriptInterface fun isDeviceLocked(): Boolean {
+        val km = activity.getSystemService(KeyguardManager::class.java)
+        return km?.isKeyguardLocked == true
+    }
+    @JavascriptInterface fun canDrawOverlays(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            android.provider.Settings.canDrawOverlays(activity)
+        } else {
+            true
+        }
+    }
+    @JavascriptInterface fun requestOverlayPermission(): Boolean {
+        return runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !android.provider.Settings.canDrawOverlays(activity)) {
+                val intent = Intent(
+                    android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:${activity.packageName}")
+                ).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                activity.startActivity(intent)
+                true
+            } else {
+                true
+            }
+        }.getOrDefault(false)
+    }
+    @JavascriptInterface fun wakeDeviceScreen(): Boolean {
+        return runCatching {
+            val pm = activity.getSystemService(PowerManager::class.java)
+            @Suppress("DEPRECATION")
+            val wl = pm?.newWakeLock(
+                PowerManager.FULL_WAKE_LOCK or
+                    PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                    PowerManager.ON_AFTER_RELEASE,
+                "CallShield:DirectWakeLock"
+            )
+            wl?.acquire(15000L)
+            true
+        }.getOrDefault(false)
+    }
+    @JavascriptInterface fun isAlwaysOnTopEnabled(): Boolean {
+        val sp = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return sp.getBoolean("always_on_top_call_overlay", true)
+    }
+    @JavascriptInterface fun setAlwaysOnTopEnabled(enabled: Boolean): Boolean {
+        return runCatching {
+            activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("always_on_top_call_overlay", enabled)
+                .apply()
+            activity.runOnUiThread {
+                if (activity is MainActivity) {
+                    activity.configureLockscreenWindow(enabled && activity.hasActiveOrRingingCall())
+                }
+            }
+            dispatchWebEvent("ALWAYS_ON_TOP_CHANGED", JSONObject().put("enabled", enabled))
+            true
+        }.getOrDefault(false)
+    }
+    @JavascriptInterface fun requestDeviceUnlock(): Boolean {
+        return runCatching {
+            val km = activity.getSystemService(KeyguardManager::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                km?.requestDismissKeyguard(activity, object : KeyguardManager.KeyguardDismissCallback() {
+                    override fun onDismissSucceeded() {
+                        super.onDismissSucceeded()
+                        dispatchWebEvent("DEVICE_LOCK_STATE_CHANGED", JSONObject().put("isLocked", false).put("state", "unlocked"))
+                    }
+                    override fun onDismissCancelled() {
+                        super.onDismissCancelled()
+                        dispatchWebEvent("DEVICE_LOCK_STATE_CHANGED", JSONObject().put("isLocked", km.isKeyguardLocked).put("state", if (km.isKeyguardLocked) "locked" else "unlocked"))
+                    }
+                    override fun onDismissError() {
+                        super.onDismissError()
+                    }
+                })
+                true
+            } else {
+                @Suppress("DEPRECATION")
+                activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
+                true
+            }
+        }.getOrDefault(false)
+    }
+    @JavascriptInterface fun onUiReady() {
+        activity.runOnUiThread {
+            if (activity is MainActivity) activity.onReactUiReady()
+        }
+    }
+    @JavascriptInterface fun syncActiveCalls() {
+        activity.runOnUiThread {
+            VigilShieldInCallService.emitActiveCalls()
+        }
+    }
     @JavascriptInterface fun disconnectCall(id: String, number: String? = null): Boolean {
         val normalizedNumber = number.orEmpty().filter { it.isDigit() }
         val call = VigilShieldInCallService.activeCalls[id]
@@ -228,6 +324,7 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
             ?: VigilShieldInCallService.activeCalls.values.singleOrNull()
             ?: return false
         val resolvedId = VigilShieldInCallService.activeCalls.entries.firstOrNull { it.value == call }?.key ?: id
+        CallRingerHelper.stopRinging(activity.applicationContext)
         VigilShieldInCallService.stopRinging()
         return runCatching {
             if (call.state != Call.STATE_DISCONNECTED && call.state != Call.STATE_DISCONNECTING) {
@@ -251,17 +348,82 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
     @JavascriptInterface fun unholdCall(id: String): Boolean = runCatching { (VigilShieldInCallService.activeCalls[id] ?: VigilShieldInCallService.activeCalls.values.singleOrNull())?.unhold() ?: return false; true }.getOrDefault(false)
     @JavascriptInterface fun swapCalls(): Boolean = VigilShieldInCallService.swapCalls()
     @JavascriptInterface fun mergeCalls(): Boolean = VigilShieldInCallService.mergeCalls()
-    @JavascriptInterface fun clearStaleCallNotifications(): Boolean { CallNotificationHelper.clearAllCallNotifications(activity.applicationContext); VigilShieldInCallService.stopRinging(); return true }
+    @JavascriptInterface fun clearStaleCallNotifications(): Boolean { CallNotificationHelper.clearAllCallNotifications(activity.applicationContext); CallRingerHelper.stopRinging(activity.applicationContext); VigilShieldInCallService.stopRinging(); return true }
+    @JavascriptInterface fun saveCallRecordingToDevice(fileName: String, base64Data: String, mimeType: String?): String {
+        return try {
+            val cleanBase64 = if (base64Data.contains(",")) base64Data.substringAfter(",") else base64Data
+            val bytes = android.util.Base64.decode(cleanBase64, android.util.Base64.DEFAULT)
+            val cleanName = if (fileName.endsWith(".wav", ignoreCase = true)) fileName else "$fileName.wav"
+            val effectiveMime = if (mimeType.isNullOrBlank()) "audio/wav" else mimeType
+
+            var savedPath = ""
+            var savedUri: Uri? = null
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val values = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.Audio.Media.DISPLAY_NAME, cleanName)
+                    put(android.provider.MediaStore.Audio.Media.MIME_TYPE, effectiveMime)
+                    put(android.provider.MediaStore.Audio.Media.RELATIVE_PATH, "${android.os.Environment.DIRECTORY_RECORDINGS}/CallShield")
+                    put(android.provider.MediaStore.Audio.Media.IS_PENDING, 1)
+                }
+                val uri = activity.contentResolver.insert(android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values)
+                if (uri != null) {
+                    activity.contentResolver.openOutputStream(uri)?.use { os ->
+                        os.write(bytes)
+                        os.flush()
+                    }
+                    values.clear()
+                    values.put(android.provider.MediaStore.Audio.Media.IS_PENDING, 0)
+                    activity.contentResolver.update(uri, values, null, null)
+                    savedUri = uri
+                    savedPath = "Internal Storage/Recordings/CallShield/$cleanName"
+                }
+            }
+
+            if (savedUri == null) {
+                val recDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_RECORDINGS)
+                val targetDir = java.io.File(recDir, "CallShield").apply { if (!exists()) mkdirs() }
+                val targetFile = java.io.File(targetDir, cleanName)
+                java.io.FileOutputStream(targetFile).use { fos ->
+                    fos.write(bytes)
+                    fos.flush()
+                }
+                android.media.MediaScannerConnection.scanFile(activity, arrayOf(targetFile.absolutePath), arrayOf(effectiveMime), null)
+                savedPath = targetFile.absolutePath
+                savedUri = Uri.fromFile(targetFile)
+            }
+
+            activity.runOnUiThread {
+                android.widget.Toast.makeText(activity, "Saved call recording to device:\nRecordings/CallShield/$cleanName", android.widget.Toast.LENGTH_LONG).show()
+            }
+
+            JSONObject()
+                .put("success", true)
+                .put("path", savedPath)
+                .put("uri", savedUri?.toString() ?: "")
+                .put("fileName", cleanName)
+                .put("sizeBytes", bytes.size)
+                .toString()
+        } catch (e: Exception) {
+            JSONObject().put("success", false).put("error", e.message ?: "Failed saving recording").toString()
+        }
+    }
+    @JavascriptInterface fun hasRecordAudioPermission(): Boolean = hasPermission(Manifest.permission.RECORD_AUDIO)
+    @JavascriptInterface fun requestAudioPermission(): Boolean {
+        if (hasRecordAudioPermission()) return true
+        ActivityCompat.requestPermissions(activity, arrayOf(Manifest.permission.RECORD_AUDIO), PERMISSION_REQ)
+        return true
+    }
     fun isDefaultDialer(): Boolean = if (Build.VERSION.SDK_INT >= 29) activity.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_DIALER) else telecom.defaultDialerPackage == activity.packageName
     fun hasPermission(permission: String): Boolean = ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED
     fun hasCallLogPermission(): Boolean = hasPermission(Manifest.permission.READ_CALL_LOG)
     fun hasContactsPermission(): Boolean = hasPermission(Manifest.permission.READ_CONTACTS)
-    fun hasDevicePermissions(): Boolean = hasContactsPermission() && hasCallLogPermission() && hasPermission(Manifest.permission.CALL_PHONE) && hasPermission(Manifest.permission.READ_PHONE_STATE) && hasPermission(Manifest.permission.ANSWER_PHONE_CALLS) && (Build.VERSION.SDK_INT < 33 || hasPermission(Manifest.permission.POST_NOTIFICATIONS))
+    fun hasDevicePermissions(): Boolean = hasContactsPermission() && hasCallLogPermission() && hasPermission(Manifest.permission.CALL_PHONE) && hasPermission(Manifest.permission.READ_PHONE_STATE) && hasPermission(Manifest.permission.ANSWER_PHONE_CALLS) && hasPermission(Manifest.permission.RECORD_AUDIO) && (Build.VERSION.SDK_INT < 33 || hasPermission(Manifest.permission.POST_NOTIFICATIONS))
     fun setSecuritySetting(key: String, enabled: Boolean) {
         activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(key, enabled).apply()
     }
     fun roleStatus(): JSONObject = JSONObject().put("isDefaultDialer", isDefaultDialer()).put("isDialerRoleAvailable", Build.VERSION.SDK_INT >= 29 && activity.getSystemService(RoleManager::class.java).isRoleAvailable(RoleManager.ROLE_DIALER)).put("isCallScreeningRoleHeld", Build.VERSION.SDK_INT >= 29 && activity.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_CALL_SCREENING))
-    fun permissionStatus(): JSONObject = JSONObject().put("callLogPermission", hasCallLogPermission()).put("contactsPermission", hasContactsPermission()).put("callPhonePermission", hasPermission(Manifest.permission.CALL_PHONE)).put("phoneStatePermission", hasPermission(Manifest.permission.READ_PHONE_STATE)).put("answerCallsPermission", hasPermission(Manifest.permission.ANSWER_PHONE_CALLS)).put("notificationsPermission", Build.VERSION.SDK_INT < 33 || hasPermission(Manifest.permission.POST_NOTIFICATIONS))
+    fun permissionStatus(): JSONObject = JSONObject().put("callLogPermission", hasCallLogPermission()).put("contactsPermission", hasContactsPermission()).put("callPhonePermission", hasPermission(Manifest.permission.CALL_PHONE)).put("phoneStatePermission", hasPermission(Manifest.permission.READ_PHONE_STATE)).put("answerCallsPermission", hasPermission(Manifest.permission.ANSWER_PHONE_CALLS)).put("recordAudioPermission", hasPermission(Manifest.permission.RECORD_AUDIO)).put("notificationsPermission", Build.VERSION.SDK_INT < 33 || hasPermission(Manifest.permission.POST_NOTIFICATIONS))
     fun dispatchWebEvent(type: String, data: JSONObject) { webView.post { webView.evaluateJavascript("if(window.__onAndroidTelecomEvent){window.__onAndroidTelecomEvent(${JSONObject.quote(type)},$data);}", null) } }
     fun dispatchCallEvent(type: String, data: JSONObject) = dispatchWebEvent(type, data)
     private fun readContacts(limit: Int): JSONArray { val result = JSONArray(); if (!hasContactsPermission()) return result; val projection = arrayOf(ContactsContract.CommonDataKinds.Phone.CONTACT_ID, ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER, ContactsContract.CommonDataKinds.Phone.STARRED); activity.contentResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, projection, null, null, "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} ASC")?.use { cursor -> var count = 0; while (cursor.moveToNext() && count < limit.coerceIn(1, 2000)) { result.put(JSONObject().put("id", cursor.getString(0).orEmpty()).put("name", cursor.getString(1).orEmpty()).put("number", cursor.getString(2).orEmpty()).put("isFavorite", cursor.getInt(3) == 1)); count++ } }; return result }

@@ -47,8 +47,11 @@ class VigilShieldInCallService : InCallService() {
         var callEventListener: CallEventListener? = null
         
         fun isServiceBound(): Boolean = instance != null
-        fun stopRinging() { runCatching { appContext?.getSystemService(android.telecom.TelecomManager::class.java)?.silenceRinger() } }
-        fun isRinging(): Boolean = activeCalls.values.any { it.state == Call.STATE_RINGING }
+        fun stopRinging() {
+            appContext?.let { CallRingerHelper.silenceRinger(it) }
+            runCatching { appContext?.getSystemService(android.telecom.TelecomManager::class.java)?.silenceRinger() }
+        }
+        fun isRinging(): Boolean = CallRingerHelper.isRinging() || activeCalls.values.any { it.state == Call.STATE_RINGING }
         fun emitActiveCalls() { activeCalls.forEach { (id, call) -> instance?.let { svc -> val d = svc.extractCallDetails(call, id); bridge?.dispatchCallEvent("CALL_STATE_CHANGED", JSONObject().put("callId", id).put("details", d.toJson())) } } }
         fun swapCalls(): Boolean = instance?.swapCallsInternal() ?: false
         fun mergeCalls(): Boolean = instance?.mergeCallsInternal() ?: false
@@ -103,6 +106,7 @@ class VigilShieldInCallService : InCallService() {
         super.onCreate()
         instance = this
         appContext = applicationContext
+        ensureRingerNotMuted(applicationContext)
         CallNotificationHelper.ensureChannel(applicationContext)
         Log.i(TAG, "CallShield InCallService instantiated and bound by Android Telecom.")
     }
@@ -127,6 +131,27 @@ class VigilShieldInCallService : InCallService() {
                 val stateName = stateToString(state)
                 Log.d(TAG, "Call $callId state changed to: $stateName")
                 val details = extractCallDetails(call, callId)
+                val name = details.callerDisplayName.orEmpty().ifBlank { details.number.ifBlank { "Unknown caller" } }
+                val number = details.number
+
+                when (state) {
+                    Call.STATE_RINGING -> {
+                        handleIncomingCall(call, callId)
+                    }
+                    Call.STATE_ACTIVE, Call.STATE_DIALING, Call.STATE_CONNECTING, Call.STATE_HOLDING -> {
+                        CallRingerHelper.stopRinging(applicationContext)
+                        CallNotificationHelper.clearCall(applicationContext, callId)
+                        CallNotificationHelper.showOngoingCall(applicationContext, callId, name, number, stateName, details.connectTimeMillis)
+                    }
+                    Call.STATE_DISCONNECTED -> {
+                        CallRingerHelper.stopRinging(applicationContext)
+                        CallNotificationHelper.clearCall(applicationContext, callId)
+                        if (details.isIncoming && details.connectTimeMillis <= 0L) {
+                            CallNotificationHelper.showMissedCall(applicationContext, name, number)
+                        }
+                    }
+                }
+
                 callEventListener?.onCallStateChanged(callId, stateName, details)
                 bridge?.dispatchCallEvent(if (state == Call.STATE_DISCONNECTED) "CALL_DISCONNECTED" else "CALL_STATE_CHANGED", JSONObject().put("callId", callId).put("details", details.toJson()))
                 
@@ -154,6 +179,15 @@ class VigilShieldInCallService : InCallService() {
         call.registerCallback(callback)
 
         val initialDetails = extractCallDetails(call, callId)
+        val initialName = initialDetails.callerDisplayName.orEmpty().ifBlank { initialDetails.number.ifBlank { "Unknown caller" } }
+        val initialNumber = initialDetails.number
+
+        if (call.state == Call.STATE_RINGING) {
+            handleIncomingCall(call, callId)
+        } else if (call.state == Call.STATE_ACTIVE || call.state == Call.STATE_DIALING || call.state == Call.STATE_CONNECTING || call.state == Call.STATE_HOLDING) {
+            CallNotificationHelper.showOngoingCall(applicationContext, callId, initialName, initialNumber, stateToString(call.state), initialDetails.connectTimeMillis)
+        }
+
         callEventListener?.onCallAdded(callId, initialDetails)
         bridge?.dispatchCallEvent(if (call.state == Call.STATE_RINGING) "CALL_ADDED" else "CALL_STATE_CHANGED", JSONObject().put("callId", callId).put("details", initialDetails.toJson()))
     }
@@ -170,6 +204,13 @@ class VigilShieldInCallService : InCallService() {
         
         val disconnectReason = call.details.disconnectCause?.description?.toString() ?: "Call ended"
         Log.i(TAG, "onCallRemoved: $callId, reason: $disconnectReason")
+        CallRingerHelper.stopRinging(applicationContext)
+        CallNotificationHelper.clearCall(applicationContext, callId)
+        if (activeCalls.isEmpty()) {
+            CallNotificationHelper.clearAllCallNotifications(applicationContext)
+            ensureRingerNotMuted(applicationContext)
+            releaseWakeLock()
+        }
         callEventListener?.onCallRemoved(callId, details, disconnectReason)
         bridge?.dispatchCallEvent("CALL_DISCONNECTED", JSONObject().put("callId", callId).put("details", details.toJson()))
     }
@@ -191,6 +232,7 @@ class VigilShieldInCallService : InCallService() {
     // --- REAL CALL ACTIONS VIA ANDROID TELECOM APIS ---
 
     fun answerCall(callId: String): Boolean {
+        CallRingerHelper.stopRinging(applicationContext)
         val call = activeCalls[callId] ?: return false
         if (call.state == Call.STATE_RINGING) {
             call.answer(VideoProfile.STATE_AUDIO_ONLY)
@@ -201,6 +243,7 @@ class VigilShieldInCallService : InCallService() {
     }
 
     fun rejectCall(callId: String, rejectWithMessage: String? = null): Boolean {
+        CallRingerHelper.stopRinging(applicationContext)
         val call = activeCalls[callId] ?: return false
         if (call.state == Call.STATE_RINGING) {
             if (rejectWithMessage != null) {
@@ -215,6 +258,7 @@ class VigilShieldInCallService : InCallService() {
     }
 
     fun disconnectCall(callId: String): Boolean {
+        CallRingerHelper.stopRinging(applicationContext)
         val call = activeCalls[callId] ?: return false
         call.disconnect()
         Log.i(TAG, "Real call disconnected: $callId")
@@ -358,6 +402,87 @@ class VigilShieldInCallService : InCallService() {
             Call.STATE_DISCONNECTED -> "DISCONNECTED"
             Call.STATE_DISCONNECTING -> "DISCONNECTING"
             else -> "UNKNOWN"
+        }
+    }
+
+    private var incomingWakeLock: android.os.PowerManager.WakeLock? = null
+
+    private fun handleIncomingCall(call: Call, callId: String) {
+        val details = extractCallDetails(call, callId)
+        val name = details.callerDisplayName.orEmpty().ifBlank { details.number.ifBlank { "Incoming call" } }
+        val number = details.number
+        wakeScreenUp(applicationContext)
+        CallRingerHelper.startRinging(applicationContext)
+        CallNotificationHelper.showIncomingCall(applicationContext, callId, name, number)
+
+        val km = applicationContext.getSystemService(android.app.KeyguardManager::class.java)
+        val isLocked = km?.isKeyguardLocked == true
+        val sp = applicationContext.getSharedPreferences("vigilshield", Context.MODE_PRIVATE)
+        val alwaysOnTop = sp.getBoolean("always_on_top_call_overlay", true)
+
+        if (isLocked || !MainActivity.isAppVisible || alwaysOnTop) {
+            launchIncomingCallActivity(applicationContext, callId, name, number)
+        }
+    }
+
+    private fun wakeScreenUp(context: Context) {
+        runCatching {
+            val pm = context.getSystemService(android.os.PowerManager::class.java)
+            if (incomingWakeLock?.isHeld == true) {
+                try { incomingWakeLock?.release() } catch (_: Throwable) {}
+            }
+            @Suppress("DEPRECATION")
+            incomingWakeLock = pm?.newWakeLock(
+                android.os.PowerManager.FULL_WAKE_LOCK or
+                    android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                    android.os.PowerManager.ON_AFTER_RELEASE,
+                "CallShield:IncomingWakeLock"
+            )?.apply {
+                setReferenceCounted(false)
+                acquire(45_000L)
+            }
+        }
+    }
+
+    private fun releaseWakeLock() {
+        runCatching {
+            if (incomingWakeLock?.isHeld == true) {
+                incomingWakeLock?.release()
+            }
+            incomingWakeLock = null
+        }
+    }
+
+    private fun launchIncomingCallActivity(context: Context, callId: String, name: String, number: String) {
+        runCatching {
+            val intent = Intent(context, IncomingCallActivity::class.java).apply {
+                putExtra("open_call_id", callId)
+                putExtra("open_call_number", number)
+                putExtra("display_name", name)
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                )
+            }
+            context.startActivity(intent)
+        }
+    }
+
+    private fun ensureRingerNotMuted(context: Context) {
+        runCatching {
+            val audio = context.getSystemService(android.media.AudioManager::class.java) ?: return
+            if (audio.ringerMode == android.media.AudioManager.RINGER_MODE_NORMAL) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    if (audio.isStreamMute(android.media.AudioManager.STREAM_RING)) {
+                        audio.adjustStreamVolume(android.media.AudioManager.STREAM_RING, android.media.AudioManager.ADJUST_UNMUTE, 0)
+                    }
+                    if (audio.isStreamMute(android.media.AudioManager.STREAM_NOTIFICATION)) {
+                        audio.adjustStreamVolume(android.media.AudioManager.STREAM_NOTIFICATION, android.media.AudioManager.ADJUST_UNMUTE, 0)
+                    }
+                }
+            }
         }
     }
 }

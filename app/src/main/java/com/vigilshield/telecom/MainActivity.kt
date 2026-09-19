@@ -43,6 +43,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var assetLoader: WebViewAssetLoader
     private val mainHandler = Handler(Looper.getMainLooper())
     private var uiReportedReady = false
+    private var lockStateReceiver: android.content.BroadcastReceiver? = null
+    private var keyguardLockedListener: Any? = null
     private var startupCheckAttempts = 0
     private var lastConsoleError: String? = null
     private var lastPermissionSignature: String? = null
@@ -67,8 +69,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ensureRingerNotMuted()
         window.statusBarColor = Color.rgb(11, 15, 20)
         window.navigationBarColor = Color.rgb(11, 15, 20)
+        registerLockStateListener()
         configureLockscreenWindow(hasActiveOrRingingCall() || isIncomingCallIntent(intent))
         val root = FrameLayout(this)
         webView = WebView(this); root.addView(webView, FrameLayout.LayoutParams(-1, -1))
@@ -95,13 +99,37 @@ class MainActivity : AppCompatActivity() {
             override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: android.webkit.WebResourceError?) { if (request?.isForMainFrame != false) showError("The CallShield screen could not load.\n\n${error?.description ?: "Unknown WebView error"}") }
             @Suppress("DEPRECATION") override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) { showError("The CallShield screen could not load.\n\n${description ?: "WebView error $errorCode"}") }
         }
-        webView.webChromeClient = object : WebChromeClient() { override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean { if (consoleMessage.messageLevel() == ConsoleMessage.MessageLevel.ERROR) lastConsoleError = "${consoleMessage.message()} (line ${consoleMessage.lineNumber()})"; return true } }
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                if (consoleMessage.messageLevel() == ConsoleMessage.MessageLevel.ERROR) lastConsoleError = "${consoleMessage.message()} (line ${consoleMessage.lineNumber()})"
+                return true
+            }
+            override fun onPermissionRequest(request: android.webkit.PermissionRequest?) {
+                runOnUiThread {
+                    request?.grant(request.resources)
+                }
+            }
+        }
+        webView.setDownloadListener { url, _, contentDisposition, mimetype, _ ->
+            try {
+                if (url.startsWith("data:")) {
+                    val base64Data = url.substringAfter("base64,")
+                    val fileName = "CallShield_Recording_${System.currentTimeMillis()}.wav"
+                    bridge.saveCallRecordingToDevice(fileName, base64Data, mimetype ?: "audio/wav")
+                } else {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                    startActivity(intent)
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("MainActivity", "Download failed: ${e.message}")
+            }
+        }
         webView.loadUrl(APP_ASSET_URL)
         // Default Phone role is requested only from an explicit user action in the UI.
         // Do not interrupt widget/phone-surface launches with a system role dialog.
     }
 
-    private fun hasActiveOrRingingCall(): Boolean {
+    internal fun hasActiveOrRingingCall(): Boolean {
         return VigilShieldInCallService.activeCalls.values.any {
             it.state == android.telecom.Call.STATE_RINGING ||
             it.state == android.telecom.Call.STATE_ACTIVE ||
@@ -123,8 +151,16 @@ class MainActivity : AppCompatActivity() {
                !value?.getStringExtra("open_call_id").isNullOrBlank()
     }
 
-    private fun configureLockscreenWindow(isIncomingOrActiveCall: Boolean) {
-        if (isIncomingOrActiveCall) {
+    private fun isWindowShowOnLockConfigured(): Boolean {
+        return runCatching {
+            val ai = packageManager.getActivityInfo(componentName, PackageManager.GET_META_DATA)
+            ai.metaData?.getBoolean("window-show-on-lock", true) ?: true
+        }.getOrDefault(true)
+    }
+
+    internal fun configureLockscreenWindow(isIncomingOrActiveCall: Boolean) {
+        val showOnLock = isWindowShowOnLockConfigured()
+        if (isIncomingOrActiveCall && showOnLock) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                 setShowWhenLocked(true)
                 setTurnScreenOn(true)
@@ -318,16 +354,28 @@ class MainActivity : AppCompatActivity() {
                intent?.getBooleanExtra("is_incoming_call", false) == true
     }
 
+    private fun ensureRingerNotMuted() {
+        runCatching {
+            val audio = getSystemService(AudioManager::class.java) ?: return
+            if (audio.ringerMode == AudioManager.RINGER_MODE_NORMAL) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    if (audio.isStreamMute(AudioManager.STREAM_RING)) {
+                        audio.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_UNMUTE, 0)
+                    }
+                    if (audio.isStreamMute(AudioManager.STREAM_NOTIFICATION)) {
+                        audio.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_UNMUTE, 0)
+                    }
+                }
+            }
+        }
+    }
+
     private fun silenceIncomingRinger() {
+        CallRingerHelper.silenceRinger(this)
         VigilShieldInCallService.stopRinging()
         runCatching {
             val telecom = getSystemService(TelecomManager::class.java)
             telecom?.silenceRinger()
-        }
-        runCatching {
-            val audio = getSystemService(AudioManager::class.java)
-            audio?.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_MUTE, 0)
-            audio?.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_MUTE, 0)
         }
         runCatching {
             val vibrator = getSystemService(Vibrator::class.java)
@@ -340,6 +388,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        ensureRingerNotMuted()
         val km = getSystemService(KeyguardManager::class.java)
         val hasCall = hasActiveOrRingingCall() || isIncomingCallIntent(intent)
 
@@ -347,9 +396,9 @@ class MainActivity : AppCompatActivity() {
         hideLoading()
         hideError()
 
-        if (VigilShieldInCallService.activeCalls.isEmpty()) {
+        if (VigilShieldInCallService.activeCalls.isEmpty() && !hasCall) {
             CallNotificationHelper.clearAllCallNotifications(this)
-            VigilShieldInCallService.stopRinging()
+            CallRingerHelper.stopRinging(this)
         }
 
         if (::bridge.isInitialized) {
@@ -426,6 +475,58 @@ class MainActivity : AppCompatActivity() {
                 else startActivityForResult(rm.createRequestRoleIntent(RoleManager.ROLE_DIALER), DIALER_ROLE_REQ)
             } else requestPermissionsIfNeeded()
         } else requestPermissionsIfNeeded()
+    }
+
+    private fun registerLockStateListener() {
+        if (lockStateReceiver == null) {
+            lockStateReceiver = object : android.content.BroadcastReceiver() {
+                override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+                    val km = getSystemService(KeyguardManager::class.java)
+                    val isLocked = km?.isKeyguardLocked == true
+                    if (::bridge.isInitialized) {
+                        bridge.dispatchWebEvent("DEVICE_LOCK_STATE_CHANGED", JSONObject().put("isLocked", isLocked).put("state", if (isLocked) "locked" else "unlocked"))
+                    }
+                }
+            }
+            val filter = android.content.IntentFilter().apply {
+                addAction(android.content.Intent.ACTION_USER_PRESENT)
+                addAction(android.content.Intent.ACTION_SCREEN_ON)
+                addAction(android.content.Intent.ACTION_SCREEN_OFF)
+            }
+            try {
+                registerReceiver(lockStateReceiver, filter)
+            } catch (_: Exception) {}
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && keyguardLockedListener == null) {
+            val km = getSystemService(KeyguardManager::class.java)
+            val listener = KeyguardManager.KeyguardLockedStateListener { isLocked ->
+                if (::bridge.isInitialized) {
+                    bridge.dispatchWebEvent("DEVICE_LOCK_STATE_CHANGED", JSONObject().put("isLocked", isLocked).put("state", if (isLocked) "locked" else "unlocked"))
+                }
+            }
+            keyguardLockedListener = listener
+            km?.addKeyguardLockedStateListener(mainExecutor, listener)
+        }
+    }
+
+    private fun unregisterLockStateListener() {
+        lockStateReceiver?.let {
+            try { unregisterReceiver(it) } catch (_: Exception) {}
+            lockStateReceiver = null
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val listener = keyguardLockedListener as? KeyguardManager.KeyguardLockedStateListener
+            if (listener != null) {
+                val km = getSystemService(KeyguardManager::class.java)
+                try { km?.removeKeyguardLockedStateListener(listener) } catch (_: Exception) {}
+                keyguardLockedListener = null
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        unregisterLockStateListener()
+        super.onDestroy()
     }
 }
 

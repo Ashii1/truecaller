@@ -100,10 +100,13 @@ export default function AudioRecordingPlayer({
     }
   };
 
-  const handleDownload = () => {
-    callRecordingService.downloadRecordingToDevice(recording);
+  const [downloadNoticeMsg, setDownloadNoticeMsg] = useState<string>('');
+
+  const handleDownload = async () => {
+    const res = await callRecordingService.downloadRecordingToDevice(recording);
+    setDownloadNoticeMsg(res.message);
     setDownloadedNotice(true);
-    setTimeout(() => setDownloadedNotice(false), 3000);
+    setTimeout(() => setDownloadedNotice(false), 4000);
   };
 
   const formatSeconds = (sec: number) => {
@@ -176,7 +179,7 @@ export default function AudioRecordingPlayer({
 
       {downloadedNotice && (
         <div className="mt-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 text-[11px] text-emerald-300 font-semibold flex items-center justify-between">
-          <span>Saved to device storage folder: {recording.fileName}</span>
+          <span>{downloadNoticeMsg || `Saved to ${recording.folderPath}${recording.fileName}`}</span>
         </div>
       )}
 
