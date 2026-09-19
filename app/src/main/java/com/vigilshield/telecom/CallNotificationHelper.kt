@@ -113,7 +113,7 @@ object CallNotificationHelper {
         val notifId = INCOMING_CALL_ID
         activeNotificationIds.add(notifId)
         activeNotificationIds.add(callId.hashCode())
-        val openIntent = PendingIntent.getActivity(context, callId.hashCode(), ongoingCallActivityIntent(context, callId, name, number), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val openIntent = PendingIntent.getActivity(context, callId.hashCode(), callActivityIntent(context, callId, name, number), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val answer = PendingIntent.getBroadcast(context, callId.hashCode() + 1, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_ANSWER).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val decline = PendingIntent.getBroadcast(context, callId.hashCode() + 2, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_DECLINE).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val dismiss = PendingIntent.getBroadcast(context, callId.hashCode() + 4, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_DISMISS).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
