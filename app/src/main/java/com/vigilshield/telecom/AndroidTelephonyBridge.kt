@@ -161,7 +161,11 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
             account?.let { extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, it) }
             extras.putBoolean(TelecomManager.EXTRA_START_CALL_WITH_SPEAKERPHONE, false)
 
-            val callId = "out-${System.currentTimeMillis()}"
+            // The real Telecom call id is assigned by NativeInCallService.onCallAdded().
+            // Do not invent a second id: the UI will switch to the native id from the
+            // CALL_STATE_CHANGED event, and disconnectCall() can safely use its fallback
+            // during the short dialing window.
+            val callId = ""
             val callerName = lookupName(clean).orEmpty().ifBlank { clean }
 
             // Do not launch a second activity here. NativeInCallService.onCallAdded()
@@ -319,9 +323,11 @@ class NativeInCallService : InCallService() {
             }
         }
         fun launchActiveCallActivity(context: Context, callId: String, name: String, number: String, state: Int = Call.STATE_DIALING) {
-            // Always bring CallShield's in-call surface to the front. If the user started
-            // the call from Contacts/Recents, leaving the current tab visible would make
-            // the real call run behind the contacts screen.
+            // If CallShield is already visible, React owns the in-call surface and
+            // receives the Telecom state event below. Reordering MainActivity here can
+            // race WebView lifecycle during call setup. Only launch it when the app is
+            // actually in the background.
+            if (MainActivity.isAppVisible) return
             runCatching {
                 val intent = Intent(context, MainActivity::class.java).apply {
                     action = "com.vigilshield.telecom.OPEN_OUTGOING_CALL"
