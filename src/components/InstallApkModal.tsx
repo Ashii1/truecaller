@@ -54,7 +54,11 @@ export default function InstallApkModal({
   if (!isOpen) return null;
 
   const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(text).catch(() => {});
+      }
+    } catch {}
     setCopiedCode(id);
     setTimeout(() => setCopiedCode(null), 2500);
   };

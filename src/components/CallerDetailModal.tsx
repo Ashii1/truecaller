@@ -145,7 +145,7 @@ export default function CallerDetailModal({
             ...callsWithRecs.filter((c) => !items.some((it) => (it.dataUri && it.dataUri === c.dataUri) || it.callId === c.callId)),
           ];
           setRecordings(combined);
-        });
+        }).catch(() => {});
       }
     }
   }, [isOpen, call, profile, number, key, calls]);

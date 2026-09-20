@@ -37,8 +37,7 @@ export default defineConfig(() => {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         },
         devOptions: {
-          enabled: true,
-          type: 'module',
+          enabled: false,
         },
       }),
     ],
@@ -60,7 +59,7 @@ export default defineConfig(() => {
       },
     },
     server: {
-      hmr: process.env.DISABLE_HMR !== 'true',
+      hmr: process.env.DISABLE_HMR === 'true' ? false : undefined,
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };

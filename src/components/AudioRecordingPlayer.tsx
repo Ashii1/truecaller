@@ -46,7 +46,7 @@ export default function AudioRecordingPlayer({
         if (isMounted && uri && uri.trim() !== '') {
           setAudioSrc(uri);
         }
-      });
+      }).catch(() => {});
     }
     return () => {
       isMounted = false;

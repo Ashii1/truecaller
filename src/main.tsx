@@ -61,10 +61,41 @@ class AppErrorBoundary extends Component<{children: ReactNode}, {error: Error | 
 }
 
 window.addEventListener('error', (event) => {
-  console.error('[CallShield window error]', event.error || event.message);
+  const msg = String(event.error?.message || event.message || '');
+  if (msg.includes('ResizeObserver') || msg.includes('Script error')) {
+    event.preventDefault?.();
+    return;
+  }
+  console.warn('[CallShield handled window error]', msg);
 });
+
 window.addEventListener('unhandledrejection', (event) => {
-  console.error('[CallShield window rejection]', event.reason);
+  event.preventDefault?.();
+  const reason = event.reason;
+  const message = typeof reason === 'string'
+    ? reason
+    : (reason?.message || (typeof reason === 'object' && reason !== null ? JSON.stringify(reason) : String(reason || '')));
+
+  const isBenign =
+    message.includes('vite') ||
+    message.includes('websocket') ||
+    message.includes('ServiceWorker') ||
+    message.includes('service worker') ||
+    message.includes('sw.js') ||
+    message.includes('WakeLock') ||
+    message.includes('NotAllowedError') ||
+    message.includes('AbortError') ||
+    message.includes('clipboard') ||
+    message.includes('play()') ||
+    message.includes('Failed to fetch') ||
+    message.includes('NetworkError');
+
+  if (isBenign) {
+    console.debug('[CallShield handled background event]:', message);
+    return;
+  }
+
+  console.warn('[CallShield handled background rejection]:', reason);
 });
 
 try {
@@ -76,13 +107,17 @@ try {
 
 const isAndroidWrapper = typeof window !== 'undefined' &&
   typeof (window as Window & { AndroidTelecomBridge?: unknown }).AndroidTelecomBridge !== 'undefined';
+const inIframe = typeof window !== 'undefined' && window.self !== window.top;
 
-if (!isAndroidWrapper && 'serviceWorker' in navigator) {
+if (!isAndroidWrapper && !inIframe && 'serviceWorker' in navigator) {
   try {
     registerSW({
       immediate: true,
       onOfflineReady() {
         console.log('CallShield is ready for offline and WebAPK install');
+      },
+      onRegisterError(err) {
+        console.warn('[CallShield PWA] Service worker registration skipped:', err);
       },
     });
   } catch (e) {

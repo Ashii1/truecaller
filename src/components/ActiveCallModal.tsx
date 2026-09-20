@@ -146,7 +146,9 @@ export default function ActiveCallModal({
   const handleCopyNote = () => {
     if (!callerNote.trim()) return;
     try {
-      navigator.clipboard?.writeText(callerNote);
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(callerNote).catch(() => {});
+      }
       triggerHapticFeedback(20);
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);

@@ -174,8 +174,8 @@ export default function PostCallModal({
     const finalMsg = textToSend.trim();
     if (!finalMsg) return;
 
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(finalMsg);
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(finalMsg).catch(() => {});
     }
 
     // Trigger device SMS intent
@@ -289,8 +289,8 @@ export default function PostCallModal({
   const handleCopySummary = () => {
     const bulletsText = (postCall.screeningSummaryBullets || []).map(b => `• ${b}`).join('\n');
     const fullText = bulletsText || postCall.screeningSummary || '';
-    if (fullText && typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(fullText);
+    if (fullText && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(fullText).catch(() => {});
       setCopiedSummary(true);
       setTimeout(() => setCopiedSummary(false), 2000);
     }
@@ -946,8 +946,8 @@ export default function PostCallModal({
                 <button
                   type="button"
                   onClick={() => {
-                    if (navigator.clipboard) {
-                      navigator.clipboard.writeText(noteText);
+                    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                      navigator.clipboard.writeText(noteText).catch(() => {});
                       showFeedback('Note copied to clipboard');
                     }
                   }}

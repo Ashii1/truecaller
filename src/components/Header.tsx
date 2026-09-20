@@ -153,7 +153,7 @@ function Header({
     let isMounted = true;
     callRecordingService.getAllRecordings().then(list => {
       if (isMounted) setRecordingsCount(list.length);
-    });
+    }).catch(() => {});
     const unsub = callRecordingService.subscribe(list => {
       if (isMounted) setRecordingsCount(list.length);
     });

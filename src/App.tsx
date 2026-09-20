@@ -181,7 +181,7 @@ export default function App(){
  }, []);
 
  useEffect(()=>{const handler=(e:any)=>{e.preventDefault();setDeferredPrompt(e)};window.addEventListener('beforeinstallprompt',handler);return()=>window.removeEventListener('beforeinstallprompt',handler)},[]);
- useEffect(()=>{const handleCallsUpdate=(e:any)=>{if(e.detail&&Array.isArray(e.detail)){setCalls(e.detail)}else{const fresh=safeParse<CallLogItem[]>('callshield_calls',[]);if(fresh?.length)setCalls(fresh)}};window.addEventListener('callshield_calls_updated',handleCallsUpdate as EventListener);externalDirectoryService.batchEnrichLocalCalls();return()=>window.removeEventListener('callshield_calls_updated',handleCallsUpdate as EventListener)},[]);
+ useEffect(()=>{const handleCallsUpdate=(e:any)=>{if(e.detail&&Array.isArray(e.detail)){setCalls(e.detail)}else{const fresh=safeParse<CallLogItem[]>('callshield_calls',[]);if(fresh?.length)setCalls(fresh)}};window.addEventListener('callshield_calls_updated',handleCallsUpdate as EventListener);externalDirectoryService.batchEnrichLocalCalls().catch(()=>{});return()=>window.removeEventListener('callshield_calls_updated',handleCallsUpdate as EventListener)},[]);
  const syncNativeDeviceData=useCallback(()=>{if(!telecomBridge.isAndroidEnvironment())return;try{const freshCalls=telecomBridge.fetchDeviceCallLogs(200);const freshContacts=telecomBridge.fetchDeviceContacts(500);setCalls(prev=>freshCalls.length?freshCalls:prev);setContacts(prev=>freshContacts.length?freshContacts:prev)}catch(e){console.warn('Device data refresh failed',e)}},[]);
   useEffect(() => { safeStore('callshield_settings', settings); }, [settings]);
   useEffect(() => { safeStore('callshield_rules', rules); }, [rules]);
