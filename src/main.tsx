@@ -62,7 +62,12 @@ class AppErrorBoundary extends Component<{children: ReactNode}, {error: Error | 
 
 window.addEventListener('error', (event) => {
   const msg = String(event.error?.message || event.message || '');
-  if (msg.includes('ResizeObserver') || msg.includes('Script error')) {
+  if (
+    msg.includes('ResizeObserver') ||
+    msg.includes('Script error') ||
+    msg.includes('vite') ||
+    msg.includes('websocket')
+  ) {
     event.preventDefault?.();
     return;
   }
@@ -70,39 +75,48 @@ window.addEventListener('error', (event) => {
 });
 
 window.addEventListener('unhandledrejection', (event) => {
+  // Always prevent unhandled rejections from bubbling as uncaught errors
   event.preventDefault?.();
   const reason = event.reason;
   const message = typeof reason === 'string'
     ? reason
     : (reason?.message || (typeof reason === 'object' && reason !== null ? JSON.stringify(reason) : String(reason || '')));
 
-  const isBenign =
+  // Silence all expected platform/iframe sandbox and network abort conditions
+  const isIgnored =
+    !message ||
     message.includes('vite') ||
     message.includes('websocket') ||
+    message.includes('ws://') ||
+    message.includes('wss://') ||
     message.includes('ServiceWorker') ||
     message.includes('service worker') ||
     message.includes('sw.js') ||
     message.includes('WakeLock') ||
+    message.includes('wakeLock') ||
     message.includes('NotAllowedError') ||
     message.includes('AbortError') ||
     message.includes('clipboard') ||
     message.includes('play()') ||
     message.includes('Failed to fetch') ||
-    message.includes('NetworkError');
+    message.includes('NetworkError') ||
+    message.includes('The play() request was interrupted') ||
+    message.includes('user gesture');
 
-  if (isBenign) {
-    console.debug('[CallShield handled background event]:', message);
+  if (isIgnored) {
     return;
   }
 
-  console.warn('[CallShield handled background rejection]:', reason);
+  console.warn('[CallShield handled background event]:', message);
 });
 
-try {
-  const testResults = runCallShieldTestSuite();
-  console.info('[CallShield Test Suite] Validation results:', testResults);
-} catch (e) {
-  console.error('[CallShield Test Suite] Execution error:', e);
+if (process.env.NODE_ENV === 'test') {
+  try {
+    const testResults = runCallShieldTestSuite();
+    console.info('[CallShield Test Suite] Validation results:', testResults);
+  } catch (e) {
+    console.error('[CallShield Test Suite] Execution error:', e);
+  }
 }
 
 const isAndroidWrapper = typeof window !== 'undefined' &&
