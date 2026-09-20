@@ -37,53 +37,24 @@
             <intent-filter><action android:name="android.telecom.CallScreeningService" /></intent-filter>
         </service>
         <receiver android:name=".CallActionReceiver" android:exported="false" />
-
-        <!-- Home Screen Speed Dial Widget -->
         <receiver android:name=".SpeedDialWidgetProvider" android:exported="true">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/speed_dial_widget_info" />
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/speed_dial_widget_info" />
         </receiver>
-
-        <!-- Home Screen Protection Status Widget -->
         <receiver android:name=".SecurityWidgetProvider" android:exported="true">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/security_widget_info" />
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/security_widget_info" />
         </receiver>
-
-        <!-- Window Show On Lock configuration flag -->
         <meta-data android:name="window-show-on-lock" android:value="true" />
-
-        <activity
-            android:name=".IncomingCallActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:showWhenLocked="true"
-            android:turnScreenOn="true"
-            android:inheritShowWhenLocked="true"
-            android:launchMode="singleTop"
-            android:theme="@style/Theme.CallShield">
+        <activity android:name=".IncomingCallActivity" android:exported="false" android:excludeFromRecents="true" android:showWhenLocked="true" android:turnScreenOn="true" android:inheritShowWhenLocked="true" android:theme="@style/Theme.CallShield">
             <meta-data android:name="window-show-on-lock" android:value="true" />
         </activity>
-        <activity android:name=".MainActivity"
-            android:exported="true"
-            android:launchMode="singleTask"
-            android:showWhenLocked="true"
-            android:turnScreenOn="true"
-            android:inheritShowWhenLocked="true">
+        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask" android:showWhenLocked="true" android:turnScreenOn="true" android:inheritShowWhenLocked="true">
             <meta-data android:name="window-show-on-lock" android:value="true" />
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
             <intent-filter><action android:name="android.intent.action.DIAL" /><category android:name="android.intent.category.DEFAULT" /></intent-filter>
             <intent-filter><action android:name="android.intent.action.DIAL" /><category android:name="android.intent.category.DEFAULT" /><data android:scheme="tel" /></intent-filter>
             <intent-filter><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="tel" /></intent-filter>
-            <intent-filter><action android:name="android.intent.action.CALL" /><category android:name="android.intent.category.DEFAULT" /><data android:scheme="tel" /></intent-filter>
         </activity>
     </application>
 </manifest>
