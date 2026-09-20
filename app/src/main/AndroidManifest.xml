@@ -55,6 +55,7 @@
             <intent-filter><action android:name="android.intent.action.DIAL" /><category android:name="android.intent.category.DEFAULT" /></intent-filter>
             <intent-filter><action android:name="android.intent.action.DIAL" /><category android:name="android.intent.category.DEFAULT" /><data android:scheme="tel" /></intent-filter>
             <intent-filter><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="tel" /></intent-filter>
+            <!-- ACTION_CALL is intentionally not handled by MainActivity. Once CallShield holds ROLE_DIALER, Android Telecom owns the real call and binds VigilShieldInCallService. -->
         </activity>
     </application>
 </manifest>
