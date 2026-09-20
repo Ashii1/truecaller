@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import { GoogleGenAI } from '@google/genai';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import { lookupWithIpqs } from './server/phone-intelligence';
 
 const app = express();
 const PORT = 3000;
@@ -656,10 +657,46 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-app.get('/api/lookup', (req, res) => {
+app.get('/api/lookup', async (req, res) => {
   const query = String(req.query.q || '').trim();
   if (!query) return res.status(400).json({ error: 'Query required' });
   const { e164 } = normalizeInput(query);
+
+  if (query) {
+    try {
+      const external = await lookupWithIpqs(query);
+      if (external?.found) {
+        const riskScore = external.fraudScore ?? (external.spammer || external.recentAbuse ? 90 : 0);
+        const spam = Boolean(external.spammer || external.recentAbuse || (external.fraudScore ?? 0) >= 90);
+        return res.json({
+          found: true,
+          profile: {
+            number: external.e164,
+            name: external.name || 'Unknown Caller',
+            classification: spam ? 'SPAM' : 'UNKNOWN',
+            category: spam ? 'Spam / Abuse' : 'Unclassified Line',
+            isVerified: false,
+            riskScore,
+            reportsCount: 0,
+            confidence: external.confidence ?? 50,
+            source: external.source,
+            carrier: external.carrier || null,
+            lineType: external.lineType || null,
+            country: external.country || null,
+            region: external.region || null,
+            city: external.city || null,
+            valid: external.valid ?? null,
+            active: external.active ?? null,
+            spammer: external.spammer ?? null,
+            recentAbuse: external.recentAbuse ?? null,
+          },
+        });
+      }
+    } catch {
+      // Fall through to local directory
+    }
+  }
+
   const pId = dbPhoneIdByE164.get(e164);
 
   if (pId) {
@@ -1044,7 +1081,11 @@ app.get('/vigilshield_app.zip', (req, res) => {
 
 // Vite Middleware for Dev and Static Serving for Production
 async function startServer() {
-  if (process.env.NODE_ENV !== 'production') {
+  const isProduction =
+    process.env.NODE_ENV === 'production' ||
+    (typeof __filename !== 'undefined' && __filename.endsWith('.cjs'));
+
+  if (!isProduction) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: {
