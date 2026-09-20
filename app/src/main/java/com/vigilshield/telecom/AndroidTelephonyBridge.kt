@@ -157,8 +157,15 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
             // The default Phone role must stay on CallShield; use Telecom only and never launch ACTION_CALL.
             val extras = Bundle()
             val accounts = runCatching { telecom.callCapablePhoneAccounts }.getOrNull().orEmpty()
-            val account = accounts.firstOrNull { it.id == accountHandleId } ?: accounts.firstOrNull()
-            account?.let { extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, it) }
+            val account = when {
+                accountHandleId.isNullOrBlank() -> null // Let Telecom pick user default or prompt SIM picker
+                accountHandleId.contains("SIM 1") || accountHandleId == "0" -> accounts.getOrNull(0)
+                accountHandleId.contains("SIM 2") || accountHandleId == "1" -> accounts.getOrNull(1) ?: accounts.firstOrNull()
+                else -> accounts.firstOrNull { it.id == accountHandleId }
+            }
+            if (account != null) {
+                extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, account)
+            }
             extras.putBoolean(TelecomManager.EXTRA_START_CALL_WITH_SPEAKERPHONE, false)
 
             // The real Telecom call id is assigned by VigilShieldInCallService.onCallAdded().

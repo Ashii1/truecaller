@@ -376,11 +376,18 @@ npx cap open android # Opens Android Studio to click "Build APK"`;
               </div>
 
               <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2.5">
-                <h5 className="text-xs font-bold text-slate-200">How to transition your current device:</h5>
+                <h5 className="text-xs font-bold text-slate-200">How to enable seamless in-place updates:</h5>
                 <ol className="text-xs text-slate-400 space-y-1.5 list-decimal list-inside leading-relaxed">
-                  <li><strong>One-time step:</strong> If you previously installed an old build signed with an incompatible debug key, uninstall it once from your device to clear the conflicting certificate.</li>
-                  <li><strong>Install the new unified build:</strong> Install the new APK (v1.5.4, versionCode 204+).</li>
-                  <li><strong>Future updates work seamlessly:</strong> Every subsequent APK built locally or via GitHub CI uses this exact same signing certificate and a higher versionCode, updating directly in-place without uninstallation!</li>
+                  <li><strong>Consistent Keystore in GitHub Actions:</strong> In your GitHub repository settings under <em>Secrets and variables → Actions</em>, add:
+                    <div className="font-mono text-[11px] text-amber-300 mt-1 pl-4 space-y-0.5">
+                      • <code>VIGILSHIELD_KEYSTORE_BASE64</code><br />
+                      • <code>VIGILSHIELD_KEYSTORE_PASSWORD</code><br />
+                      • <code>VIGILSHIELD_KEY_ALIAS</code><br />
+                      • <code>VIGILSHIELD_KEY_PASSWORD</code>
+                    </div>
+                  </li>
+                  <li><strong>Without secrets:</strong> Every CI run generates a random ephemeral key with a different digital certificate, which causes Android to reject installing on top of the old app.</li>
+                  <li><strong>With secrets configured:</strong> Every APK built from GitHub uses the same permanent signing key and auto-incremented <code className="font-mono text-emerald-400">versionCode</code>, allowing you to install updates directly over the old version with one tap!</li>
                 </ol>
               </div>
             </div>

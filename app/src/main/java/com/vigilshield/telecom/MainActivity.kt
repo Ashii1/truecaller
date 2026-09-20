@@ -249,6 +249,8 @@ class MainActivity : AppCompatActivity() {
                 val quoted = JSONObject.quote(number)
                 if (current.action == Intent.ACTION_DIAL || current.action == Intent.ACTION_VIEW) {
                     webView.post { webView.evaluateJavascript("if(window.__onAndroidDialIntent){window.__onAndroidDialIntent($quoted);}", null) }
+                } else if (current.action == Intent.ACTION_CALL) {
+                    webView.post { webView.evaluateJavascript("if(window.__onAndroidCallIntent){window.__onAndroidCallIntent($quoted);}", null) }
                 }
             }
         }
