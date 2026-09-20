@@ -15,7 +15,9 @@ import {
   ShieldAlert, 
   Radio, 
   Loader2,
-  Play
+  Play,
+  Minimize2,
+  Maximize2
 } from 'lucide-react';
 import { IncomingCallState, ScreeningTranscriptEntry } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
@@ -44,6 +46,7 @@ export default function CallScreeningOverlay({ call, onPickUp, onHangUp, onBlock
   const [callerInputText, setCallerInputText] = useState('');
   const [customReply, setCustomReply] = useState('');
   const [isAudioMuted, setIsAudioMuted] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
   const [detectedIntent, setDetectedIntent] = useState<string | null>(null);
   const [dynamicSuggestedReplies, setDynamicSuggestedReplies] = useState<string[]>([
     'Can you please call back later?',
@@ -222,6 +225,85 @@ export default function CallScreeningOverlay({ call, onPickUp, onHangUp, onBlock
   const isWaveformActive = isAssistantSpeaking || isAiThinking || isListeningCallerMic;
   const waveformColor = call.isSpam ? 'rose' : isAssistantSpeaking ? 'indigo' : isAiThinking ? 'amber' : 'emerald';
 
+  if (isMinimized) {
+    const latestEntry = transcript[transcript.length - 1];
+    return (
+      <aside
+        id="call-screening-notification-banner"
+        role="alert"
+        aria-live="assertive"
+        className="fixed top-2 sm:top-4 inset-x-2 sm:inset-x-auto sm:right-4 sm:w-[440px] z-[99999] rounded-2xl bg-[#0a101d]/95 backdrop-blur-xl border border-indigo-500/40 p-3 sm:p-3.5 text-white shadow-2xl shadow-black/90 animate-in slide-in-from-top duration-200"
+      >
+        <div className="flex items-center justify-between border-b border-white/[0.08] pb-2 mb-2 text-[11px]">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+            </span>
+            <span className="font-bold text-indigo-300 truncate">AI Screening in Progress...</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsMinimized(false)}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/20 border border-indigo-500/40 text-indigo-200 hover:bg-indigo-500/30 transition font-semibold text-[11px]"
+            title="Expand to Full Screening Overlay"
+          >
+            <Maximize2 className="w-3 h-3" />
+            <span>Expand</span>
+          </button>
+        </div>
+
+        {/* Card info */}
+        <div onClick={() => setIsMinimized(false)} className="cursor-pointer select-none">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <h4 className="font-bold text-sm text-white truncate">
+                {call.callerName || formatPhoneNumber(typeof call.number === 'string' ? call.number : String(call.number ?? ''))}
+              </h4>
+              <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                {formatPhoneNumber(typeof call.number === 'string' ? call.number : String(call.number ?? ''))}
+              </p>
+            </div>
+            {detectedIntent && (
+              <span className="shrink-0 px-2 py-0.5 rounded-md bg-indigo-950 border border-indigo-500/40 text-[10px] font-bold text-indigo-300">
+                {detectedIntent}
+              </span>
+            )}
+          </div>
+
+          {/* Latest transcript or summary */}
+          <div className="mt-2 p-2 rounded-xl bg-slate-900/80 border border-slate-800/80 text-xs text-slate-300 flex items-start gap-2">
+            <Bot className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
+            <p className="line-clamp-2 italic text-[11px] text-slate-300 leading-relaxed">
+              {latestEntry ? `${latestEntry.sender === 'assistant' ? 'AI: ' : 'Caller: '}"${latestEntry.text}"` : 'Screening caller intent in real time...'}
+            </p>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="mt-2.5 flex items-center justify-between gap-2 pt-2 border-t border-white/[0.06]">
+          <button
+            type="button"
+            onClick={() => onHangUp(transcript, detectedIntent)}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md shadow-rose-950/40 active:scale-95 transition cursor-pointer"
+          >
+            <PhoneOff className="h-3.5 w-3.5" />
+            <span>Hang Up</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onPickUp(transcript, detectedIntent)}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-950/40 active:scale-95 transition cursor-pointer"
+          >
+            <Phone className="h-3.5 w-3.5" />
+            <span>Answer</span>
+          </button>
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-2 sm:p-4 backdrop-blur-md">
       <div className="flex h-full max-h-[720px] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-indigo-500/40 bg-[#0c121c] shadow-2xl shadow-indigo-950/60">
@@ -251,6 +333,16 @@ export default function CallScreeningOverlay({ call, onPickUp, onHangUp, onBlock
             </div>
 
             <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setIsMinimized(true)}
+                className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                title="Minimize AI Screening to Notification Banner"
+                aria-label="Minimize AI Screening"
+              >
+                <Minimize2 className="h-4 w-4" />
+              </button>
+
               <button
                 type="button"
                 onClick={() => setAutoConverse(v => !v)}

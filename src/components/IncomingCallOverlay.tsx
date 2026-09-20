@@ -4,7 +4,9 @@ import {
   Bot,
   ChevronDown,
   Lock,
+  Maximize2,
   MessageSquare,
+  Minimize2,
   Phone,
   PhoneOff,
   Pin,
@@ -63,9 +65,23 @@ export default function IncomingCallOverlay({
     typeof propIsDeviceLocked === 'boolean' ? propIsDeviceLocked : telecomBridge.isDeviceLocked()
   );
 
+  // Presentation state: when phone is in active use (unlocked), default to compact heads-up popup banner
+  const [isMinimized, setIsMinimized] = useState<boolean>(() => {
+    const locked = typeof propIsDeviceLocked === 'boolean' ? propIsDeviceLocked : telecomBridge.isDeviceLocked();
+    return !locked;
+  });
+
   // 'Always On Top' flag state: forces device screen wake and maintains top-priority window over lock
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState<boolean>(() => telecomBridge.isAlwaysOnTopEnabled());
   const [canOverlay, setCanOverlay] = useState<boolean>(() => telecomBridge.canDrawOverlays());
+
+  // Whenever incoming call arrives or lock state changes, set proper mode
+  useEffect(() => {
+    if (call) {
+      const locked = typeof propIsDeviceLocked === 'boolean' ? propIsDeviceLocked : telecomBridge.isDeviceLocked();
+      setIsMinimized(!locked);
+    }
+  }, [call?.callId, propIsDeviceLocked]);
 
   // Synchronize when parent lock state changes
   useEffect(() => {
@@ -256,13 +272,137 @@ export default function IncomingCallOverlay({
     }
   };
 
+  // 1. Heads-Up Popup Notification Banner (While phone is in active use)
+  if (isMinimized) {
+    return (
+      <aside
+        id="incoming-call-notification-banner"
+        role="alert"
+        aria-live="assertive"
+        className="fixed top-2 sm:top-4 inset-x-2 sm:inset-x-auto sm:right-4 sm:w-[440px] z-[99999] rounded-2xl bg-[#0c1320]/95 backdrop-blur-xl border border-indigo-500/30 p-3 sm:p-3.5 text-white shadow-2xl shadow-black/90 animate-in slide-in-from-top duration-200"
+      >
+        {/* Banner Top Info Bar */}
+        <div className="flex items-center justify-between border-b border-white/[0.08] pb-2 mb-2 text-[11px]">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="font-bold text-emerald-300 truncate">Incoming Call</span>
+            <span className="text-slate-400 shrink-0">· {call.sim || 'SIM 1'}</span>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={silence}
+              className={`p-1 rounded-lg transition ${
+                silenced ? 'text-amber-400 bg-amber-500/15' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+              title={silenced ? 'Silenced' : 'Silence Ringtone'}
+              aria-label={silenced ? 'Silenced' : 'Silence Ringtone'}
+            >
+              <VolumeX className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsMinimized(false)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/25 transition font-semibold text-[11px]"
+              title="Expand to Fullscreen Alert"
+              aria-label="Expand to Fullscreen"
+            >
+              <Maximize2 className="w-3 h-3" />
+              <span>Fullscreen</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Click to expand card area */}
+        <div
+          onClick={() => setIsMinimized(false)}
+          className="flex items-center gap-3 cursor-pointer group select-none"
+        >
+          {/* Pulsing Avatar */}
+          <div className="relative shrink-0">
+            <div className={`grid h-11 w-11 place-items-center rounded-full text-base font-bold shadow-md border ${
+              critical
+                ? 'bg-red-950 text-red-200 border-red-500/50'
+                : suspicious
+                ? 'bg-amber-950 text-amber-200 border-amber-500/50'
+                : 'bg-indigo-950 text-indigo-200 border-indigo-500/50'
+            }`}>
+              {(call.callerName || '?').slice(0, 1).toUpperCase()}
+            </div>
+          </div>
+
+          {/* Caller Text Information */}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <h4 className="font-bold text-sm text-white truncate max-w-[190px] sm:max-w-[220px]">
+                {call.callerName || t('unknown_caller')}
+              </h4>
+              <span className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.2 text-[9px] font-bold border ${
+                critical
+                  ? 'bg-red-500/10 border-red-500/30 text-red-300'
+                  : suspicious
+                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                  : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+              }`}>
+                {critical ? 'High Risk' : suspicious ? 'Suspicious' : 'Verified'}
+              </span>
+            </div>
+            <div className="text-[11px] font-mono text-slate-400 mt-0.5">
+              {formatPhoneNumber(typeof call.number === 'string' ? call.number : String(call.number ?? ''))}
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Action Buttons in Banner */}
+        <div className="mt-2.5 flex items-center justify-between gap-2 pt-2 border-t border-white/[0.06]">
+          <button
+            id="popup-decline-call-btn"
+            type="button"
+            onClick={decline}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md shadow-rose-950/40 active:scale-95 transition cursor-pointer"
+          >
+            <PhoneOff className="h-3.5 w-3.5" />
+            <span>Decline</span>
+          </button>
+
+          {aiScreeningAllowed && (
+            <button
+              id="popup-screen-call-ai-btn"
+              type="button"
+              onClick={screen}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-950/40 active:scale-95 transition cursor-pointer"
+            >
+              <Bot className="h-3.5 w-3.5 text-indigo-200" />
+              <span>Screen</span>
+            </button>
+          )}
+
+          <button
+            id="popup-answer-call-btn"
+            type="button"
+            onClick={answer}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-950/40 active:scale-95 transition cursor-pointer"
+          >
+            <Phone className="h-3.5 w-3.5" />
+            <span>Answer</span>
+          </button>
+        </div>
+      </aside>
+    );
+  }
+
+  // 2. Fullscreen Immersive Alert (When locked or user requested fullscreen)
   return (
     <div
       id="incoming-call-overlay"
       className="fixed inset-0 z-[99999] flex flex-col justify-between w-screen h-[100dvh] min-h-[100dvh] bg-gradient-to-b from-[#030712] via-[#0b0f19] to-[#030712] text-white p-4 sm:p-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] select-none overflow-y-auto overscroll-none"
       aria-label={t('incoming_call_title')}
     >
-      {/* Top Bar: Verification, Lock State, Always On Top & Silence Button */}
+      {/* Top Bar: Verification, Lock State, Minimize & Silence Button */}
       <header id="incoming-call-header" className="shrink-0 flex items-center justify-between gap-2 w-full max-w-lg mx-auto border-b border-slate-800/80 pb-3">
         {/* Spam / Verification Badge */}
         <div className="flex items-center gap-1.5 text-xs font-semibold">
@@ -290,8 +430,21 @@ export default function IncomingCallOverlay({
           </span>
         </div>
 
-        {/* Lock State Pill, Always-On-Top & Silence Action */}
+        {/* Lock State Pill, Minimize & Silence Action */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Minimize Call to Notification Banner */}
+          <button
+            id="minimize-call-overlay-btn"
+            type="button"
+            onClick={() => setIsMinimized(true)}
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-300 bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700/60 shadow-sm active:scale-95 hover:bg-slate-700/80 transition cursor-pointer"
+            title="Minimize incoming call to notification banner"
+            aria-label="Minimize Call"
+          >
+            <Minimize2 className="w-3 h-3 text-slate-400" />
+            <span className="hidden sm:inline">Minimize</span>
+          </button>
+
           {/* Always On Top Toggle / Indicator */}
           <button
             id="always-on-top-toggle-btn"
