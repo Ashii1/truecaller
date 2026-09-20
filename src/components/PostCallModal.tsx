@@ -109,6 +109,15 @@ export default function PostCallModal({
   const [showTranscript, setShowTranscript] = useState(false);
   const [copiedSummary, setCopiedSummary] = useState(false);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [isPlayingSummaryAudio, setIsPlayingSummaryAudio] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   const cleanNumber = postCall ? normalizePhone(postCall.number) : '';
 
@@ -296,8 +305,6 @@ export default function PostCallModal({
     }
   };
 
-  const [isPlayingSummaryAudio, setIsPlayingSummaryAudio] = useState(false);
-
   // Play audio aloud for AI summary
   const handleTogglePlaySummaryAudio = () => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
@@ -320,14 +327,6 @@ export default function PostCallModal({
     utterance.onerror = () => setIsPlayingSummaryAudio(false);
     window.speechSynthesis.speak(utterance);
   };
-
-  useEffect(() => {
-    return () => {
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
-    };
-  }, []);
 
   const hasScreeningInfo = Boolean(
     postCall.usedAiScreener ||

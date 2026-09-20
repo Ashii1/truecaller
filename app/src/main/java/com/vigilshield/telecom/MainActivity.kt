@@ -3,6 +3,7 @@ package com.vigilshield.telecom
 import android.Manifest
 import android.app.KeyguardManager
 import android.app.role.RoleManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -502,11 +503,12 @@ class MainActivity : AppCompatActivity() {
                 addAction(android.content.Intent.ACTION_SCREEN_OFF)
             }
             runCatching {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    registerReceiver(lockStateReceiver, filter, Context.RECEIVER_EXPORTED)
-                } else {
-                    registerReceiver(lockStateReceiver, filter)
-                }
+                ContextCompat.registerReceiver(
+                    this,
+                    lockStateReceiver,
+                    filter,
+                    ContextCompat.RECEIVER_NOT_EXPORTED
+                )
             }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && keyguardLockedListener == null) {
