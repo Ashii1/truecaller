@@ -3,10 +3,11 @@ import org.gradle.api.tasks.Exec
 
 // CI release builds use an ephemeral keystore reconstructed from GitHub Actions secrets.
 // Never keep signing credentials in source control.
-val baseVersionCode = 204
+// VERSION UPDATED: 205 (was 204) - fixes APK installation without uninstall
+val baseVersionCode = 205
 val ciRunNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
 val finalVersionCode = baseVersionCode + ciRunNumber
-val finalVersionName = "1.5.4"
+val finalVersionName = "1.5.5"
 
 val envKeystorePath = System.getenv("VIGILSHIELD_KEYSTORE_FILE")
 val envKeystorePassword = System.getenv("VIGILSHIELD_KEYSTORE_PASSWORD")
@@ -35,6 +36,12 @@ android {
     }
 
     signingConfigs {
+        create("debug") {
+            storeFile = file(System.getProperty("user.home") + "/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         create("ciRelease") {
             if (releaseKeystoreFile != null && releaseStorePassword != null && releaseKeyAlias != null && releaseKeyPassword != null) {
                 storeFile = releaseKeystoreFile
@@ -47,7 +54,9 @@ android {
 
     buildTypes {
         debug {
-            // Debug builds use the standard Android debug signing key.
+            signingConfig = signingConfigs.getByName("debug")
+            debuggable = true
+            applicationIdSuffix = ".debug"
         }
         release {
             isMinifyEnabled = true
