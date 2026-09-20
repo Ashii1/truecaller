@@ -1,6 +1,19 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script>
+      // In cloud container preview environments, HMR websocket connections are disabled
+      if (typeof window !== 'undefined') {
+        const _origConsoleError = console.error;
+        console.error = function(...args) {
+          const msg = args.join(' ');
+          if (msg.includes('[vite]') && (msg.includes('connect') || msg.includes('websocket') || msg.includes('ws://') || msg.includes('wss://'))) {
+            return;
+          }
+          return _origConsoleError.apply(this, args);
+        };
+      }
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>CallShield - Know Who's Calling</title>
