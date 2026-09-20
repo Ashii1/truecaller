@@ -1,20 +1,15 @@
 package com.vigilshield.telecom
 
 import android.Manifest
-import android.app.KeyguardManager
-import android.app.role.RoleManager
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
+import android.app.Activity
 import android.graphics.Color
-import android.media.AudioManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.os.Vibrator
-import android.telecom.TelecomManager
+import android.content.Intent
+import android.net.Uri
+import android.content.pm.PackageManager
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -24,18 +19,16 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.ProgressBar
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
+import android.widget.Button
 import androidx.core.content.ContextCompat
+import androidx.core.app.ActivityCompat
 import androidx.webkit.WebViewAssetLoader
 import org.json.JSONObject
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : Activity() {
     private lateinit var webView: WebView
     private lateinit var bridge: AndroidTelephonyBridge
     private lateinit var loadingView: View
@@ -50,6 +43,7 @@ class MainActivity : AppCompatActivity() {
     private var lastConsoleError: String? = null
     private var lastPermissionSignature: String? = null
     private var lastDispatchedIntentIdentity: Int = 0
+
     companion object {
         private const val PERMISSION_REQ = 7002
         private const val DIALER_ROLE_REQ = 7001
@@ -91,8 +85,28 @@ class MainActivity : AppCompatActivity() {
             override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean { if (consoleMessage.messageLevel() == ConsoleMessage.MessageLevel.ERROR) lastConsoleError = "${consoleMessage.message()} (line ${consoleMessage.lineNumber()})"; return true }
             override fun onPermissionRequest(request: android.webkit.PermissionRequest?) { runOnUiThread { request?.grant(request.resources) } }
         }
-        webView.setDownloadListener { url, _, contentDisposition, mimetype, _ -> try { if (url.startsWith("data:")) { val base64Data = url.substringAfter("base64,"); val fileName = "CallShield_Recording_${System.currentTimeMillis()}.wav"; bridge.saveCallRecordingToDevice(fileName, base64Data, mimetype ?: "audio/wav") } else { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } } catch (e: Exception) { android.util.Log.w("MainActivity", "Download failed: ${e.message}") } }
+        webView.setDownloadListener { url, _, _, mimetype, _ -> try { if (url.startsWith("data:")) { val base64Data = url.substringAfter("base64,"); val fileName = "CallShield_Recording_${System.currentTimeMillis()}.wav"; bridge.saveCallRecordingToDevice(fileName, base64Data, mimetype ?: "audio/wav") } else { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } } catch (e: Exception) { android.util.Log.w("MainActivity", "Download failed: ${e.message}") } }
         webView.loadUrl(APP_ASSET_URL)
+        handleDirectCallIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleDirectCallIntent(intent)
+        if (uiReportedReady) dispatchLaunchIntent()
+    }
+
+    private fun handleDirectCallIntent(value: Intent?) {
+        if (value?.action != Intent.ACTION_CALL) return
+        val number = value.data?.schemeSpecificPart?.trim().orEmpty()
+        if (number.isBlank()) return
+        mainHandler.post {
+            val result = bridge.placeRealCall(number, null)
+            if (!result.startsWith("{\"success\":true")) {
+                android.util.Log.w("MainActivity", "ACTION_CALL rejected by Telecom: $result")
+            }
+        }
     }
 
     internal fun hasActiveOrRingingCall(): Boolean = runCatching { VigilShieldInCallService.activeCalls.values.any { it.state == android.telecom.Call.STATE_RINGING || it.state == android.telecom.Call.STATE_ACTIVE || it.state == android.telecom.Call.STATE_DIALING || it.state == android.telecom.Call.STATE_CONNECTING || it.state == android.telecom.Call.STATE_HOLDING } }.getOrDefault(false)
@@ -127,9 +141,6 @@ class MainActivity : AppCompatActivity() {
             if (!number.isNullOrBlank()) {
                 val quoted = JSONObject.quote(number)
                 if (current.action == Intent.ACTION_DIAL || current.action == Intent.ACTION_VIEW) webView.post { webView.evaluateJavascript("if(window.__onAndroidDialIntent){window.__onAndroidDialIntent($quoted);}", null) }
-                // ACTION_CALL is deliberately not forwarded into the WebView. A direct call
-                // has already been accepted by Android Telecom; forwarding it here can trigger
-                // a second JS call attempt and make the OEM Phone app appear.
             }
         }
     }
@@ -147,5 +158,5 @@ class MainActivity : AppCompatActivity() {
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean { val isVolumeKey = keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_MUTE; if (isVolumeKey && isRingingOrIncoming()) { silenceIncomingRinger(); return true }; return super.onKeyDown(keyCode, event) }
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean { val isVolumeKey = keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_MUTE; if (isVolumeKey && isRingingOrIncoming()) return true; return super.onKeyUp(keyCode, event) }
     private fun isRingingOrIncoming(): Boolean = VigilShieldInCallService.isRinging() || VigilShieldInCallService.activeCalls.values.any { it.state == android.telecom.Call.STATE_RINGING } || intent?.getBooleanExtra("is_incoming_call", false) == true
-    private fun ensureRingerNotMuted() { runCatching { val audio = getSystemService(AudioManager::class.java) ?: return; if (audio.ringerMode == AudioManager.RINGER_MODE_NORMAL && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) { if (audio.isStreamMute(AudioManager.STREAM_RING)) audio.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_UNMUTE, 0); if (audio.isStreamMute(AudioManager.STREAM_NOTIFICATION)) audio.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_UNMUTE, 0) } } }
+    private fun ensureRingerNotMuted() { runCatching { val audio = getSystemService(android.media.AudioManager::class.java) ?: return; if (audio.ringerMode == android.media.AudioManager.RINGER_MODE_NORMAL && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) { if (audio.isStreamMute(android.media.AudioManager.STREAM_RING)) audio.adjustStreamVolume(android.media.AudioManager.STREAM_RING, android.media.AudioManager.ADJUST_UNMUTE, 0); if (audio.isStreamMute(android.media.AudioManager.STREAM_NOTIFICATION)) audio.adjustStreamVolume(android.media.AudioManager.STREAM_NOTIFICATION, android.media.AudioManager.ADJUST_UNMUTE, 0) } } }
 }
