@@ -36,12 +36,6 @@ android {
     }
 
     signingConfigs {
-        create("debug") {
-            storeFile = file(System.getProperty("user.home") + "/.android/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
         create("ciRelease") {
             if (releaseKeystoreFile != null && releaseStorePassword != null && releaseKeyAlias != null && releaseKeyPassword != null) {
                 storeFile = releaseKeystoreFile
@@ -54,7 +48,6 @@ android {
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("debug")
             isDebuggable = true
             applicationIdSuffix = ".debug"
         }
