@@ -6,6 +6,7 @@
 -keep class com.vigilshield.telecom.AndroidTelephonyBridge { *; }
 -keep class com.vigilshield.telecom.MainActivity { *; }
 -keep class com.vigilshield.telecom.IncomingCallActivity { *; }
+-keep class com.vigilshield.telecom.OutgoingCallActivity { *; }
 -keep class com.vigilshield.telecom.CallNotificationHelper { *; }
 -keep class com.vigilshield.telecom.CallRingerHelper { *; }
 -keep class com.vigilshield.telecom.CallActionReceiver { *; }
