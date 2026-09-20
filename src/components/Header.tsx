@@ -220,9 +220,11 @@ function Header({
             </div>
             <div className="min-w-0">
               <div className="text-sm font-bold leading-tight tracking-tight text-white">{t('app_title')}</div>
-              <div className="hidden">
-                <span className={`inline-block h-1.5 w-1.5 rounded-full ${settings?.masterEnabled !== false ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
-                <span>{isDefaultDialer ? t('default_phone_app') : t('phone_setup_required')}</span>
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                <span className={`inline-block h-1.5 w-1.5 rounded-full ${isDefaultDialer ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                <span className={isDefaultDialer ? 'text-emerald-300' : 'text-amber-300'}>
+                  {isDefaultDialer ? t('default_phone_app') : t('phone_setup_required')}
+                </span>
               </div>
             </div>
           </div>
@@ -318,10 +320,13 @@ function Header({
 
             {onRequestDefaultDialer && !isDefaultDialer && (
               <button
+                type="button"
                 onClick={onRequestDefaultDialer}
-                className="hidden items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 sm:flex"
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-500 active:scale-95 transition-all"
+                title={t('set_as_phone_app')}
               >
-                <PhoneCall className="h-3.5 w-3.5" /> {t('set_as_phone_app')}
+                <PhoneCall className="h-3.5 w-3.5 shrink-0" />
+                <span className="hidden xs:inline">{t('set_as_phone_app')}</span>
               </button>
             )}
 

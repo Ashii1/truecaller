@@ -17,6 +17,8 @@ interface DialerTabProps {
   onChangeSim: (sim: 'SIM 1 (Personal)' | 'SIM 2 (Work)') => void;
   initialNumber?: string;
   density?: DisplayDensity;
+  isDefaultDialer?: boolean;
+  onRequestDefaultDialer?: () => void;
 }
 
 const KEYPAD = [
@@ -55,6 +57,8 @@ const DialerTab = memo(function DialerTab({
   onChangeSim,
   initialNumber,
   density = 'comfortable',
+  isDefaultDialer,
+  onRequestDefaultDialer,
 }: DialerTabProps) {
   const { t } = useI18n();
   const [value, setValue] = useState(initialNumber || '');
@@ -148,6 +152,25 @@ const DialerTab = memo(function DialerTab({
           <h1 className={`font-bold tracking-tight text-white transition-all ${isCompact ? 'text-lg' : 'text-xl'}`}>{t('dialer_keypad')}</h1>
         </div>
       </div>
+
+      {/* Default Dialer Prompt Banner - Only shows when app is not default phone handler */}
+      {!isDefaultDialer && onRequestDefaultDialer && (
+        <div className={`flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-500/10 transition-all ${isCompact ? 'mb-1.5 px-2.5 py-1.5' : 'mb-2 px-3 py-2'}`}>
+          <div className="flex items-center gap-2 min-w-0 pr-2">
+            <span className="flex h-2 w-2 shrink-0 rounded-full bg-amber-400 animate-pulse" />
+            <p className="text-[11px] leading-tight text-slate-300 truncate">
+              Calls route to system phone until set as default.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onRequestDefaultDialer}
+            className="shrink-0 rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white shadow hover:bg-emerald-500 active:scale-95 transition-all"
+          >
+            {t('set_as_phone_app')}
+          </button>
+        </div>
+      )}
 
       {/* Fixed-Height T9 Matches Strip - Never shifts the keypad layout below */}
       <div className={`flex items-center overflow-x-auto no-scrollbar transition-all ${isCompact ? 'mb-1.5 h-7.5 gap-1' : 'mb-2 h-9 gap-1.5'}`}>
