@@ -36,6 +36,13 @@ android {
     }
 
     signingConfigs {
+        create("debug") {
+            // FIX: Explicit debug config allows debug APKs to be debuggable and use correct keystore
+            storeFile = file(System.getProperty("user.home") + "/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         create("ciRelease") {
             if (releaseKeystoreFile != null && releaseStorePassword != null && releaseKeyAlias != null && releaseKeyPassword != null) {
                 storeFile = releaseKeystoreFile
@@ -48,7 +55,10 @@ android {
 
     buildTypes {
         debug {
-            isDebuggable = true
+            // Debug builds use the standard Android debug signing key.
+            signingConfig = signingConfigs.getByName("debug")
+            debuggable = true
+            // FIX: applicationIdSuffix allows debug and release APKs to coexist
             applicationIdSuffix = ".debug"
         }
         release {
