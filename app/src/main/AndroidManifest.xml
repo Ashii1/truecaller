@@ -20,7 +20,7 @@
         android:usesCleartextTraffic="false"
         android:supportsRtl="true"
         android:theme="@style/Theme.CallShield">
-        <service android:name=".NativeInCallService" android:permission="android.permission.BIND_INCALL_SERVICE" android:exported="true">
+        <service android:name=".VigilShieldInCallService" android:permission="android.permission.BIND_INCALL_SERVICE" android:exported="true">
             <meta-data android:name="android.telecom.IN_CALL_SERVICE_UI" android:value="true" />
             <meta-data android:name="android.telecom.IN_CALL_SERVICE_RINGING" android:value="true" />
             <intent-filter><action android:name="android.telecom.InCallService" /></intent-filter>
@@ -30,24 +30,14 @@
         </service>
         <receiver android:name=".CallActionReceiver" android:exported="false" />
 
-        <!-- Home Screen Speed Dial Widget -->
         <receiver android:name=".SpeedDialWidgetProvider" android:exported="true">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/speed_dial_widget_info" />
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/speed_dial_widget_info" />
         </receiver>
 
-        <!-- Home Screen Protection Status Widget -->
         <receiver android:name=".SecurityWidgetProvider" android:exported="true">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/security_widget_info" />
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/security_widget_info" />
         </receiver>
 
         <activity android:name=".IncomingCallActivity"
