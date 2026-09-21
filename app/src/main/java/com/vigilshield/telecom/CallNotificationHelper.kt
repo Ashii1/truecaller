@@ -99,13 +99,14 @@ object CallNotificationHelper {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
     }
 
-    private fun ongoingCallActivityIntent(context: Context, callId: String, name: String, number: String): Intent = Intent(context, MainActivity::class.java).apply {
-        action = "com.vigilshield.telecom.OPEN_OUTGOING_CALL"
+    private fun ongoingCallActivityIntent(context: Context, callId: String, name: String, number: String, isIncoming: Boolean = false): Intent = Intent(context, MainActivity::class.java).apply {
+        // FIX: Use correct action based on call direction to prevent redirect to phone app
+        action = if(isIncoming) "com.vigilshield.telecom.OPEN_INCOMING_CALL" else "com.vigilshield.telecom.OPEN_OUTGOING_CALL"
         putExtra("open_call_id", callId)
         putExtra("open_call_number", number)
         putExtra("open_call_name", name)
-        putExtra("is_incoming_call", false)
-        putExtra("open_tab", "dialer")
+        putExtra("is_incoming_call", isIncoming)
+        putExtra("open_tab", if(isIncoming) "incoming" else "dialer")
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
     }
 
@@ -165,7 +166,7 @@ object CallNotificationHelper {
         manager.notify(callId.hashCode(), notif)
     }
 
-    fun showOngoingCall(context: Context, callId: String, name: String, number: String, state: String, connectTimeMillis: Long, riskLevel: String? = null) {
+    fun showOngoingCall(context: Context, callId: String, name: String, number: String, state: String, connectTimeMillis: Long, riskLevel: String? = null, isIncoming: Boolean = false) {
         // Ongoing call status is a core phone-function notification, not an optional
         // security alert. Keep it visible even when security-call alerts are disabled.
         ensureChannel(context)
@@ -175,7 +176,8 @@ object CallNotificationHelper {
         activeNotificationIds.add(callId.hashCode())
         val display = identity(context, name, number)
         val numberDetail = if (privacyMode(context)) "" else number.takeIf { it.isNotBlank() } ?: ""
-        val openIntent = PendingIntent.getActivity(context, callId.hashCode(), callActivityIntent(context, callId, name, number), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        // FIX: Use ongoingCallActivityIntent with isIncoming flag to prevent redirect to phone app
+        val openIntent = PendingIntent.getActivity(context, callId.hashCode(), ongoingCallActivityIntent(context, callId, name, number, isIncoming), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val end = PendingIntent.getBroadcast(context, callId.hashCode() + 3, Intent(context, CallActionReceiver::class.java).setAction(CallActionReceiver.ACTION_END).putExtra(CallActionReceiver.EXTRA_CALL_ID, callId).putExtra(CallActionReceiver.EXTRA_CALL_NUMBER, number), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val status = when (state) { "ACTIVE" -> "Ongoing call"; "HOLDING" -> "Call on hold"; "DIALING" -> "Calling…"; "CONNECTING" -> "Connecting…"; else -> "Call in progress" }
         val riskText = when (riskLevel) { "HIGH_RISK" -> " · High risk"; "SUSPICIOUS" -> " · Suspicious"; else -> "" }
@@ -185,7 +187,7 @@ object CallNotificationHelper {
             append(riskText).append(" · ").append(status).append(" · Tap to return to call")
         }
         val person = Person.Builder().setName(display).setImportant(true).build()
-        val builder = applyPrivacy(NotificationCompat.Builder(context, CHANNEL_ID).setSmallIcon(com.vigilshield.telecom.R.drawable.ic_callshield).setContentTitle(display).setContentText(detail).setSubText(status).setCategory(NotificationCompat.CATEGORY_CALL).setPriority(NotificationCompat.PRIORITY_HIGH).setOngoing(true).setOnlyAlertOnce(true).setContentIntent(openIntent).setWhen(if (connectTimeMillis > 0L) connectTimeMillis else System.currentTimeMillis()).setUsesChronometer(state == "ACTIVE" || state == "HOLDING").setStyle(NotificationCompat.BigTextStyle().bigText(detail + if (state == "ACTIVE" || state == "HOLDING") "\nCall controls are available when you return to CallShield." else "")).addAction(0, "End call", end), context)
+        val builder = applyPrivacy(NotificationCompat.Builder(context, CHANNEL_ID).setSmallIcon(com.vigilshield.telecom.R.drawable.ic_callshield).setContentTitle(display).setContentText(detail).setSubText(status).setCategory(NotificationCompat.CATEGORY_CALL).setPriority(NotificationCompat.PRIORITY_HIGH).setOngoing(true).setOnlyAlertOnce(true).setContentIntent(openIntent).setWhen(if (connectTimeMillis > 0L) connectTimeMillis else System.currentTimeMillis()).setUsesChronometer(state == "ACTIVE" || state == "HOLDING").setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE).setStyle(NotificationCompat.BigTextStyle().bigText(detail + if (state == "ACTIVE" || state == "HOLDING") "\nCall controls are available when you return to CallShield." else "")).addAction(0, "End call", end), context)
         if (Build.VERSION.SDK_INT >= 31) builder.setStyle(NotificationCompat.CallStyle.forOngoingCall(person, end))
         val ongoingNotification = builder.build()
         manager.notify(ONGOING_CALL_ID, ongoingNotification)
