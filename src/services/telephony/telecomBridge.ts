@@ -22,7 +22,8 @@ declare global {
       clearStaleCallNotifications?:()=>boolean;
       setSecuritySetting?:(key:string,value:boolean)=>boolean; syncBlockRules?:(json:string)=>boolean; createContact?:(number:string,name?:string)=>boolean;
       silenceRinger?:()=>boolean; isDeviceLocked?:()=>boolean; requestDeviceUnlock?:()=>boolean; onUiReady?:()=>void; syncActiveCalls?:()=>void;
-      pinWidget?:(type:string)=>string; updateWidgetData?:(speedDialJson:string)=>boolean; moveTaskToBack?:()=>boolean;
+      getRingerMode?:()=>string; setHardwareKeyConfig?:(configJson:string)=>boolean;
+      pinWidget?:(type:string)=>string; updateWidgetData?:(speedDialJson:string)=>boolean;
     };
     __onAndroidTelecomEvent?:(eventType:string,payload:any)=>void;
     __onAndroidDialIntent?:(number:string)=>void;
@@ -112,6 +113,8 @@ class TelecomBridgeService {
   public rejectCall(id:string,reason?:string){if(!this.native())return false;const res=window.AndroidTelecomBridge!.rejectCall(id,reason);this.clearStaleCallNotifications();return res;}
   public disconnectCall(id:string,number?:string){if(!this.native())return false;const res=window.AndroidTelecomBridge!.disconnectCall(id,number);this.clearStaleCallNotifications();return res;}
   public silenceRinger(){if(!this.native()||!window.AndroidTelecomBridge?.silenceRinger)return false;try{return window.AndroidTelecomBridge.silenceRinger();}catch{return false;}}
+  public getRingerMode():'NORMAL'|'VIBRATE'|'SILENT'{if(!this.native()||!window.AndroidTelecomBridge?.getRingerMode)return'NORMAL';try{const m=window.AndroidTelecomBridge.getRingerMode();return (m==='SILENT'||m==='VIBRATE')?m:'NORMAL';}catch{return'NORMAL';}}
+  public syncHardwareConfig(config:{powerButtonEndsCall?:boolean;volumeButtonSilencesRinger?:boolean;volumeButtonAction?:'MUTE_RINGER'|'REJECT_CALL'}):boolean{if(!this.native()||!window.AndroidTelecomBridge?.setHardwareKeyConfig)return false;try{return Boolean(window.AndroidTelecomBridge.setHardwareKeyConfig(JSON.stringify(config)));}catch{return false;}}
   public isDeviceLocked():boolean{if(!this.native()||!window.AndroidTelecomBridge?.isDeviceLocked)return false;try{return Boolean(window.AndroidTelecomBridge.isDeviceLocked());}catch{return false;}}
   public requestDeviceUnlock():boolean{if(!this.native()||!window.AndroidTelecomBridge?.requestDeviceUnlock)return false;try{return Boolean(window.AndroidTelecomBridge.requestDeviceUnlock());}catch{return false;}}
   public notifyUiReady(){if(!this.native()||!window.AndroidTelecomBridge?.onUiReady)return;try{window.AndroidTelecomBridge.onUiReady();}catch{}}
@@ -230,14 +233,6 @@ class TelecomBridgeService {
     if (!this.native() || !window.AndroidTelecomBridge?.updateWidgetData) return false;
     try {
       return Boolean(window.AndroidTelecomBridge.updateWidgetData(JSON.stringify(contacts)));
-    } catch {
-      return false;
-    }
-  }
-  public moveTaskToBack(): boolean {
-    if (!this.native() || !window.AndroidTelecomBridge?.moveTaskToBack) return false;
-    try {
-      return Boolean(window.AndroidTelecomBridge.moveTaskToBack());
     } catch {
       return false;
     }

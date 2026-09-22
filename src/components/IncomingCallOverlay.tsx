@@ -1,94 +1,126 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback, type MouseEvent } from 'react';
 import {
   AlertTriangle,
   Bot,
   ChevronDown,
   ChevronUp,
-  Lock,
-  Maximize2,
-  MessageSquare,
   Phone,
   PhoneOff,
+  Power,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
-  Volume2,
   VolumeX,
-  X,
 } from 'lucide-react';
-import { IncomingCallState, ScreeningTranscriptEntry } from '../types';
+import { IncomingCallState, ScreeningTranscriptEntry, ShieldSettings } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import { useI18n } from '../i18n/LanguageContext';
 import { telecomBridge } from '../services/telephony/telecomBridge';
+import { startIncomingCallAlerts, IncomingCallAlertController } from '../utils/audioAlerts';
 import CallScreeningOverlay from './CallScreeningOverlay';
 
 interface IncomingCallOverlayProps {
   call: IncomingCallState | null;
+  isDeviceLocked?: boolean;
   autoCancelEnabled: boolean;
-  onCancelCall: (
-    reason: string,
-    block: boolean,
-    screeningData?: { transcript: ScreeningTranscriptEntry[]; intent: string | null }
-  ) => void;
-  onAnswerCall: (
-    screeningData?: { transcript: ScreeningTranscriptEntry[]; intent: string | null }
-  ) => void;
+  settings?: ShieldSettings;
+  onCancelCall: (reason: string, block: boolean, screeningData?: { transcript: ScreeningTranscriptEntry[]; intent: string | null }) => void;
+  onAnswerCall: (screeningData?: { transcript: ScreeningTranscriptEntry[]; intent: string | null }) => void;
   onDismiss: () => void;
   onScreenCall?: (call: IncomingCallState) => void;
-  isDeviceLocked?: boolean;
-  isUserActive?: boolean;
+  initialMode?: 'popup' | 'fullscreen';
 }
 
 export default function IncomingCallOverlay({
   call,
+  isDeviceLocked = false,
   autoCancelEnabled,
+  settings,
   onCancelCall,
   onAnswerCall,
   onDismiss,
   onScreenCall,
-  isDeviceLocked = false,
-  isUserActive = true,
+  initialMode,
 }: IncomingCallOverlayProps) {
   const { t } = useI18n();
-  const [isManuallyExpanded, setIsManuallyExpanded] = useState(false);
-  const [showQuickSms, setShowQuickSms] = useState(false);
-  const [detailsExpanded, setDetailsExpanded] = useState(false);
+
+  // On lockscreen, strictly enforce fullscreen mode.
+  // In app (unlocked), default to the redesigned in-app popup banner.
+  const [displayMode, setDisplayMode] = useState<'popup' | 'fullscreen'>(() => {
+    if (isDeviceLocked) return 'fullscreen';
+    return call?.viewMode || initialMode || 'popup';
+  });
+
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [expandedDetails, setExpandedDetails] = useState(false);
   const [silenced, setSilenced] = useState(false);
   const [isScreeningInternal, setIsScreeningInternal] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const alertControllerRef = useRef<IncomingCallAlertController | null>(null);
 
-  const critical = !!call?.isSpam && (call.riskScore >= 75 || call.spamCategory === 'SCAM');
-  const suspicious =
-    (!!call?.isSpam && !critical) || !!call?.isNeighborSpoof || !!call?.isPingBackScam;
+  // Sync mode if lockscreen state changes or if call forces a viewMode
+  useEffect(() => {
+    if (isDeviceLocked) {
+      setDisplayMode('fullscreen');
+    } else if (call?.viewMode) {
+      setDisplayMode(call.viewMode);
+    }
+  }, [isDeviceLocked, call?.viewMode]);
+
+  const critical = Boolean(call?.isSpam && (call.riskScore >= 75 || call.spamCategory === 'SCAM'));
+  const suspicious = Boolean((call?.isSpam && !critical) || call?.isNeighborSpoof || call?.isPingBackScam);
+
+  const handleSilence = useCallback(() => {
+    setSilenced(true);
+    if (alertControllerRef.current) {
+      alertControllerRef.current.silence();
+    }
+    telecomBridge.silenceRinger();
+  }, []);
+
+  // System ringtone and vibration lifecycle
+  useEffect(() => {
+    if (!call || call.status !== 'RINGING' || silenced) {
+      if (alertControllerRef.current) {
+        alertControllerRef.current.silence();
+        alertControllerRef.current = null;
+      }
+      return;
+    }
+
+    const nativeMode = telecomBridge.getRingerMode();
+    const effectiveMode = nativeMode || settings?.ringerMode || 'NORMAL';
+
+    alertControllerRef.current = startIncomingCallAlerts({
+      ringerMode: effectiveMode,
+      playRingtone: settings?.playRingtone !== false,
+    });
+
+    return () => {
+      if (alertControllerRef.current) {
+        alertControllerRef.current.stop();
+        alertControllerRef.current = null;
+      }
+    };
+  }, [call?.status, silenced, settings?.ringerMode, settings?.playRingtone]);
 
   useEffect(() => {
     let wakeLockSentinel: any = null;
-    if (
-      typeof navigator !== 'undefined' &&
-      'wakeLock' in navigator &&
-      (navigator as any).wakeLock?.request
-    ) {
-      (navigator as any).wakeLock
-        .request('screen')
-        .then((lock: any) => {
-          wakeLockSentinel = lock;
-        })
-        .catch(() => {});
+    if (typeof navigator !== 'undefined' && 'wakeLock' in navigator && (navigator as any).wakeLock?.request) {
+      (navigator as any).wakeLock.request('screen').then((lock: any) => {
+        wakeLockSentinel = lock;
+      }).catch(() => {});
     }
-
-    const handleSilence = () => {
-      setSilenced(true);
-      telecomBridge.silenceRinger();
-    };
 
     window.addEventListener('SILENCE_RINGER', handleSilence);
     const unsubBridge = telecomBridge.subscribe((eventType) => {
       if (eventType === 'SILENCE_RINGER') {
-        setSilenced(true);
+        handleSilence();
       }
     });
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // 1. Volume button silences ringer
       const isVol =
         e.key === 'AudioVolumeDown' ||
         e.key === 'AudioVolumeUp' ||
@@ -97,47 +129,81 @@ export default function IncomingCallOverlay({
         e.key === 'VolumeUp' ||
         e.keyCode === 174 ||
         e.keyCode === 175 ||
-        e.keyCode === 173;
+        e.keyCode === 173 ||
+        e.key === 'v' ||
+        e.key === 'V' ||
+        e.key === 's' ||
+        e.key === 'S' ||
+        e.key === 'Escape';
+
+      // 1. Volume button behavior: Mute Ringer vs Reject Call
       if (isVol) {
+        e.preventDefault();
+        const action = settings?.volumeButtonAction || (settings?.volumeButtonSilencesRinger === false ? 'REJECT_CALL' : 'MUTE_RINGER');
+        if (action === 'REJECT_CALL') {
+          handleSilence();
+          onCancelCall('Declined via volume button', false);
+        } else {
+          handleSilence();
+        }
+        return;
+      }
+
+      // 2. Power button ends/rejects call (when configured in settings)
+      const isPowerKey =
+        e.key === 'Power' ||
+        e.code === 'Power' ||
+        e.key === 'EndCall' ||
+        e.code === 'EndCall' ||
+        (e.altKey && (e.key === 'p' || e.key === 'P' || e.key === 'End'));
+
+      if (isPowerKey && settings?.powerButtonEndsCall) {
+        e.preventDefault();
         handleSilence();
+        onCancelCall('Declined via power button', false);
+        return;
       }
     };
     window.addEventListener('keydown', handleKeyDown);
 
+    // 3. Flip to silence (gyroscope/orientation trigger)
+    const handleOrientation = (e: DeviceOrientationEvent) => {
+      if (settings?.flipToSilence === false) return;
+      if (e.beta !== null && (e.beta > 150 || e.beta < -150 || Math.abs(e.beta) > 165)) {
+        handleSilence();
+      }
+    };
+    if (typeof window !== 'undefined' && 'DeviceOrientationEvent' in window) {
+      window.addEventListener('deviceorientation', handleOrientation);
+    }
+
     return () => {
       window.removeEventListener('SILENCE_RINGER', handleSilence);
       window.removeEventListener('keydown', handleKeyDown);
+      if (typeof window !== 'undefined' && 'DeviceOrientationEvent' in window) {
+        window.removeEventListener('deviceorientation', handleOrientation);
+      }
       unsubBridge();
       if (wakeLockSentinel) {
-        try {
-          wakeLockSentinel.release();
-        } catch {}
+        try { wakeLockSentinel.release(); } catch {}
       }
     };
-  }, []);
+  }, [handleSilence, onCancelCall, settings?.flipToSilence, settings?.powerButtonEndsCall, settings?.volumeButtonSilencesRinger, settings?.volumeButtonAction]);
 
   useEffect(() => {
-    if (
-      !call ||
-      call.status !== 'RINGING' ||
-      !autoCancelEnabled ||
-      !call.isSpam ||
-      call.riskScore < 90
-    ) {
+    if (!call || call.status !== 'RINGING' || !autoCancelEnabled || !call.isSpam || call.riskScore < 90) {
       setCountdown(0);
       return;
     }
     setCountdown(3);
-    const timer = window.setInterval(() => {
-      setCountdown((value) => {
-        if (value <= 1) {
-          window.clearInterval(timer);
-          onCancelCall(call.spamReason || 'High-confidence spam call', true);
-          return 0;
-        }
-        return value - 1;
-      });
-    }, 1000);
+    const timer = window.setInterval(() => setCountdown(value => {
+      if (value <= 1) {
+        window.clearInterval(timer);
+        onCancelCall(call.spamReason || 'High-confidence spam call', true);
+        return 0;
+      }
+      return value - 1;
+    }), 1000);
     return () => window.clearInterval(timer);
   }, [call, autoCancelEnabled, onCancelCall]);
 
@@ -161,10 +227,7 @@ export default function IncomingCallOverlay({
         onBlockSpam={(transcript, intent) => {
           setIsScreeningInternal(false);
           setSilenced(true);
-          onCancelCall('Screening concluded: caller blocked as spam', true, {
-            transcript,
-            intent,
-          });
+          onCancelCall('Screening concluded: caller blocked as spam', true, { transcript, intent });
         }}
       />
     );
@@ -172,17 +235,20 @@ export default function IncomingCallOverlay({
 
   if (call.status !== 'RINGING') return null;
 
-  const answer = () => {
+  const handleAnswer = (e?: MouseEvent) => {
+    e?.stopPropagation();
     setSilenced(true);
     onAnswerCall();
   };
 
-  const decline = () => {
+  const handleDecline = (e?: MouseEvent) => {
+    e?.stopPropagation();
     setSilenced(true);
     onCancelCall('Declined by user', false);
   };
 
-  const screen = () => {
+  const handleScreen = (e?: MouseEvent) => {
+    e?.stopPropagation();
     setSilenced(true);
     setIsScreeningInternal(true);
     if (onScreenCall) {
@@ -190,469 +256,511 @@ export default function IncomingCallOverlay({
     }
   };
 
-  const silence = () => {
-    setSilenced(true);
-    telecomBridge.silenceRinger();
+  const handleSilenceClick = (e?: MouseEvent) => {
+    e?.stopPropagation();
+    handleSilence();
   };
 
-  const handleQuickSmsReject = (messageText: string) => {
-    setSilenced(true);
-    onCancelCall(`Declined with SMS: "${messageText}"`, false);
+  // Clicking on the in-app popup banner directly opens fullscreen caller
+  const handleBannerClick = () => {
+    setDisplayMode('fullscreen');
   };
 
-  // Requirement 2: "while user active then at that time fullnotification not required only in app notification (top of screen)"
-  // Requirement 1: "In lockscreen im not getting fullscreen caller info"
-  // When device is locked, ALWAYS show full-screen caller info.
-  // When device is unlocked and user is active, show the top in-app notification banner unless expanded.
-  const showTopBannerOnly = !isDeviceLocked && isUserActive && !isManuallyExpanded;
+  const callerDisplayName = call.callerName || t('unknown_caller');
+  const formattedNumber = formatPhoneNumber(typeof call.number === 'string' ? call.number : String(call.number ?? ''));
 
-  const callerInitial = (call.callerName || '?').slice(0, 1).toUpperCase();
-  const formattedNumber = formatPhoneNumber(
-    typeof call.number === 'string' ? call.number : String(call.number ?? '')
-  );
-
-  /* -------------------------------------------------------------
-   * 1. IN-APP HEADS-UP NOTIFICATION BANNER (Top of screen)
-   * ------------------------------------------------------------- */
-  if (showTopBannerOnly) {
-    return (
-      <div
-        className="fixed top-2 sm:top-4 left-2 right-2 sm:left-1/2 sm:-translate-x-1/2 max-w-lg z-[99999] pointer-events-auto transition-all animate-in slide-in-from-top-4 duration-200"
-        role="alert"
-        aria-live="assertive"
-      >
-        <div className="rounded-3xl border border-white/20 bg-slate-950/95 backdrop-blur-2xl p-3.5 shadow-2xl shadow-black/90 text-white">
-          {/* Top Row: Caller Identity & Expand Button */}
-          <div
-            className="flex items-center gap-3 cursor-pointer select-none"
-            onClick={() => setIsManuallyExpanded(true)}
-            title="Tap to expand full screen caller UI"
-          >
-            {/* Pulsing Avatar */}
-            <div className="relative shrink-0">
-              <div
-                className={`absolute inset-0 rounded-full animate-ping opacity-30 ${
-                  critical ? 'bg-rose-500' : suspicious ? 'bg-amber-500' : 'bg-emerald-500'
-                }`}
-              />
-              <div
-                className={`relative flex h-12 w-12 items-center justify-center rounded-full text-lg font-black border-2 shadow-lg ${
-                  critical
-                    ? 'bg-rose-950 text-rose-200 border-rose-500'
-                    : suspicious
-                    ? 'bg-amber-950 text-amber-200 border-amber-500'
-                    : 'bg-emerald-950 text-emerald-200 border-emerald-500'
-                }`}
-              >
-                {callerInitial}
+  // =========================================================================
+  // 1. IN-APP POPUP BANNER (Rendered ONLY when NOT on lockscreen & mode === 'popup')
+  // =========================================================================
+  if (!isDeviceLocked && displayMode === 'popup') {
+    if (isCollapsed) {
+      // Sleek collapsed compact pill at the top of the viewport
+      return (
+        <div
+          id="inapp-caller-popup-collapsed"
+          onClick={handleBannerClick}
+          className="fixed top-3 left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[99999] flex items-center justify-between gap-2.5 rounded-full border border-white/15 bg-[#0b101b]/95 px-3.5 py-2 shadow-2xl shadow-black/80 backdrop-blur-xl cursor-pointer select-none transition-all duration-200 animate-in fade-in slide-in-from-top-2 hover:border-white/25 active:scale-[0.99]"
+          title="Click to expand fullscreen caller"
+          role="button"
+          tabIndex={0}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="relative flex shrink-0">
+              <span className={`absolute -inset-0.5 rounded-full animate-ping opacity-30 ${critical ? 'bg-rose-500' : suspicious ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+              <div className={`relative grid h-7 w-7 place-items-center rounded-full text-xs font-black ${
+                critical
+                  ? 'bg-rose-950 text-rose-300 border border-rose-500/50'
+                  : suspicious
+                  ? 'bg-amber-950 text-amber-300 border border-amber-500/50'
+                  : 'bg-emerald-950 text-emerald-300 border border-emerald-500/50'
+              }`}>
+                {callerDisplayName.slice(0, 1).toUpperCase()}
               </div>
             </div>
-
-            {/* Caller Info */}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <h2 className="text-base font-black text-white truncate">
-                  {call.callerName || t('unknown_caller')}
-                </h2>
-                {call.isVerifiedBusiness && (
-                  <ShieldCheck className="h-4 w-4 shrink-0 text-blue-400" />
-                )}
-              </div>
-              <p className="font-mono text-xs text-slate-300 tracking-wide truncate">
-                {formattedNumber}
-              </p>
-              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mt-0.5">
-                <span className="font-medium text-slate-300">
-                  {call.carrier || 'Cellular'}
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 truncate">
+                <span className="text-xs font-bold text-white truncate">{callerDisplayName}</span>
+                <span className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                  critical ? 'bg-rose-500/20 text-rose-400' : suspicious ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'
+                }`}>
+                  {critical ? 'SPAM' : suspicious ? 'CHECK' : 'CALL'}
                 </span>
-                <span>•</span>
-                <span>{call.location || 'India'}</span>
-                {critical && (
-                  <span className="ml-1 rounded px-1.5 py-0.2 bg-rose-500/25 text-rose-300 font-bold border border-rose-500/40">
-                    High Risk
-                  </span>
-                )}
-                {call.isNeighborSpoof && (
-                  <span className="ml-1 rounded px-1.5 py-0.2 bg-amber-500/25 text-amber-300 font-bold border border-amber-500/40">
-                    Spoof
-                  </span>
-                )}
               </div>
             </div>
+          </div>
 
-            {/* Expand Fullscreen Button */}
+          <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={handleDecline}
+              className="grid h-8 w-8 place-items-center rounded-full bg-rose-600 text-white hover:bg-rose-500 active:scale-90 transition shadow-sm"
+              aria-label={t('decline')}
+              title={t('decline')}
+            >
+              <PhoneOff className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={handleAnswer}
+              className="grid h-8 w-8 place-items-center rounded-full bg-emerald-600 text-white hover:bg-emerald-500 active:scale-90 transition shadow-sm"
+              aria-label={t('answer')}
+              title={t('answer')}
+            >
+              <Phone className="h-4 w-4" />
+            </button>
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                setIsManuallyExpanded(true);
+                setIsCollapsed(false);
               }}
-              className="p-2 rounded-2xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition active:scale-95"
-              title="Expand to Fullscreen Caller UI"
+              className="grid h-7 w-7 place-items-center rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition"
+              title="Expand in-app card"
+              aria-label="Expand in-app card"
             >
-              <Maximize2 className="h-4 w-4" />
+              <ChevronDown className="h-4 w-4" />
             </button>
           </div>
+        </div>
+      );
+    }
 
-          {/* Bottom Row: One-Handed High-Contrast Actions */}
-          <div className="mt-3 grid grid-cols-4 gap-2 pt-2 border-t border-white/10">
-            {/* Decline */}
+    // Fully redesigned In-App Incoming Call Card
+    return (
+      <div
+        id="inapp-caller-popup-card"
+        onClick={handleBannerClick}
+        className="fixed top-3 left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[99999] rounded-2xl sm:rounded-3xl border border-white/[0.12] bg-[#0b101b]/95 p-3.5 sm:p-4 text-white shadow-2xl shadow-black/90 backdrop-blur-2xl cursor-pointer select-none transition-all duration-200 animate-in fade-in slide-in-from-top-4 hover:border-white/20 active:scale-[0.99]"
+        title="Tap anywhere to display fullscreen"
+        role="button"
+        tabIndex={0}
+      >
+        {/* Top meta row with trust status, collapse handle & silence ringer */}
+        <div className="flex items-center justify-between gap-2 border-b border-white/[0.07] pb-2.5">
+          <div className="flex items-center gap-1.5 min-w-0">
+            {critical ? (
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+            ) : call.isNeighborSpoof ? (
+              <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+            ) : suspicious ? (
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+            ) : (
+              <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+            )}
+            <span className={`text-[11px] font-bold truncate ${
+              critical
+                ? 'text-rose-400'
+                : call.isNeighborSpoof
+                ? 'text-amber-400'
+                : call.isPingBackScam
+                ? 'text-rose-400'
+                : suspicious
+                ? 'text-amber-400'
+                : call.isVerifiedBusiness
+                ? 'text-emerald-400'
+                : 'text-emerald-400'
+            }`}>
+              {critical
+                ? t('high_risk_caller')
+                : call.isNeighborSpoof
+                ? 'Neighbor Spoof'
+                : call.isPingBackScam
+                ? '1-Ring Ping-Back Scam'
+                : suspicious
+                ? t('potential_spam')
+                : call.isVerifiedBusiness
+                ? t('verified_caller')
+                : `${t('safe_badge')} · Verified`}
+            </span>
+            {countdown > 0 && (
+              <span className="font-mono text-[10px] text-rose-400 bg-rose-500/15 px-1.5 py-0.2 rounded-full">
+                Auto-drop in {countdown}s
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
             <button
               type="button"
-              onClick={decline}
-              className="flex items-center justify-center gap-1 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-950/60 active:scale-95 transition"
-              aria-label="Decline Call"
-            >
-              <PhoneOff className="h-4 w-4" />
-              <span>Decline</span>
-            </button>
-
-            {/* Silence */}
-            <button
-              type="button"
-              onClick={silence}
-              className={`flex items-center justify-center gap-1 py-2.5 rounded-2xl border text-xs font-semibold active:scale-95 transition ${
+              onClick={handleSilenceClick}
+              className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
                 silenced
-                  ? 'bg-slate-800 text-slate-400 border-slate-700'
-                  : 'bg-white/10 hover:bg-white/15 text-slate-200 border-white/15'
+                  ? 'border border-slate-700 bg-slate-800 text-slate-400'
+                  : 'border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
               }`}
-              aria-label={silenced ? 'Silenced' : 'Silence'}
+              title={
+                silenced
+                  ? 'Ringtone silenced'
+                  : settings?.volumeButtonAction === 'REJECT_CALL'
+                  ? 'Mute ringtone (Vol key rejects call)'
+                  : 'Silence ringtone (or press Vol key)'
+              }
+              aria-label={silenced ? 'Ringtone silenced' : 'Silence ringtone'}
             >
-              <VolumeX className="h-4 w-4" />
-              <span>{silenced ? 'Silenced' : 'Silence'}</span>
+              <VolumeX className="h-3 w-3" />
+              <span>{silenced ? 'Silenced' : 'Mute'}</span>
             </button>
-
-            {/* AI Screen */}
             <button
               type="button"
-              onClick={screen}
-              className="flex items-center justify-center gap-1 py-2.5 rounded-2xl bg-indigo-900/90 hover:bg-indigo-800/90 border border-indigo-500/40 text-indigo-200 font-bold text-xs active:scale-95 transition"
-              title="Screen with AI"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsCollapsed(true);
+              }}
+              className="grid h-6 w-6 place-items-center rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition"
+              title="Minimize to top pill"
+              aria-label="Minimize in-app popup"
             >
-              <Bot className="h-4 w-4 text-indigo-300" />
-              <span>Screen</span>
-            </button>
-
-            {/* Answer */}
-            <button
-              type="button"
-              onClick={answer}
-              className="flex items-center justify-center gap-1 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-950/60 active:scale-95 transition"
-              aria-label="Answer Call"
-            >
-              <Phone className="h-4 w-4" />
-              <span>Answer</span>
+              <ChevronUp className="h-3.5 w-3.5" />
             </button>
           </div>
+        </div>
+
+        {/* Main Caller Profile Row */}
+        <div className="flex items-center gap-3 py-3">
+          {/* Avatar with pulsing ring */}
+          <div className="relative shrink-0">
+            <div className={`absolute -inset-1 rounded-full animate-ping opacity-25 ${
+              critical ? 'bg-rose-500' : suspicious ? 'bg-amber-500' : 'bg-emerald-500'
+            }`} />
+            <div className={`relative grid h-12 w-12 place-items-center rounded-full text-lg font-black shadow-lg ${
+              critical
+                ? 'bg-rose-950 text-rose-200 border-2 border-rose-500/50 shadow-rose-950/40'
+                : suspicious
+                ? 'bg-amber-950 text-amber-200 border-2 border-amber-500/50 shadow-amber-950/40'
+                : 'bg-indigo-950 text-indigo-200 border-2 border-indigo-500/50 shadow-indigo-950/40'
+            }`}>
+              {callerDisplayName.slice(0, 1).toUpperCase()}
+            </div>
+          </div>
+
+          {/* Caller Details Info */}
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-extrabold text-white truncate tracking-tight">
+              {callerDisplayName}
+            </h3>
+            <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
+              <span className="font-mono text-xs text-slate-300 font-semibold">{formattedNumber}</span>
+              <span className="text-slate-600 text-[10px]">•</span>
+              <span className="text-[11px] text-slate-400 truncate">{call.carrier || 'Cellular'}</span>
+              {call.location && (
+                <>
+                  <span className="text-slate-600 text-[10px]">•</span>
+                  <span className="text-[11px] text-slate-400 truncate">{call.location}</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Action Controls Row */}
+        <div className="flex items-center justify-between gap-2 pt-1" onClick={e => e.stopPropagation()}>
+          {/* AI Screen Call Pill */}
+          <button
+            type="button"
+            onClick={handleScreen}
+            className="flex items-center gap-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-xs font-bold text-indigo-300 hover:bg-indigo-500/20 active:scale-95 transition"
+            title="Screen call with AI assistant"
+          >
+            <Bot className="h-3.5 w-3.5 text-indigo-400" />
+            <span>Screen</span>
+            <Sparkles className="h-3 w-3 text-indigo-400" />
+          </button>
+
+          {/* Decline & Answer Action Buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleDecline}
+              className="flex items-center gap-1.5 rounded-xl bg-rose-600 px-3.5 py-2 text-xs font-bold text-white shadow-md shadow-rose-950/50 hover:bg-rose-500 active:scale-95 transition"
+              aria-label={t('decline')}
+            >
+              <PhoneOff className="h-3.5 w-3.5" />
+              <span>{t('decline')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleAnswer}
+              className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-emerald-950/50 hover:bg-emerald-500 active:scale-95 transition"
+              aria-label={t('answer')}
+            >
+              <Phone className="h-3.5 w-3.5" />
+              <span>{t('answer')}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Hardware Key Helper Bar in In-App Popup */}
+        <div className="flex items-center justify-between text-[10px] text-slate-400/80 pt-2 mt-2 border-t border-white/[0.06] select-none">
+          <span className="flex items-center gap-1">
+            <span className="rounded bg-slate-800 px-1 py-0.2 font-mono text-[9px] text-slate-300 font-semibold">Vol Key</span>
+            <span>{settings?.volumeButtonAction === 'REJECT_CALL' ? 'Reject Call' : (silenced ? 'Muted' : 'Mute Ringer')}</span>
+          </span>
+          {settings?.powerButtonEndsCall && (
+            <span className="flex items-center gap-1">
+              <span className="rounded bg-slate-800 px-1 py-0.2 font-mono text-[9px] text-slate-300 font-semibold">Power</span>
+              <span>Decline</span>
+            </span>
+          )}
         </div>
       </div>
     );
   }
 
-  /* -------------------------------------------------------------
-   * 2. REDESIGNED FULLSCREEN CALLER INFO (Lockscreen & Full mode)
-   * ------------------------------------------------------------- */
+  // =========================================================================
+  // 2. FULLSCREEN CALLER (Active on Lockscreen OR when tapped from in-app popup)
+  // =========================================================================
   return (
     <div
-      className="fixed inset-0 z-[99999] flex flex-col justify-between w-screen h-screen bg-gradient-to-b from-[#050811] via-[#090e1a] to-[#04060c] text-white p-5 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2.5rem,env(safe-area-inset-bottom))] select-none overflow-y-auto"
+      id="fullscreen-caller-overlay"
+      className="fixed inset-0 z-[99999] flex flex-col justify-between w-screen h-screen bg-gradient-to-b from-[#030712] via-[#0b0f19] to-[#030712] text-white p-5 pt-[max(1.75rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))] select-none overflow-y-auto"
       aria-label={t('incoming_call_title')}
     >
-      {/* Top Bar: Security Badge, Lock Status & Quick Collapse */}
-      <div className="flex items-center justify-between w-full max-w-lg mx-auto border-b border-white/10 pb-3">
-        <div className="flex items-center gap-2">
-          {isDeviceLocked ? (
-            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900/90 border border-slate-700 text-slate-300 text-[11px] font-semibold">
-              <Lock className="h-3 w-3 text-amber-400" />
-              <span>Lockscreen Call Guard</span>
-            </span>
+      {/* Top Bar Status */}
+      <div className="flex items-center justify-between w-full max-w-lg mx-auto border-b border-slate-800/80 pb-3.5">
+        <div className="flex items-center gap-2 text-xs font-semibold">
+          {critical ? (
+            <AlertTriangle className="h-4 w-4 text-red-400" />
+          ) : call.isNeighborSpoof ? (
+            <ShieldAlert className="h-4 w-4 text-amber-400" />
+          ) : suspicious ? (
+            <AlertTriangle className="h-4 w-4 text-amber-400" />
           ) : (
+            <ShieldCheck className="h-4 w-4 text-emerald-400" />
+          )}
+          <span className={critical ? 'text-red-300' : call.isNeighborSpoof ? 'text-amber-300' : suspicious ? 'text-amber-300' : 'text-emerald-300'}>
+            {critical
+              ? t('high_risk_caller')
+              : call.isNeighborSpoof
+              ? 'Neighbor Spoof Detected'
+              : call.isPingBackScam
+              ? '1-Ring Ping-Back Scam'
+              : suspicious
+              ? t('potential_spam')
+              : call.isVerifiedBusiness
+              ? t('verified_caller')
+              : `${t('safe_badge')} · ${t('public_directory_verified')}`}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Allow minimizing back to in-app popup ONLY when NOT on lockscreen */}
+          {!isDeviceLocked && (
             <button
               type="button"
-              onClick={() => setIsManuallyExpanded(false)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/15 text-slate-300 text-[11px] font-semibold transition active:scale-95"
-              title="Collapse to in-app banner"
+              onClick={() => setDisplayMode('popup')}
+              className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              title="Minimize to in-app banner"
+              aria-label="Minimize to in-app banner"
             >
-              <ChevronUp className="h-3.5 w-3.5" />
-              <span>In-App Banner</span>
+              <ChevronDown className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Banner</span>
             </button>
           )}
 
-          <div className="flex items-center gap-1 text-[11px] font-bold">
-            {critical ? (
-              <span className="text-rose-400 flex items-center gap-1">
-                <AlertTriangle className="h-3.5 w-3.5" /> High Risk Spam
-              </span>
-            ) : call.isNeighborSpoof ? (
-              <span className="text-amber-400 flex items-center gap-1">
-                <ShieldAlert className="h-3.5 w-3.5" /> Spoofed Prefix
-              </span>
-            ) : call.isPingBackScam ? (
-              <span className="text-rose-400 flex items-center gap-1">
-                <AlertTriangle className="h-3.5 w-3.5" /> 1-Ring Trap
-              </span>
-            ) : suspicious ? (
-              <span className="text-amber-300 flex items-center gap-1">
-                <AlertTriangle className="h-3.5 w-3.5" /> Potential Spam
-              </span>
-            ) : (
-              <span className="text-emerald-400 flex items-center gap-1">
-                <ShieldCheck className="h-3.5 w-3.5" /> Verified Call
-              </span>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={handleSilenceClick}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+              silenced
+                ? 'bg-slate-800/80 text-slate-400 border border-slate-700/60'
+                : 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+            }`}
+            aria-label={silenced ? 'Ringtone Silenced' : 'Silence Ringtone'}
+          >
+            <VolumeX className="h-3.5 w-3.5" />
+            <span>{silenced ? 'Silenced' : 'Silence'}</span>
+          </button>
         </div>
-
-        <button
-          type="button"
-          onClick={silence}
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition ${
-            silenced
-              ? 'bg-slate-800 text-slate-400 border border-slate-700'
-              : 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
-          }`}
-          aria-label={silenced ? 'Ringtone Silenced' : 'Silence Ringtone'}
-        >
-          <VolumeX className="h-3.5 w-3.5" />
-          <span>{silenced ? 'Silenced' : 'Silence'}</span>
-        </button>
       </div>
 
-      {/* Middle Stage: Caller Avatar, Name, Number, Badges & Alerts */}
-      <div className="flex flex-col items-center justify-center text-center my-auto px-4 max-w-md mx-auto w-full py-4">
-        {/* Radar Ringing Animation with Large Avatar */}
+      {settings?.flashAlertOnIncomingCall && !silenced && (
+        <div className="pointer-events-none fixed inset-0 z-[100000] border-4 border-amber-400/40 animate-pulse" />
+      )}
+
+      {/* Main Caller Profile Info */}
+      <div className="flex flex-col items-center justify-center text-center my-auto px-4 max-w-md mx-auto w-full">
+        {/* Pulsing Avatar */}
         <div className="relative mb-6">
-          <div
-            className={`absolute -inset-4 rounded-full animate-ping opacity-25 ${
-              critical ? 'bg-rose-500' : suspicious ? 'bg-amber-500' : 'bg-emerald-500'
-            }`}
-          />
-          <div
-            className={`absolute -inset-8 rounded-full animate-pulse opacity-15 ${
-              critical ? 'bg-rose-600' : suspicious ? 'bg-amber-600' : 'bg-emerald-600'
-            }`}
-          />
-          <div
-            className={`relative flex h-32 w-32 items-center justify-center rounded-full text-5xl font-black shadow-2xl border-4 ${
-              critical
-                ? 'bg-gradient-to-b from-rose-950 to-slate-950 text-rose-200 border-rose-500/60 shadow-rose-950/60'
-                : suspicious
-                ? 'bg-gradient-to-b from-amber-950 to-slate-950 text-amber-200 border-amber-500/60 shadow-amber-950/60'
-                : 'bg-gradient-to-b from-emerald-950 to-slate-950 text-emerald-200 border-emerald-500/60 shadow-emerald-950/60'
-            }`}
-          >
-            {callerInitial}
-            {call.isVerifiedBusiness && (
-              <div
-                className="absolute -bottom-1 -right-1 rounded-full bg-blue-600 p-2 border-2 border-[#04060c] shadow-lg"
-                title="Verified Enterprise Caller"
-              >
-                <ShieldCheck className="h-5 w-5 text-white" />
-              </div>
+          <div className={`absolute inset-0 rounded-full animate-ping opacity-25 ${critical ? 'bg-red-500' : suspicious ? 'bg-amber-500' : 'bg-indigo-500'}`} />
+          <div className={`relative grid h-28 w-28 place-items-center rounded-full text-4xl font-bold shadow-2xl border-2 ${
+            critical
+              ? 'bg-red-950/60 text-red-200 border-red-500/50 shadow-red-950/50'
+              : suspicious
+              ? 'bg-amber-950/60 text-amber-200 border-amber-500/50 shadow-amber-950/50'
+              : 'bg-indigo-950/60 text-indigo-200 border-indigo-500/50 shadow-indigo-950/50'
+          }`}>
+            {callerDisplayName.slice(0, 1).toUpperCase()}
+          </div>
+        </div>
+
+        <h2 className="truncate max-w-full text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+          {callerDisplayName}
+        </h2>
+        <p className="mt-2 font-mono text-lg text-slate-300 tracking-wider">
+          {formattedNumber}
+        </p>
+
+        <div className="mt-2 flex items-center justify-center gap-2 text-xs text-slate-400 font-medium">
+          <span className="rounded-md bg-slate-800/80 px-2 py-0.5 text-slate-300">{call.carrier || 'Cellular'}</span>
+          <span>•</span>
+          <span>{call.location || 'India'}</span>
+        </div>
+
+        {settings?.volumeButtonAction === 'REJECT_CALL' ? (
+          <div className="mt-3 flex items-center justify-center gap-2.5 text-[11px] text-slate-400">
+            <span className="flex items-center gap-1">
+              <span className="rounded bg-rose-950/80 border border-rose-800/60 px-1.5 py-0.5 font-mono text-[10px] text-rose-300 font-bold">Vol Key</span>
+              <span className="text-rose-300 font-medium">Reject Call</span>
+            </span>
+            {settings?.powerButtonEndsCall && (
+              <span className="flex items-center gap-1">
+                <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-300">Power</span>
+                <span>End</span>
+              </span>
             )}
           </div>
-        </div>
-
-        {/* Caller Name & Formatted Phone Number */}
-        <div className="space-y-1 max-w-full">
-          <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight leading-tight truncate px-2">
-            {call.callerName || t('unknown_caller')}
-          </h1>
-          <p className="font-mono text-xl text-slate-200 tracking-wider">
-            {formattedNumber}
-          </p>
-          <div className="flex items-center justify-center gap-2 text-xs text-slate-400 font-medium pt-1">
-            <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-slate-200">
-              {call.carrier || 'Cellular'}
-            </span>
-            <span>•</span>
-            <span>{call.location || 'India'}</span>
-            <span>•</span>
-            <span className="text-emerald-400 font-semibold">Incoming Voice</span>
-          </div>
-        </div>
-
-        {/* Silenced Status Pill */}
-        {silenced && (
-          <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-900/90 px-3.5 py-1 text-xs text-slate-300 animate-in fade-in">
+        ) : silenced ? (
+          <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-900/90 px-3.5 py-1 text-xs text-slate-300 animate-in fade-in">
             <VolumeX className="h-3.5 w-3.5 text-amber-400" />
             <span>Ringtone silenced (Volume key or button)</span>
           </div>
+        ) : (
+          <div className="mt-3 flex items-center justify-center gap-2.5 text-[11px] text-slate-400">
+            <span className="flex items-center gap-1">
+              <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-300">Vol Key</span>
+              <span>Silence</span>
+            </span>
+            {settings?.powerButtonEndsCall && (
+              <span className="flex items-center gap-1">
+                <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-300">Power</span>
+                <span>End</span>
+              </span>
+            )}
+          </div>
         )}
 
-        {/* High Risk / Spoofing Context Banners */}
+        {/* Neighbor Spoof High-Visibility Banner */}
         {call.isNeighborSpoof && (
-          <div className="mt-4 w-full rounded-2xl border border-amber-500/40 bg-amber-500/15 p-3 text-left text-xs text-amber-200">
+          <div className="mt-4 w-full rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5 text-left text-xs text-amber-200 shadow-sm">
             <div className="flex items-center gap-1.5 font-bold text-amber-300">
               <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
-              <span>Neighbor Spoof Warning</span>
+              <span>Likely Spoofed (Neighbor Spoofing)</span>
             </div>
             <p className="mt-1 text-[11px] leading-relaxed text-amber-200/90">
-              This number mimics your local area code to manipulate you into answering.
+              This caller matches your local prefix but is not in your contacts. Scammers often fake local numbers to trick you into answering.
             </p>
           </div>
         )}
 
+        {/* 1-Ring Ping-Back Scam Banner */}
         {call.isPingBackScam && (
-          <div className="mt-4 w-full rounded-2xl border border-rose-500/40 bg-rose-500/15 p-3 text-left text-xs text-rose-200">
+          <div className="mt-4 w-full rounded-2xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-left text-xs text-rose-200 shadow-sm">
             <div className="flex items-center gap-1.5 font-bold text-rose-300">
               <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
               <span>1-Ring Callback Scam Trap</span>
             </div>
             <p className="mt-1 text-[11px] leading-relaxed text-rose-200/90">
-              Dialers drop after 1 ring to trick you into calling back expensive premium numbers.
+              Automated dialers drop after 1 ring to trick you into calling back expensive premium numbers.
             </p>
           </div>
         )}
 
         {(critical || (suspicious && !call.isNeighborSpoof && !call.isPingBackScam)) && (
-          <div
-            className={`mt-4 w-full rounded-2xl p-3 text-left text-xs ${
-              critical
-                ? 'bg-rose-500/20 border border-rose-500/40 text-rose-200'
-                : 'bg-amber-500/20 border border-amber-500/40 text-amber-200'
-            }`}
-          >
-            <div className="font-bold flex items-center gap-1">
-              <AlertTriangle className="h-3.5 w-3.5" />
-              <span>
-                {critical
-                  ? 'High Risk Spam Caller — Do Not Share Credentials'
-                  : 'Suspicious Caller — Exercise Caution'}
-              </span>
-            </div>
-            {countdown > 0 && (
-              <div className="mt-1 font-mono text-[11px] text-amber-300 font-bold">
-                {t('auto_cancelling_in')} {countdown}s...
-              </div>
-            )}
+          <div className={`mt-4 w-full rounded-2xl px-3.5 py-2.5 text-left text-xs ${critical ? 'bg-red-500/15 border border-red-500/30 text-red-200' : 'bg-amber-500/15 border border-amber-500/30 text-amber-200'}`}>
+            <div className="font-semibold">{critical ? 'Do not share OTPs, PINs, or banking details.' : 'Review caller information before answering.'}</div>
+            {countdown > 0 && <div className="mt-1 font-mono text-[11px] opacity-90">{t('auto_cancelling_in')} {countdown}{t('seconds_short')}.</div>}
           </div>
         )}
 
-        {/* Collapsible Technical Details */}
-        {detailsExpanded && (
-          <div className="mt-3 w-full space-y-1.5 rounded-2xl border border-white/10 bg-black/60 p-3 text-left text-xs text-slate-300 animate-in fade-in">
-            <div className="flex justify-between">
-              <span className="text-slate-400">Carrier:</span>
-              <span className="font-medium">{call.carrier || 'Cellular'}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Location:</span>
-              <span className="font-medium">{call.location || 'Unavailable'}</span>
-            </div>
-            {call.reportsCount > 0 && (
-              <div className="flex justify-between">
-                <span className="text-slate-400">Spam Reports:</span>
-                <span className="font-bold text-rose-400">{call.reportsCount}</span>
-              </div>
-            )}
-            <div className="flex justify-between">
-              <span className="text-slate-400">Reputation Risk:</span>
-              <span className="font-bold">{call.riskScore}/100</span>
-            </div>
+        {expandedDetails && (
+          <div className="mt-3 w-full space-y-2 rounded-2xl border border-slate-800 bg-slate-950/80 p-3.5 text-left text-xs text-slate-400">
+            <div className="flex justify-between"><span>{t('carrier_label')}</span><span className="text-slate-200">{call.carrier || 'Cellular'}</span></div>
+            <div className="flex justify-between"><span>{t('location_label')}</span><span className="max-w-[65%] text-right text-slate-200">{call.location || 'Unavailable'}</span></div>
+            {call.reportsCount > 0 && <div className="flex justify-between"><span>{t('spam_reports_count')}</span><span className="text-slate-200">{call.reportsCount.toLocaleString()}</span></div>}
           </div>
         )}
 
         <button
           type="button"
-          onClick={() => setDetailsExpanded((prev) => !prev)}
-          className="mt-2.5 inline-flex items-center gap-1 text-xs font-semibold text-slate-400 hover:text-white"
+          onClick={() => setExpandedDetails(value => !value)}
+          className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-slate-400 hover:text-white"
         >
-          <span>{detailsExpanded ? 'Hide Details' : 'Caller Details & Network'}</span>
-          <ChevronDown
-            className={`h-3.5 w-3.5 transition-transform ${detailsExpanded ? 'rotate-180' : ''}`}
-          />
+          {t('caller_details')} <ChevronDown className={`h-4 w-4 transition-transform ${expandedDetails ? 'rotate-180' : ''}`} />
         </button>
       </div>
 
-      {/* Bottom Action Deck */}
-      <div className="w-full max-w-md mx-auto space-y-3">
-        {/* Quick SMS Reject Options Drawer */}
-        {showQuickSms && (
-          <div className="p-3 rounded-2xl bg-slate-900/95 border border-white/20 shadow-2xl space-y-2 animate-in fade-in slide-in-from-bottom-2">
-            <div className="flex items-center justify-between border-b border-white/10 pb-1.5">
-              <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                <MessageSquare className="h-3.5 w-3.5 text-indigo-400" />
-                Quick Decline with SMS
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowQuickSms(false)}
-                className="p-1 rounded-full text-slate-400 hover:text-white"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <div className="grid grid-cols-1 gap-1.5 pt-1">
-              {[
-                "Can't talk right now. What's up?",
-                "I'll call you right back.",
-                'Please text me instead.',
-                'In a meeting, will call later.',
-              ].map((msg) => (
-                <button
-                  key={msg}
-                  type="button"
-                  onClick={() => handleQuickSmsReject(msg)}
-                  className="text-left px-3 py-2 rounded-xl bg-white/5 hover:bg-white/15 text-xs text-slate-200 active:scale-98 transition"
-                >
-                  "{msg}"
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
+      {/* Bottom Action Controls */}
+      <div className="w-full max-w-md mx-auto space-y-3 pt-2">
         {/* Screen Call with AI Button */}
         <button
           type="button"
-          onClick={screen}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-indigo-500/40 bg-gradient-to-r from-indigo-900/80 via-purple-900/80 to-indigo-900/80 px-4 py-3 text-xs sm:text-sm font-bold text-indigo-100 shadow-xl shadow-indigo-950/50 hover:from-indigo-800 hover:to-purple-800 active:scale-98 transition"
+          onClick={handleScreen}
+          className="flex w-full items-center justify-center gap-2.5 rounded-2xl border border-indigo-500/40 bg-gradient-to-r from-indigo-900/80 via-purple-900/80 to-indigo-900/80 px-4 py-3.5 text-xs sm:text-sm font-bold text-indigo-100 shadow-xl shadow-indigo-950/50 transition hover:from-indigo-800 hover:to-purple-800 active:scale-98"
         >
           <Bot className="h-4 w-4 text-indigo-300" />
           <span>Screen Call with AI Assistant</span>
           <Sparkles className="h-3.5 w-3.5 text-indigo-300" />
         </button>
 
-        {/* Primary Large Tactile Controls: Decline, Quick SMS/Silence, Answer */}
-        <div className="grid grid-cols-3 gap-3 pt-1 place-items-center">
+        {/* Primary Large Call Actions */}
+        <div className="grid grid-cols-3 gap-3 pt-1">
           {/* Decline */}
           <div className="flex flex-col items-center gap-1.5">
             <button
               type="button"
-              onClick={decline}
-              className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-rose-600 text-white hover:bg-rose-500 shadow-2xl shadow-rose-950/80 active:scale-90 transition border-2 border-rose-400/50"
+              onClick={handleDecline}
+              className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-600 font-bold text-white hover:bg-rose-500 shadow-lg shadow-rose-950/60 active:scale-90 transition"
               aria-label={t('decline')}
             >
-              <PhoneOff className="h-8 w-8 stroke-[2.5]" />
+              <PhoneOff className="h-7 w-7" />
             </button>
-            <span className="text-xs font-bold text-slate-300">{t('decline')}</span>
+            <span className="text-xs font-semibold text-slate-300">{t('decline')}</span>
           </div>
 
-          {/* Quick SMS / Silence Toggle */}
+          {/* Quick Silence */}
           <div className="flex flex-col items-center gap-1.5">
             <button
               type="button"
-              onClick={() => setShowQuickSms((prev) => !prev)}
-              className="flex h-[60px] w-[60px] items-center justify-center rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-slate-200 shadow-xl active:scale-90 transition"
-              aria-label="Quick Message Decline"
-              title="Decline with SMS"
+              onClick={handleSilence}
+              className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white shadow-lg active:scale-90 transition"
+              aria-label={silenced ? 'Silenced' : 'Silence'}
             >
-              <MessageSquare className="h-6 w-6 text-slate-300" />
+              <VolumeX className="h-6 w-6" />
             </button>
-            <span className="text-[11px] font-semibold text-slate-400">Quick SMS</span>
+            <span className="text-xs font-semibold text-slate-400">{silenced ? 'Silenced' : 'Silence'}</span>
           </div>
 
           {/* Answer */}
           <div className="flex flex-col items-center gap-1.5">
             <button
               type="button"
-              onClick={answer}
-              className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-emerald-600 text-white hover:bg-emerald-500 shadow-2xl shadow-emerald-950/80 active:scale-90 transition border-2 border-emerald-400/50 ring-4 ring-emerald-500/20"
+              onClick={handleAnswer}
+              className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-600 font-bold text-white hover:bg-emerald-500 shadow-lg shadow-emerald-950/60 active:scale-90 transition"
               aria-label={t('answer')}
             >
-              <Phone className="h-8 w-8 stroke-[2.5]" />
+              <Phone className="h-7 w-7" />
             </button>
-            <span className="text-xs font-bold text-slate-300">{t('answer')}</span>
+            <span className="text-xs font-semibold text-slate-300">{t('answer')}</span>
           </div>
         </div>
       </div>

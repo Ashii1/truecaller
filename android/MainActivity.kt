@@ -7,18 +7,15 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import android.view.ViewGroup
-import android.view.WindowManager
-import android.webkit.RenderProcessGoneDetail
+import android.view.KeyEvent
 import android.webkit.WebChromeClient
-import android.webkit.WebResourceError
-import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import org.json.JSONObject
 
 /**
  * Main Activity hosting the VigilShield Telecom Interface.
@@ -40,12 +37,75 @@ class MainActivity : AppCompatActivity() {
     private lateinit var telecomManager: TelecomCallManager
     private lateinit var callLogRepository: CallLogRepository
     private lateinit var bridge: AndroidTelephonyBridge
+    private var powerButtonEndsCallEnabled: Boolean = false
+    private var volumeButtonSilencesRingerEnabled: Boolean = true
+    private var volumeButtonAction: String = "MUTE_RINGER"
+
+    fun updateHardwareKeyConfig(powerEndsCall: Boolean, volSilences: Boolean, volAction: String = "MUTE_RINGER") {
+        powerButtonEndsCallEnabled = powerEndsCall
+        volumeButtonSilencesRingerEnabled = volSilences
+        volumeButtonAction = volAction
+        Log.i(TAG, "Hardware key config updated: powerEndsCall=$powerEndsCall, volSilences=$volSilences, volAction=$volAction")
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            val keyCode = event.keyCode
+
+            // 1. Hardware volume keys behavior (Mute Ringer vs Reject Call)
+            if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+                val inCall = VigilShieldInCallService.instance
+                val ringingCall = inCall?.activeCalls?.values?.firstOrNull { it.state == android.telecom.Call.STATE_RINGING }
+                if (ringingCall != null) {
+                    if (volumeButtonAction == "REJECT_CALL") {
+                        Log.i(TAG, "Hardware volume key pressed while ringing. Rejecting incoming call.")
+                        inCall.rejectCall(inCall.getCallIdentifier(ringingCall), "Declined via volume button")
+                        val payload = JSONObject().apply { put("source", "volume_key") }
+                        val script = "if (window.__onAndroidTelecomEvent) { window.__onAndroidTelecomEvent('CALL_REJECTED', $payload); }"
+                        webView.evaluateJavascript(script, null)
+                        return true
+                    } else if (volumeButtonSilencesRingerEnabled) {
+                        Log.i(TAG, "Hardware volume key pressed while ringing. Silencing ringer.")
+                        inCall.silenceRinger()
+                        val payload = JSONObject().apply { put("source", "volume_key") }
+                        val script = "if (window.__onAndroidTelecomEvent) { window.__onAndroidTelecomEvent('SILENCE_RINGER', $payload); }"
+                        webView.evaluateJavascript(script, null)
+                        return true
+                    }
+                }
+            }
+
+            // 2. Hardware power button ends calls (if configured in settings)
+            if (powerButtonEndsCallEnabled && (keyCode == KeyEvent.KEYCODE_POWER || keyCode == KeyEvent.KEYCODE_ENDCALL)) {
+                val inCall = VigilShieldInCallService.instance
+                val ringingCall = inCall?.activeCalls?.values?.firstOrNull { it.state == android.telecom.Call.STATE_RINGING }
+                val activeCall = inCall?.activeCalls?.values?.firstOrNull {
+                    it.state == android.telecom.Call.STATE_ACTIVE ||
+                    it.state == android.telecom.Call.STATE_DIALING ||
+                    it.state == android.telecom.Call.STATE_HOLDING
+                }
+                if (ringingCall != null) {
+                    Log.i(TAG, "Hardware power button pressed while ringing. Rejecting incoming call.")
+                    inCall.rejectCall(inCall.getCallIdentifier(ringingCall), "Declined via power button")
+                    val payload = JSONObject().apply { put("source", "power_button") }
+                    val script = "if (window.__onAndroidTelecomEvent) { window.__onAndroidTelecomEvent('CALL_REJECTED', $payload); }"
+                    webView.evaluateJavascript(script, null)
+                    return true
+                } else if (activeCall != null) {
+                    Log.i(TAG, "Hardware power button pressed while call active. Ending call.")
+                    inCall.disconnectCall(inCall.getCallIdentifier(activeCall))
+                    val payload = JSONObject().apply { put("source", "power_button") }
+                    val script = "if (window.__onAndroidTelecomEvent) { window.__onAndroidTelecomEvent('CALL_DISCONNECTED', $payload); }"
+                    webView.evaluateJavascript(script, null)
+                    return true
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Lockscreen and Turn Screen On configuration
-        setupLockscreenVisibility()
 
         telecomManager = TelecomCallManager(this)
         callLogRepository = CallLogRepository(this)
@@ -56,21 +116,6 @@ class MainActivity : AppCompatActivity() {
         setupWebView()
         requestTelephonyPermissions()
         handleIncomingIntent(intent)
-    }
-
-    private fun setupLockscreenVisibility() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true)
-            setTurnScreenOn(true)
-        } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
-                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-            )
-        }
     }
 
     private fun setupWebView() {
@@ -88,25 +133,6 @@ class MainActivity : AppCompatActivity() {
         webView.addJavascriptInterface(bridge, AndroidTelephonyBridge.INTERFACE_NAME)
 
         webView.webViewClient = object : WebViewClient() {
-            override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
-                Log.e(TAG, "WebView render process crashed/gone. Recovering to prevent app shutdown.")
-                try {
-                    (view?.parent as? ViewGroup)?.removeView(view)
-                    view?.destroy()
-                    webView = WebView(this@MainActivity)
-                    setContentView(webView)
-                    setupWebView()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error recovering from render process crash: ${e.message}")
-                }
-                return true
-            }
-
-            override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
-                super.onReceivedError(view, request, error)
-                Log.w(TAG, "WebView resource error on URL: ${request?.url} - Error: ${error?.description}")
-            }
-
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 Log.i(TAG, "WebView page loaded: $url")
@@ -180,28 +206,17 @@ class MainActivity : AppCompatActivity() {
             val contactsGranted = callLogRepository.hasContactsPermission()
             Log.i(TAG, "Permissions result: allGranted=$allGranted callLogGranted=$callLogGranted contactsGranted=$contactsGranted")
 
-            // Notify React of the updated telephony permissions
+            // The React page can already be mounted when the permission dialog closes.
+            // Reload it so its initial native-device sync runs AFTER READ_CALL_LOG/CONTACTS
+            // have actually been granted. This prevents an empty call history from being
+            // cached as if the device had no calls.
             webView.post {
                 webView.evaluateJavascript(
                     "if (window.__onAndroidTelecomEvent) { window.__onAndroidTelecomEvent('PERMISSIONS_CHANGED', {'granted': $allGranted, 'callLogPermission': $callLogGranted, 'contactsPermission': $contactsGranted}); }",
                     null
                 )
-            }
-        }
-    }
-
-    override fun onBackPressed() {
-        // First allow the web application to handle dialogs, sheets, or back stack
-        webView.evaluateJavascript(
-            "(function() { return (typeof window.__onAndroidBackPressed === 'function') ? window.__onAndroidBackPressed() : false; })()"
-        ) { result ->
-            val handled = result == "true"
-            if (!handled) {
-                if (webView.canGoBack()) {
-                    webView.goBack()
-                } else {
-                    // Send to background safely instead of destroying activity
-                    moveTaskToBack(true)
+                if (callLogGranted || contactsGranted) {
+                    webView.reload()
                 }
             }
         }

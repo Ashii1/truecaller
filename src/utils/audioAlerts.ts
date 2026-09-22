@@ -234,3 +234,68 @@ export function triggerHapticFeedback(pattern: number | number[] = 25) {
   }
 }
 
+export function triggerCallConnectedHaptic() {
+  triggerHapticFeedback([40, 50, 40]);
+}
+
+export interface IncomingCallAlertController {
+  stop: () => void;
+  silence: () => void;
+}
+
+export function startIncomingCallAlerts(options: {
+  ringerMode?: 'NORMAL' | 'VIBRATE' | 'SILENT';
+  playRingtone?: boolean;
+}): IncomingCallAlertController {
+  const mode = options.ringerMode || 'NORMAL';
+  const shouldPlayAudio = mode === 'NORMAL' && options.playRingtone !== false;
+  const shouldVibrate = mode === 'NORMAL' || mode === 'VIBRATE';
+
+  let ringController: RingController | null = null;
+  let vibrateInterval: number | null = null;
+  let isSilenced = false;
+
+  // 1. Audio ringtone
+  if (shouldPlayAudio) {
+    ringController = playPhoneRing();
+  }
+
+  // 2. Continuous vibration cadence for incoming calls: vibrate 800ms, pause 400ms, vibrate 800ms, pause 1500ms
+  if (shouldVibrate && typeof navigator !== 'undefined' && 'vibrate' in navigator && navigator.vibrate) {
+    const doVibrate = () => {
+      if (isSilenced) return;
+      try {
+        navigator.vibrate([800, 400, 800]);
+      } catch {
+        // ignore
+      }
+    };
+    doVibrate();
+    vibrateInterval = window.setInterval(doVibrate, 3500);
+  }
+
+  const stopAll = () => {
+    isSilenced = true;
+    if (ringController) {
+      ringController.stop();
+      ringController = null;
+    }
+    if (vibrateInterval) {
+      clearInterval(vibrateInterval);
+      vibrateInterval = null;
+    }
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator && navigator.vibrate) {
+      try {
+        navigator.vibrate(0);
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  return {
+    stop: stopAll,
+    silence: stopAll,
+  };
+}
+

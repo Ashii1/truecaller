@@ -2,9 +2,16 @@ package com.vigilshield.telecom
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.AudioManager
+import android.media.Ringtone
+import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.InCallService
@@ -88,6 +95,9 @@ class VigilShieldInCallService : InCallService() {
     }
 
     private val callCallbacks = ConcurrentHashMap<String, Call.Callback>()
+    private var ringtone: Ringtone? = null
+    private var vibrator: Vibrator? = null
+    private var isRingingActive: Boolean = false
 
     override fun onCreate() {
         super.onCreate()
@@ -97,10 +107,87 @@ class VigilShieldInCallService : InCallService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        silenceRinger()
         activeCalls.clear()
         callCallbacks.clear()
         instance = null
         Log.i(TAG, "CallShield InCallService destroyed.")
+    }
+
+    fun startRingingAlert() {
+        if (isRingingActive) return
+        isRingingActive = true
+
+        try {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            val ringerMode = audioManager?.ringerMode ?: AudioManager.RINGER_MODE_NORMAL
+            Log.i(TAG, "startRingingAlert: System ringerMode = $ringerMode (0=SILENT, 1=VIBRATE, 2=NORMAL)")
+
+            vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                vibratorManager?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            }
+
+            when (ringerMode) {
+                AudioManager.RINGER_MODE_NORMAL -> {
+                    // Play device default ringtone
+                    val ringtoneUri = RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_RINGTONE)
+                    ringtone = RingtoneManager.getRingtone(this, ringtoneUri)
+                    ringtone?.audioAttributes = AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                    ringtone?.play()
+
+                    // Vibrate alongside ringtone
+                    val pattern = longArrayOf(0, 1000, 1000)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        vibrator?.vibrate(pattern, 0)
+                    }
+                }
+                AudioManager.RINGER_MODE_VIBRATE -> {
+                    // SILENT audio, ONLY vibrate
+                    ringtone?.stop()
+                    ringtone = null
+
+                    val pattern = longArrayOf(0, 1000, 1000)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        vibrator?.vibrate(pattern, 0)
+                    }
+                }
+                AudioManager.RINGER_MODE_SILENT -> {
+                    // Silent ringing - no audio, no vibration
+                    ringtone?.stop()
+                    ringtone = null
+                    vibrator?.cancel()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error playing ringtone/vibration: ${e.message}")
+        }
+    }
+
+    fun silenceRinger(): Boolean {
+        Log.i(TAG, "silenceRinger: Silencing ringtone and cancelling vibrator.")
+        isRingingActive = false
+        try {
+            ringtone?.stop()
+            ringtone = null
+            vibrator?.cancel()
+            return true
+        } catch (e: Exception) {
+            Log.w(TAG, "Error silencing ringer: ${e.message}")
+            return false
+        }
     }
 
     override fun onCallAdded(call: Call) {
@@ -109,11 +196,22 @@ class VigilShieldInCallService : InCallService() {
         activeCalls[callId] = call
         Log.i(TAG, "onCallAdded: $callId, state=${stateToString(call.state)}")
 
+        if (call.state == Call.STATE_RINGING) {
+            startRingingAlert()
+        }
+
         val callback = object : Call.Callback() {
             override fun onStateChanged(call: Call, state: Int) {
                 super.onStateChanged(call, state)
                 val stateName = stateToString(state)
                 Log.d(TAG, "Call $callId state changed to: $stateName")
+
+                if (state == Call.STATE_RINGING) {
+                    startRingingAlert()
+                } else {
+                    silenceRinger()
+                }
+
                 val details = extractCallDetails(call, callId)
                 callEventListener?.onCallStateChanged(callId, stateName, details)
                 
@@ -146,6 +244,7 @@ class VigilShieldInCallService : InCallService() {
 
     override fun onCallRemoved(call: Call) {
         super.onCallRemoved(call)
+        silenceRinger()
         val callId = getCallIdentifier(call)
         val callback = callCallbacks.remove(callId)
         if (callback != null) {
@@ -176,6 +275,7 @@ class VigilShieldInCallService : InCallService() {
     // --- REAL CALL ACTIONS VIA ANDROID TELECOM APIS ---
 
     fun answerCall(callId: String): Boolean {
+        silenceRinger()
         val call = activeCalls[callId] ?: return false
         if (call.state == Call.STATE_RINGING) {
             call.answer(VideoProfile.STATE_AUDIO_ONLY)
@@ -186,6 +286,7 @@ class VigilShieldInCallService : InCallService() {
     }
 
     fun rejectCall(callId: String, rejectWithMessage: String? = null): Boolean {
+        silenceRinger()
         val call = activeCalls[callId] ?: return false
         if (call.state == Call.STATE_RINGING) {
             if (rejectWithMessage != null) {
@@ -200,6 +301,7 @@ class VigilShieldInCallService : InCallService() {
     }
 
     fun disconnectCall(callId: String): Boolean {
+        silenceRinger()
         val call = activeCalls[callId] ?: return false
         call.disconnect()
         Log.i(TAG, "Real call disconnected: $callId")

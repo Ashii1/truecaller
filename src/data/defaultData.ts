@@ -31,6 +31,13 @@ export const INITIAL_SETTINGS: ShieldSettings = {
   pingBackShieldEnabled: true,
   userPhoneNumber: '',
   privateCallPrefix: '*67',
+  powerButtonEndsCall: false,
+  volumeButtonSilencesRinger: true,
+  volumeButtonAction: 'MUTE_RINGER',
+  ringerMode: 'NORMAL',
+  vibrateOnCallConnected: true,
+  flipToSilence: true,
+  flashAlertOnIncomingCall: false,
 };
 
 export const INITIAL_PERMISSIONS: PermissionStatus = {

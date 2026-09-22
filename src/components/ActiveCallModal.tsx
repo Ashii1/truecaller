@@ -35,6 +35,7 @@ interface ActiveCallModalProps {
   onEndCall: (recordingItem?: CallRecordingItem | null, callDuration?: number, callerNote?: string) => void;
   lookupProfile: (num: string) => CallShieldDirectoryProfile;
   onAddCall?: (number: string) => void;
+  powerButtonEndsCall?: boolean;
 }
 
 export default function ActiveCallModal({
@@ -42,6 +43,7 @@ export default function ActiveCallModal({
   onEndCall,
   lookupProfile,
   onAddCall,
+  powerButtonEndsCall = false,
 }: ActiveCallModalProps) {
   const { t } = useI18n();
   const [duration, setDuration] = useState(session?.durationSeconds || 0);
@@ -84,34 +86,6 @@ export default function ActiveCallModal({
       if (session.notes) setCallerNote(session.notes);
     }
   }, [session?.number, session?.notes]);
-
-  // Auto-record all calls reliably as requested by the user
-  useEffect(() => {
-    if (!session || !session.number) return;
-    let isMounted = true;
-    const triggerAutoRecording = async () => {
-      try {
-        if (!callRecordingService.isCurrentlyRecording()) {
-          await callRecordingService.startRecording(
-            session.number,
-            session.name || 'Caller',
-            session.id
-          );
-        }
-        if (isMounted) {
-          setIsRecording(true);
-        }
-      } catch (err) {
-        console.warn('[CallShield] Auto-recording init notice:', err);
-      }
-    };
-
-    triggerAutoRecording();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [session?.id, session?.number]);
 
   // Call timer increment
   useEffect(() => {
@@ -277,19 +251,39 @@ export default function ActiveCallModal({
   const handleEndCallAction = async () => {
     triggerHapticFeedback(50);
     let recordingItem: CallRecordingItem | null = null;
-    try {
-      if (isRecording || callRecordingService.isCurrentlyRecording()) {
-        setIsRecording(false);
-        recordingItem = await callRecordingService.stopRecording();
-      }
-    } catch (err) {
-      console.warn('[CallShield] Recording save on call end note:', err);
+    if (isRecording) {
+      setIsRecording(false);
+      recordingItem = await callRecordingService.stopRecording();
     }
     if (callerNote.trim()) {
       saveNoteLocally(callerNote);
     }
     onEndCall(recordingItem, durationRef.current, callerNote.trim() || undefined);
   };
+
+  // Hardware Power Key Interception to End Active Call
+  useEffect(() => {
+    if (!session || !powerButtonEndsCall) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isPowerKey =
+        e.key === 'Power' ||
+        e.code === 'Power' ||
+        e.key === 'EndCall' ||
+        e.code === 'EndCall' ||
+        (e.altKey && (e.key === 'p' || e.key === 'P' || e.key === 'End'));
+
+      if (isPowerKey) {
+        e.preventDefault();
+        handleEndCallAction();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [session, powerButtonEndsCall]);
 
   const callerProfile = lookupProfile(session.number);
   const initials = session.name

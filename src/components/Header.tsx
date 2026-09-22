@@ -6,23 +6,31 @@ import {
   Clock,
   Database,
   Download,
+  Lock,
   LockKeyhole,
   Maximize2,
   MicOff,
   Minimize2,
+  Phone,
   PhoneCall,
+  PhoneOff,
   LayoutGrid,
   Palette,
   Settings,
+  Power,
   ShieldAlert,
   ShieldCheck,
   Siren,
+  Smartphone,
   Sparkles,
   Stethoscope,
   Trash2,
+  Vibrate,
+  Volume2,
+  VolumeX,
   X,
 } from 'lucide-react';
-import { CallLogItem, DisplayDensity, ShieldSettings } from '../types';
+import { CallLogItem, DisplayDensity, IncomingCallState, ShieldSettings } from '../types';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 import ThemeCustomizerModal from './ThemeCustomizerModal';
 import LanguageSwitcher from './LanguageSwitcher';
@@ -31,6 +39,7 @@ import { formatPhoneNumber } from '../utils/spamEngine';
 
 interface HeaderProps {
   settings?: ShieldSettings;
+  onUpdateSettings?: (settings: ShieldSettings | ((prev: ShieldSettings) => ShieldSettings)) => void;
   onToggleShield?: () => void;
   isDefaultDialer?: boolean;
   onRequestDefaultDialer?: () => void;
@@ -50,6 +59,12 @@ interface HeaderProps {
   density?: DisplayDensity;
   onDensityChange?: (density: DisplayDensity) => void;
   closeSettingsSignal?: number;
+  activeIncomingCall?: IncomingCallState | null;
+  onAnswerIncomingCall?: () => void;
+  onDeclineIncomingCall?: () => void;
+  onExpandIncomingCall?: () => void;
+  isDeviceLocked?: boolean;
+  onToggleLockDevice?: () => void;
 }
 
 type PrivacySettings = {
@@ -84,6 +99,7 @@ function readPrivacySettings(): PrivacySettings {
 
 function Header({
   settings,
+  onUpdateSettings,
   onToggleShield,
   isDefaultDialer,
   onRequestDefaultDialer,
@@ -102,6 +118,13 @@ function Header({
   density = 'comfortable',
   onDensityChange,
   closeSettingsSignal = 0,
+  activeIncomingCall,
+  onAnswerIncomingCall,
+  onDeclineIncomingCall,
+  onExpandIncomingCall,
+  isDeviceLocked = false,
+  onToggleLockDevice,
+  onTriggerIncomingCall,
 }: HeaderProps) {
   const { t } = useI18n();
   const [showSettings, setShowSettings] = useState(false);
@@ -117,6 +140,20 @@ function Header({
       return [];
     }
   });
+
+  const updateShieldSetting = <K extends keyof ShieldSettings>(key: K, value: ShieldSettings[K]) => {
+    if (onUpdateSettings) {
+      onUpdateSettings(prev => {
+        const next = { ...prev, [key]: value };
+        telecomBridge.syncHardwareConfig({
+          powerButtonEndsCall: Boolean(next.powerButtonEndsCall),
+          volumeButtonSilencesRinger: next.volumeButtonAction === 'REJECT_CALL' ? false : next.volumeButtonSilencesRinger !== false,
+          volumeButtonAction: next.volumeButtonAction || 'MUTE_RINGER',
+        });
+        return next;
+      });
+    }
+  };
 
   useEffect(() => {
     setShowSettings(false);
@@ -378,7 +415,82 @@ function Header({
 
             {/* Notification Items List */}
             <div className="max-h-[50vh] overflow-y-auto divide-y divide-white/[0.05] p-1">
-              {activeNotifications.length === 0 ? (
+              {/* Active Incoming Call (Never collapsed or clipped inside notification shade) */}
+              {activeIncomingCall && activeIncomingCall.status === 'RINGING' && (
+                <div
+                  id="notification-active-incoming-call-banner"
+                  onClick={() => {
+                    setShowNotifications(false);
+                    onExpandIncomingCall?.();
+                  }}
+                  className="m-1.5 rounded-2xl border border-emerald-500/40 bg-emerald-950/30 p-3.5 shadow-lg shadow-black/40 backdrop-blur transition hover:bg-emerald-950/45 cursor-pointer select-none"
+                  title="Tap to open fullscreen caller"
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="flex items-center justify-between gap-2 border-b border-emerald-500/20 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                      </span>
+                      <span className="text-[11px] font-black uppercase tracking-wider text-emerald-400">
+                        Incoming Call · Ringing
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-medium text-emerald-300/80 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                      Tap for Fullscreen
+                    </span>
+                  </div>
+
+                  <div className="mt-2.5 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-extrabold text-white truncate">
+                        {activeIncomingCall.callerName || activeIncomingCall.number}
+                      </div>
+                      <div className="mt-0.5 font-mono text-xs font-semibold text-slate-300">
+                        {formatPhoneNumber(activeIncomingCall.number)}
+                      </div>
+                      <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-400">
+                        <span>{activeIncomingCall.carrier || 'Cellular'}</span>
+                        <span>•</span>
+                        <span className={`font-semibold ${activeIncomingCall.isSpam ? 'text-rose-400' : 'text-emerald-400'}`}>
+                          {activeIncomingCall.isSpam ? 'Flagged Spam' : 'Verified Caller'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowNotifications(false);
+                          onDeclineIncomingCall?.();
+                        }}
+                        className="grid h-9 w-9 place-items-center rounded-full bg-rose-600 text-white hover:bg-rose-500 active:scale-95 transition shadow-sm"
+                        title="Decline"
+                        aria-label="Decline"
+                      >
+                        <PhoneOff className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowNotifications(false);
+                          onAnswerIncomingCall?.();
+                        }}
+                        className="grid h-9 w-9 place-items-center rounded-full bg-emerald-600 text-white hover:bg-emerald-500 active:scale-95 transition shadow-sm"
+                        title="Answer"
+                        aria-label="Answer"
+                      >
+                        <Phone className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeNotifications.length === 0 && (!activeIncomingCall || activeIncomingCall.status !== 'RINGING') ? (
                 <div className="p-8 text-center">
                   <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-white/5 text-slate-500">
                     <CheckCheck className="h-5 w-5 text-emerald-400" />
@@ -493,6 +605,54 @@ function Header({
             <div className="space-y-3 p-4">
               <LanguageSwitcher variant="settings" />
 
+              {/* Caller UI Testing & Simulation Controls */}
+              <div className="rounded-2xl border border-indigo-500/25 bg-indigo-500/5 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-indigo-400" />
+                    <span className="text-sm font-bold text-white">Call Interface Testing</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/15 px-2 py-0.5 rounded-full">
+                    {isDeviceLocked ? 'Screen Locked' : 'Screen Unlocked'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Test the redesigned in-app popup (when unlocked) and fullscreen caller (when lockscreen is active).
+                </p>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  {onTriggerIncomingCall && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSettings(false);
+                        onTriggerIncomingCall();
+                      }}
+                      className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600/20 border border-emerald-500/40 px-3 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-600/30 transition active:scale-95"
+                    >
+                      <PhoneCall className="h-3.5 w-3.5" />
+                      <span>Simulate Call</span>
+                    </button>
+                  )}
+                  {onToggleLockDevice && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSettings(false);
+                        onToggleLockDevice();
+                      }}
+                      className={`flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition active:scale-95 ${
+                        isDeviceLocked
+                          ? 'bg-amber-600/25 border-amber-500/50 text-amber-300 hover:bg-amber-600/35'
+                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white'
+                      }`}
+                    >
+                      <Lock className="h-3.5 w-3.5" />
+                      <span>{isDeviceLocked ? 'Unlock Device' : 'Lock Device'}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <button
                 onClick={() => {
                   setShowSettings(false);
@@ -509,6 +669,184 @@ function Header({
                 </span>
                 <span className="text-xs font-bold text-blue-400">{t('customize')}</span>
               </button>
+
+              {/* Hardware Buttons & Audio Control */}
+              <div className="rounded-2xl border border-indigo-500/30 bg-indigo-950/20 p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-indigo-500/10 text-indigo-400">
+                    <Power className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-bold text-white">Hardware Buttons & Call Control</div>
+                    <div className="mt-0.5 text-xs text-slate-400">
+                      Configure physical phone keys and system audio synchronization for incoming & active calls.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-2 border-t border-indigo-500/15">
+                  <SettingRow
+                    icon={<Power className="h-4 w-4" />}
+                    title="Power Button Ends Calls"
+                    description="Press the physical power button to instantly hang up active calls or reject incoming calls"
+                    checked={Boolean(settings?.powerButtonEndsCall)}
+                    onChange={v => updateShieldSetting('powerButtonEndsCall', v)}
+                  />
+
+                  {/* Volume Button Behavior during Incoming Call */}
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 gap-3">
+                        <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-800 text-slate-300">
+                          {settings?.volumeButtonAction === 'REJECT_CALL' ? (
+                            <PhoneOff className="h-4 w-4 text-rose-400" />
+                          ) : (
+                            <VolumeX className="h-4 w-4 text-amber-400" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-white">Volume Button Behavior</div>
+                          <div className="mt-0.5 text-xs text-slate-400">
+                            Configure physical Volume Up or Volume Down button action when an incoming call is ringing.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateShieldSetting('volumeButtonAction', 'MUTE_RINGER');
+                          updateShieldSetting('volumeButtonSilencesRinger', true);
+                        }}
+                        className={`flex items-center gap-2.5 rounded-xl p-3 text-xs font-bold transition border text-left ${
+                          (settings?.volumeButtonAction || 'MUTE_RINGER') === 'MUTE_RINGER'
+                            ? 'border-amber-500 bg-amber-500/15 text-amber-300 shadow-sm shadow-amber-500/10'
+                            : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-amber-500/20 text-amber-400">
+                          <VolumeX className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate font-semibold">Mute Ringer</div>
+                          <div className="text-[10px] font-normal opacity-75">Silence sound & vibrate</div>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateShieldSetting('volumeButtonAction', 'REJECT_CALL');
+                          updateShieldSetting('volumeButtonSilencesRinger', false);
+                        }}
+                        className={`flex items-center gap-2.5 rounded-xl p-3 text-xs font-bold transition border text-left ${
+                          settings?.volumeButtonAction === 'REJECT_CALL'
+                            ? 'border-rose-500 bg-rose-500/15 text-rose-300 shadow-sm shadow-rose-500/10'
+                            : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-rose-500/20 text-rose-400">
+                          <PhoneOff className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate font-semibold">Reject Call</div>
+                          <div className="text-[10px] font-normal opacity-75">Decline incoming call</div>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* System Ringer Sync Mode */}
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 gap-3">
+                        <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-800 text-slate-300">
+                          {settings?.ringerMode === 'SILENT' ? (
+                            <VolumeX className="h-4 w-4 text-slate-400" />
+                          ) : settings?.ringerMode === 'VIBRATE' ? (
+                            <Vibrate className="h-4 w-4 text-amber-400" />
+                          ) : (
+                            <Volume2 className="h-4 w-4 text-emerald-400" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-white">System Ringer Sync Profile</div>
+                          <div className="mt-0.5 text-xs text-slate-400">
+                            Synced with phone sound profile. When phone is silent, rings silently; when on vibrate, vibrates only.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateShieldSetting('ringerMode', 'NORMAL')}
+                        className={`flex flex-col items-center justify-center gap-1 rounded-xl p-2.5 text-xs font-bold transition border ${
+                          (settings?.ringerMode || 'NORMAL') === 'NORMAL'
+                            ? 'border-emerald-500 bg-emerald-500/15 text-emerald-300 shadow-sm shadow-emerald-500/10'
+                            : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <Volume2 className="h-4 w-4" />
+                        <span>Sound & Vibrate</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => updateShieldSetting('ringerMode', 'VIBRATE')}
+                        className={`flex flex-col items-center justify-center gap-1 rounded-xl p-2.5 text-xs font-bold transition border ${
+                          settings?.ringerMode === 'VIBRATE'
+                            ? 'border-amber-500 bg-amber-500/15 text-amber-300 shadow-sm shadow-amber-500/10'
+                            : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <Vibrate className="h-4 w-4" />
+                        <span>Vibrate Only</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => updateShieldSetting('ringerMode', 'SILENT')}
+                        className={`flex flex-col items-center justify-center gap-1 rounded-xl p-2.5 text-xs font-bold transition border ${
+                          settings?.ringerMode === 'SILENT'
+                            ? 'border-slate-500 bg-slate-500/20 text-slate-200 shadow-sm'
+                            : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <VolumeX className="h-4 w-4" />
+                        <span>Silent Ring</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <SettingRow
+                    icon={<Vibrate className="h-4 w-4" />}
+                    title="Vibrate on Call Connected"
+                    description="Deliver a crisp haptic tap when the other party answers the call"
+                    checked={settings?.vibrateOnCallConnected !== false}
+                    onChange={v => updateShieldSetting('vibrateOnCallConnected', v)}
+                  />
+
+                  <SettingRow
+                    icon={<Smartphone className="h-4 w-4" />}
+                    title="Flip to Silence"
+                    description="Turn your phone face-down to immediately mute incoming ringtone & vibration"
+                    checked={settings?.flipToSilence !== false}
+                    onChange={v => updateShieldSetting('flipToSilence', v)}
+                  />
+
+                  <SettingRow
+                    icon={<Sparkles className="h-4 w-4" />}
+                    title="Flash Alert on Incoming Calls"
+                    description="Pulse visual edge strobe alert on screen during incoming rings"
+                    checked={Boolean(settings?.flashAlertOnIncomingCall)}
+                    onChange={v => updateShieldSetting('flashAlertOnIncomingCall', v)}
+                  />
+                </div>
+              </div>
 
               {!isDefaultDialer && onRequestDefaultDialer && (
                 <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">

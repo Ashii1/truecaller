@@ -1,6 +1,8 @@
 package com.vigilshield.telecom
 
 import android.app.Activity
+import android.content.Context
+import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -123,6 +125,42 @@ class AndroidTelephonyBridge(
     }
 
     @JavascriptInterface
+    fun silenceRinger(): Boolean {
+        Log.i(TAG, "silenceRinger invoked from JavaScript bridge")
+        val inCall = VigilShieldInCallService.instance
+        return inCall?.silenceRinger() ?: true
+    }
+
+    @JavascriptInterface
+    fun getRingerMode(): String {
+        return try {
+            val audioManager = activity.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            when (audioManager?.ringerMode) {
+                AudioManager.RINGER_MODE_SILENT -> "SILENT"
+                AudioManager.RINGER_MODE_VIBRATE -> "VIBRATE"
+                else -> "NORMAL"
+            }
+        } catch (e: Exception) {
+            "NORMAL"
+        }
+    }
+
+    @JavascriptInterface
+    fun setHardwareKeyConfig(configJson: String): Boolean {
+        return try {
+            val json = JSONObject(configJson)
+            val powerEndsCall = json.optBoolean("powerButtonEndsCall", false)
+            val volSilences = json.optBoolean("volumeButtonSilencesRinger", true)
+            val volAction = json.optString("volumeButtonAction", if (volSilences) "MUTE_RINGER" else "REJECT_CALL")
+            (activity as? MainActivity)?.updateHardwareKeyConfig(powerEndsCall, volSilences, volAction)
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse hardware key config: ${e.message}")
+            false
+        }
+    }
+
+    @JavascriptInterface
     fun setMuted(muted: Boolean): Boolean {
         val inCall = VigilShieldInCallService.instance ?: return false
         inCall.setCallMute(muted)
@@ -187,14 +225,6 @@ class AndroidTelephonyBridge(
             jsonArray.put(c.toJson())
         }
         return jsonArray.toString()
-    }
-
-    @JavascriptInterface
-    fun moveTaskToBack(): Boolean {
-        activity.runOnUiThread {
-            activity.moveTaskToBack(true)
-        }
-        return true
     }
 
     // --- EVENT DISPATCHING TO REACT FRONTEND ---
