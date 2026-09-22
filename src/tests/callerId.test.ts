@@ -38,6 +38,8 @@ export function runCallShieldTestSuite() {
     } else {
       results.push({ name: 'Local Contact Priority: Resolves private device contact first', passed: false, message: 'Did not match contact' });
     }
+  }).catch(e => {
+    results.push({ name: 'Local Contact Priority: Resolves private device contact first', passed: false, message: e.message });
   });
 
   // Test 3: Regulatory Telemarketing Prefix (TRAI 140 Series)
@@ -47,6 +49,8 @@ export function runCallShieldTestSuite() {
     } else {
       results.push({ name: 'Regulatory Telemetry: Accurately identifies TRAI 140 series', passed: false, message: 'TRAI series was not flagged as telemarketing' });
     }
+  }).catch(e => {
+    results.push({ name: 'Regulatory Telemetry: Accurately identifies TRAI 140 series', passed: false, message: e.message });
   });
 
   // Test 4: Authorized Verified Enterprise Directory
@@ -56,6 +60,8 @@ export function runCallShieldTestSuite() {
     } else {
       results.push({ name: 'Enterprise Verification: Cryptographically verified financial caller', passed: false, message: 'Failed to verify Chase' });
     }
+  }).catch(e => {
+    results.push({ name: 'Enterprise Verification: Cryptographically verified financial caller', passed: false, message: e.message });
   });
 
   // Test 5: Honest Unknown State
@@ -65,6 +71,8 @@ export function runCallShieldTestSuite() {
     } else {
       results.push({ name: 'Anti-Fabrication: Honestly returns Unknown Caller without fake data', passed: false, message: 'Fabricated caller name' });
     }
+  }).catch(e => {
+    results.push({ name: 'Anti-Fabrication: Honestly returns Unknown Caller without fake data', passed: false, message: e.message });
   });
 
   // Test 6: External Directory Service & Local Calls List Caching

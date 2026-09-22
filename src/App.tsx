@@ -51,6 +51,27 @@ export default function App(){
  const [toastMessage,setToastMessage]=useState<{text:string,type:'info'|'error'|'success'}|null>(null);
  const [isDeviceLocked, setIsDeviceLocked] = useState<boolean>(() => telecomBridge.isDeviceLocked());
  const [appInForeground, setAppInForeground] = useState<boolean>(() => typeof document === 'undefined' || document.visibilityState === 'visible');
+ const [isUserActive, setIsUserActive] = useState<boolean>(true);
+
+ useEffect(() => {
+   let timer: any = null;
+   const recordUserActivity = () => {
+     setIsUserActive(true);
+     if (timer) clearTimeout(timer);
+     timer = setTimeout(() => {
+       setIsUserActive(false);
+     }, 40000);
+   };
+
+   const events = ['pointerdown', 'keydown', 'scroll', 'touchstart', 'mousemove'];
+   events.forEach((ev) => window.addEventListener(ev, recordUserActivity, { passive: true }));
+   recordUserActivity();
+
+   return () => {
+     if (timer) clearTimeout(timer);
+     events.forEach((ev) => window.removeEventListener(ev, recordUserActivity));
+   };
+ }, []);
  
  const showToast=(text:string,type:'info'|'error'|'success'='info')=>{setToastMessage({text,type});window.setTimeout(()=>setToastMessage(null),3800)};
 
@@ -661,7 +682,7 @@ export default function App(){
         id: callLogId,
         number: activeCallSession.number,
         callerName: activeCallSession.name || activeCallSession.number,
-        type: 'OUTGOING',
+        type: activeCallSession.direction || 'OUTGOING',
         timestamp: Date.now(),
         durationSeconds: dur,
         isSpam: Boolean(activeCallSession.isSpam),
@@ -850,6 +871,9 @@ export default function App(){
       }
 
       setActiveIncomingCall(null);
+      if (telecomBridge.isAndroidEnvironment() && !appInForeground) {
+        telecomBridge.moveTaskToBack();
+      }
     }}
     onAnswerCall={(screeningData) => {
       if (activeIncomingCall?.callId) {
@@ -873,6 +897,7 @@ export default function App(){
           isKeypadOpen: false,
           selectedSim,
           sim: selectedSim,
+          direction: 'INCOMING',
           usedAiScreener: Boolean(transcript && transcript.length > 0),
           screeningTranscript: transcript,
           screeningDetectedIntent: screeningData?.intent || activeIncomingCall.screeningDetectedIntent || undefined,
@@ -890,7 +915,12 @@ export default function App(){
       }
       telecomBridge.clearStaleCallNotifications();
       setActiveIncomingCall(null);
+      if (telecomBridge.isAndroidEnvironment() && !appInForeground) {
+        telecomBridge.moveTaskToBack();
+      }
     }}
+    isDeviceLocked={isDeviceLocked}
+    isUserActive={isUserActive && appInForeground}
   />
   <ActiveCallModal session={activeCallSession} onEndCall={handleEndCall} lookupProfile={handleLookupProfile} onAddCall={n=>handleInitiateCall(n)}/>
   <PostCallModal postCall={postCallState} onDismiss={()=>setPostCallState(null)} onAddContact={handleAddContact} onBlockNumber={handleBlockNumber} onReportSpam={handleReportSpam} onSaveNote={(number,note)=>{const c=calls.find(x=>x.number.replace(/\D/g,'')===number.replace(/\D/g,''));if(c)handleSaveNote(c.id,note)}}/>

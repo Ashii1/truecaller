@@ -189,6 +189,14 @@ class AndroidTelephonyBridge(
         return jsonArray.toString()
     }
 
+    @JavascriptInterface
+    fun moveTaskToBack(): Boolean {
+        activity.runOnUiThread {
+            activity.moveTaskToBack(true)
+        }
+        return true
+    }
+
     // --- EVENT DISPATCHING TO REACT FRONTEND ---
 
     override fun onCallAdded(callId: String, details: VigilShieldInCallService.CallDetailsDto) {

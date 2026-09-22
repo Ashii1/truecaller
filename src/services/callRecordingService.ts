@@ -263,11 +263,19 @@ class CallRecordingService {
 
     const AudioContextClass =
       window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    this.audioCtx = new AudioContextClass({ sampleRate: 48000 });
-    this.sampleRate = this.audioCtx.sampleRate || 48000;
+    try {
+      this.audioCtx = new AudioContextClass({ sampleRate: 48000 });
+    } catch {
+      try {
+        this.audioCtx = new AudioContextClass();
+      } catch {
+        this.audioCtx = null;
+      }
+    }
+    this.sampleRate = this.audioCtx?.sampleRate || 48000;
 
-    if (this.audioCtx.state === 'suspended') {
-      await this.audioCtx.resume();
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      await this.audioCtx.resume().catch(() => {});
     }
 
     try {
@@ -507,17 +515,57 @@ class CallRecordingService {
   }
 
   /**
+   * Finds the best matching recording for a specific call by callId, timestamp, or number.
+   */
+  public async getRecordingForCall(
+    callIdOrTimestamp?: string | number,
+    phoneNumber?: string,
+  ): Promise<CallRecordingItem | null> {
+    if (callIdOrTimestamp) {
+      const matchById = memoryCache.find(
+        (r) => r.callId === String(callIdOrTimestamp) || r.id === String(callIdOrTimestamp)
+      );
+      if (matchById) return matchById;
+
+      if (typeof callIdOrTimestamp === 'number') {
+        // Match by calling time within a 5-minute window
+        const matchByTime = memoryCache.find(
+          (r) =>
+            Math.abs(r.timestamp - callIdOrTimestamp) < 300000 &&
+            (!phoneNumber || normalizePhoneNumber(r.number) === normalizePhoneNumber(phoneNumber))
+        );
+        if (matchByTime) return matchByTime;
+      }
+    }
+
+    if (phoneNumber) {
+      const list = await this.getRecordingsForNumber(phoneNumber);
+      if (list.length > 0) return list[0];
+    }
+
+    return null;
+  }
+
+  /**
    * Triggers a direct native download/export of the audio file to the device's storage.
    * This saves the actual .wav file into the user's device Downloads/Recordings folder.
    */
   public downloadRecordingToDevice(recording: CallRecordingItem): void {
     try {
+      if (!recording.dataUri) {
+        console.warn('[CallRecording] Empty dataUri for download');
+        return;
+      }
       const link = document.createElement('a');
       link.href = recording.dataUri;
-      link.download = recording.fileName;
+      link.download = recording.fileName || `CallShield_REC_${recording.number}_${recording.timestamp}.wav`;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      setTimeout(() => {
+        try {
+          document.body.removeChild(link);
+        } catch {}
+      }, 100);
     } catch (e) {
       console.error('[CallRecording] Download failed:', e);
     }

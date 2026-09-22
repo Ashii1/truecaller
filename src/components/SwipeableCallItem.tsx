@@ -1,9 +1,10 @@
-import { memo, useState, useCallback, useRef } from 'react';
+import { memo, useState, useCallback, useRef, useEffect, type MouseEvent } from 'react';
 import {
   motion,
   useMotionValue,
   useTransform,
   animate,
+  AnimatePresence,
 } from 'motion/react';
 import {
   AlertTriangle,
@@ -24,10 +25,13 @@ import {
   ShieldSettings,
   DisplayDensity,
   CallDirection,
+  CallRecordingItem,
 } from '../types';
 import { CallGroup } from '../utils/callHistory';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import { playSpamAlertChime, playCallCancelledTone } from '../utils/audioAlerts';
+import { callRecordingService } from '../services/callRecordingService';
+import AudioRecordingPlayer from './AudioRecordingPlayer';
 
 interface SwipeableCallItemProps {
   group: CallGroup;
@@ -68,6 +72,8 @@ function SwipeableCallItem({
   const [isDragging, setIsDragging] = useState(false);
   const [isBlockedFeedback, setIsBlockedFeedback] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
+  const [showInlineRecording, setShowInlineRecording] = useState(false);
+  const [recordingToPlay, setRecordingToPlay] = useState<CallRecordingItem | null>(null);
   const wasDraggedRef = useRef(false);
 
   // Derived transforms for responsive swipe visual indicators
@@ -83,6 +89,65 @@ function SwipeableCallItem({
       : p.name || group.number || t('unknown_caller');
   const spam = group.calls.some((c) => c.isSpam) || p.isSpam;
   const latest = group.latest;
+
+  const hasRecordedCall =
+    group.calls.some((c) => Boolean(c.recordingUri)) || Boolean(recordingToPlay);
+
+  useEffect(() => {
+    let isMounted = true;
+    callRecordingService
+      .getRecordingsForNumber(group.number)
+      .then((items) => {
+        if (isMounted && items.length > 0) {
+          const matched = items.find(
+            (r) =>
+              r.callId === latest.id ||
+              Math.abs(r.timestamp - latest.timestamp) < 300000
+          );
+          setRecordingToPlay(matched || items[0]);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [group.number, latest.id, latest.timestamp]);
+
+  const handleToggleInlinePlayer = useCallback(
+    async (e: MouseEvent) => {
+      e.stopPropagation();
+      if (!showInlineRecording) {
+        if (!recordingToPlay) {
+          const found = await callRecordingService.getRecordingForCall(
+            latest.id,
+            group.number
+          );
+          if (found) {
+            setRecordingToPlay(found);
+          } else if (latest.recordingUri) {
+            setRecordingToPlay({
+              id: `rec-${latest.id}`,
+              callId: latest.id,
+              number: group.number,
+              callerName: name,
+              timestamp: latest.timestamp,
+              durationSeconds: latest.durationSeconds || 15,
+              folderPath: 'Internal Storage/Recordings/CallShield/',
+              fileName: `REC_${group.number.replace(/\D/g, '')}_${new Date(latest.timestamp).toISOString().slice(0, 10)}.wav`,
+              fileSizeBytes: 128000,
+              mimeType: 'audio/wav',
+              dataUri: latest.recordingUri,
+              quality: '48 kHz Studio HD',
+            });
+          }
+        }
+        setShowInlineRecording(true);
+      } else {
+        setShowInlineRecording(false);
+      }
+    },
+    [showInlineRecording, recordingToPlay, latest, group.number, name]
+  );
 
   const triggerBlock = useCallback(() => {
     try {
@@ -318,11 +383,16 @@ function SwipeableCallItem({
               </span>
             )}
 
-            {group.calls.some((c) => Boolean(c.recordingUri)) && (
-              <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.5 text-[8.5px] font-bold text-emerald-300">
+            {hasRecordedCall && (
+              <button
+                type="button"
+                onClick={handleToggleInlinePlayer}
+                className="inline-flex items-center gap-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/35 px-1.5 py-0.5 text-[8.5px] font-bold text-emerald-300 active:scale-95 transition"
+                title="Play recorded call audio"
+              >
                 <Disc className="h-2.5 w-2.5 text-emerald-400 animate-pulse" />
-                REC
-              </span>
+                <span>{showInlineRecording ? 'Hide REC' : 'Play REC'}</span>
+              </button>
             )}
 
             {group.calls.some((c) => c.usedAiScreener) && (
@@ -373,7 +443,23 @@ function SwipeableCallItem({
           )}
         </div>
 
-        {/* Action buttons: Phone and Privacy call */}
+        {/* Action buttons: Recording Playback, Phone and Privacy call */}
+        {hasRecordedCall && (
+          <button
+            type="button"
+            onClick={handleToggleInlinePlayer}
+            className={`grid shrink-0 place-items-center rounded-full active:scale-95 transition ${
+              showInlineRecording
+                ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-950/50'
+                : 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30'
+            } ${isCompact ? 'h-7 w-7' : 'h-8 w-8'}`}
+            aria-label={showInlineRecording ? 'Hide recording player' : 'Play call recording'}
+            title={`Play call recording (${timeLabel(latest.timestamp)})`}
+          >
+            <Disc className={`animate-pulse ${isCompact ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
+          </button>
+        )}
+
         <button
           type="button"
           onClick={(e) => {
@@ -429,6 +515,39 @@ function SwipeableCallItem({
           <Ban className={isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
         </button>
       </motion.div>
+
+      {/* Inline Call Recording Player at this particular call timestamp */}
+      <AnimatePresence>
+        {showInlineRecording && recordingToPlay && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.18 }}
+            className="overflow-hidden border-t border-emerald-500/20 bg-slate-950/90 px-3 py-2.5 rounded-b-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-2 flex items-center justify-between text-[11px] text-emerald-400 font-medium">
+              <span className="flex items-center gap-1 font-semibold">
+                <Disc className="h-3 w-3 animate-spin text-emerald-400" />
+                Call Recording ({timeLabel(latest.timestamp)})
+              </span>
+              <span className="text-[10px] text-slate-400">
+                {recordingToPlay.quality || '48 kHz Studio Lossless'}
+              </span>
+            </div>
+            <AudioRecordingPlayer
+              recording={recordingToPlay}
+              compact={true}
+              onDelete={(id) => {
+                callRecordingService.deleteRecording(id);
+                setRecordingToPlay(null);
+                setShowInlineRecording(false);
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

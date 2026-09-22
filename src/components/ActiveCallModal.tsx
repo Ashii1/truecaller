@@ -20,14 +20,15 @@ import {
   Folder,
   StickyNote,
   Copy,
-  Trash2
+  Trash2,
+  PhoneCall
 } from 'lucide-react';
 import { ActiveCallSession, CallShieldDirectoryProfile, CallRecordingItem } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import { playDtmfTone, triggerHapticFeedback, playNotificationChime } from '../utils/audioAlerts';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 import { useI18n } from '../i18n/LanguageContext';
-import { callRecordingService, DEFAULT_RECORDINGS_FOLDER } from '../services/callRecordingService';
+import { callRecordingService } from '../services/callRecordingService';
 
 interface ActiveCallModalProps {
   session: ActiveCallSession | null;
@@ -83,6 +84,34 @@ export default function ActiveCallModal({
       if (session.notes) setCallerNote(session.notes);
     }
   }, [session?.number, session?.notes]);
+
+  // Auto-record all calls reliably as requested by the user
+  useEffect(() => {
+    if (!session || !session.number) return;
+    let isMounted = true;
+    const triggerAutoRecording = async () => {
+      try {
+        if (!callRecordingService.isCurrentlyRecording()) {
+          await callRecordingService.startRecording(
+            session.number,
+            session.name || 'Caller',
+            session.id
+          );
+        }
+        if (isMounted) {
+          setIsRecording(true);
+        }
+      } catch (err) {
+        console.warn('[CallShield] Auto-recording init notice:', err);
+      }
+    };
+
+    triggerAutoRecording();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [session?.id, session?.number]);
 
   // Call timer increment
   useEffect(() => {
@@ -165,7 +194,7 @@ export default function ActiveCallModal({
 
   const handleKeypadPress = (digit: string) => {
     playDtmfTone(digit);
-    triggerHapticFeedback(20);
+    triggerHapticFeedback(25);
     setKeypadDigits((prev) => prev + digit);
     if (session?.id) {
       telecomBridge.sendDtmfTone(session.id, digit);
@@ -175,18 +204,21 @@ export default function ActiveCallModal({
   const handleToggleMute = () => {
     const next = !isMuted;
     setIsMuted(next);
+    triggerHapticFeedback(30);
     telecomBridge.setMuted(next);
   };
 
   const handleToggleSpeaker = () => {
     const next = !isSpeaker;
     setIsSpeaker(next);
+    triggerHapticFeedback(30);
     telecomBridge.setSpeakerRoute(next);
   };
 
   const handleToggleHold = () => {
     const next = !isOnHold;
     setIsOnHold(next);
+    triggerHapticFeedback(30);
     if (session?.id) {
       if (next) {
         telecomBridge.holdCall(session.id);
@@ -197,15 +229,18 @@ export default function ActiveCallModal({
   };
 
   const handleSwapCalls = () => {
+    triggerHapticFeedback(25);
     telecomBridge.swapCalls();
   };
 
   const handleMergeCalls = () => {
+    triggerHapticFeedback(25);
     telecomBridge.mergeCalls();
   };
 
   const handleExecuteAddCall = () => {
     if (!secondCallInput.trim()) return;
+    triggerHapticFeedback(30);
     if (onAddCall) {
       onAddCall(secondCallInput.trim());
     } else {
@@ -240,10 +275,15 @@ export default function ActiveCallModal({
   };
 
   const handleEndCallAction = async () => {
+    triggerHapticFeedback(50);
     let recordingItem: CallRecordingItem | null = null;
-    if (isRecording) {
-      setIsRecording(false);
-      recordingItem = await callRecordingService.stopRecording();
+    try {
+      if (isRecording || callRecordingService.isCurrentlyRecording()) {
+        setIsRecording(false);
+        recordingItem = await callRecordingService.stopRecording();
+      }
+    } catch (err) {
+      console.warn('[CallShield] Recording save on call end note:', err);
     }
     if (callerNote.trim()) {
       saveNoteLocally(callerNote);
@@ -252,388 +292,501 @@ export default function ActiveCallModal({
   };
 
   const callerProfile = lookupProfile(session.number);
+  const initials = session.name
+    ? session.name
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((w) => w[0])
+        .join('')
+        .toUpperCase()
+    : '👤';
 
   return (
-    <div className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
-      <div className="w-full max-w-sm bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-5 shadow-2xl space-y-4 text-white text-center relative overflow-hidden max-h-[95vh] overflow-y-auto">
-        {/* Top Status & SIM info */}
-        <div className="flex items-center justify-between text-xs text-slate-400">
-          <span className="flex items-center space-x-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-semibold text-emerald-400">{t('call_connected')}</span>
-          </span>
-          <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-medium">
-            {session.sim || 'SIM 1'}
-          </span>
-        </div>
-
-        {/* Caller Avatar & Identity */}
-        <div className="space-y-1.5">
-          <div className="w-16 h-16 rounded-full mx-auto bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-2xl font-extrabold shadow-xl ring-4 ring-indigo-500/20">
-            {session.name ? session.name.slice(0, 1).toUpperCase() : '👤'}
+    <div className="fixed inset-0 z-[120] bg-black/90 backdrop-blur-xl flex flex-col justify-end sm:items-center sm:justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+      {/* Phone Handset Container with System-Level High Contrast Styling */}
+      <div className="w-full sm:max-w-md bg-[#070a10] sm:border sm:border-white/15 sm:rounded-[36px] rounded-t-[32px] p-5 sm:p-6 shadow-2xl text-white flex flex-col justify-between relative overflow-hidden max-h-[96vh] sm:max-h-[880px] overflow-y-auto">
+        
+        {/* Top Header: System Status & Hardware Indicators */}
+        <div className="flex items-center justify-between text-xs pb-2 border-b border-white/10 select-none">
+          <div className="flex items-center space-x-2">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+            </span>
+            <span className="font-bold uppercase tracking-wider text-emerald-400 text-[11px]">
+              {isOnHold ? t('on_hold') : t('call_connected')}
+            </span>
           </div>
 
-          <div>
-            <h2 className="text-lg font-extrabold text-white tracking-tight flex items-center justify-center space-x-1.5">
-              <span className="truncate max-w-[240px]">{session.name || t('unknown_caller')}</span>
-              {session.isVerifiedBusiness && (
-                <ShieldCheck className="w-4 h-4 text-blue-400 shrink-0" />
-              )}
-            </h2>
-            <p className="text-xs text-slate-400 font-mono mt-0.5">
+          <div className="flex items-center space-x-2">
+            <span className="px-2 py-0.5 rounded-full bg-white/10 text-slate-200 font-semibold text-[11px] border border-white/10">
+              {session.sim || 'SIM 1'}
+            </span>
+            <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 font-bold text-[10px]">
+              <Radio className="w-3 h-3 text-emerald-400" />
+              <span>HD 48kHz</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Middle Stage: Caller Identity & Large High-Contrast Timer */}
+        <div className="py-4 text-center space-y-3">
+          {/* Avatar / Identity Glyph */}
+          <div className="relative inline-block mx-auto">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-b from-slate-800 to-slate-900 border-2 border-white/20 flex items-center justify-center text-3xl font-extrabold text-white shadow-xl ring-8 ring-white/5">
+              {initials}
+            </div>
+            {session.isVerifiedBusiness && (
+              <div
+                className="absolute -bottom-1 -right-1 bg-blue-600 rounded-full p-1.5 border-2 border-[#070a10] shadow-md"
+                title="Verified Enterprise Caller"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-white" />
+              </div>
+            )}
+          </div>
+
+          {/* Caller Name & Formatted Phone Number */}
+          <div className="space-y-1">
+            <h1 className="text-2xl font-black text-white tracking-tight leading-snug px-3 truncate max-w-sm mx-auto">
+              {session.name || t('unknown_caller')}
+            </h1>
+            <p className="text-sm font-mono text-slate-300 tracking-wide">
               {formatPhoneNumber(session.number)}
             </p>
+            {callerProfile?.location && (
+              <p className="text-xs text-slate-400 font-medium">
+                {callerProfile.location}
+              </p>
+            )}
           </div>
 
-          {/* Active Call Timer */}
-          <div className="text-2xl font-black text-indigo-300 font-mono tracking-wider">
-            {formatTimer(duration)}
-          </div>
-        </div>
-
-        {/* Real-time Call Intelligence panel */}
-        <div className="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700 text-left space-y-1 text-xs">
-          <div className="flex items-center justify-between text-emerald-400 font-bold text-[11px]">
-            <span className="flex items-center space-x-1">
-              <Lock className="w-3 h-3" />
-              <span>Secure Telecom Channel</span>
-            </span>
-            <span className="flex items-center space-x-1">
-              <Radio className="w-3 h-3" />
-              <span>HD Voice Active (48 kHz)</span>
+          {/* High-Legibility Tabular Call Timer */}
+          <div className="inline-flex items-center justify-center px-4 py-1.5 rounded-full bg-white/5 border border-white/10">
+            <span className="text-2xl font-mono font-extrabold text-white tracking-widest tabular-nums">
+              {formatTimer(duration)}
             </span>
           </div>
-          <div className="text-slate-400 text-[11px] flex items-center space-x-1 pt-0.5">
-            <Sparkles className="w-3 h-3 text-indigo-400 shrink-0" />
-            <span>AI Real-time Firewall: Verified Clean Stream</span>
-          </div>
-        </div>
 
-        {/* Real-time Call Recording Active Banner */}
-        {isRecording && (
-          <div className="p-2.5 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-semibold flex items-center justify-between animate-pulse">
-            <div className="flex items-center space-x-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
-              <span className="font-extrabold text-rose-200">
-                REC {formatTimer(recordingDuration)}
-              </span>
-              <span className="text-[10px] bg-rose-500/20 px-1.5 py-0.5 rounded text-rose-300">
-                48 kHz Lossless
-              </span>
+          {/* Hold Alert Pill */}
+          {isOnHold && (
+            <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-500/50 text-amber-200 text-xs font-bold flex items-center justify-center space-x-2 animate-pulse">
+              <Pause className="w-4 h-4 text-amber-400" />
+              <span>{t('call_on_hold')}</span>
             </div>
-            <div className="flex items-center space-x-1 text-[10px] text-slate-400 font-mono">
-              <Folder className="w-3 h-3 text-amber-400/80" />
-              <span>CallShield/</span>
-            </div>
-          </div>
-        )}
+          )}
 
-        {/* Saved Recording Notification */}
-        {savedNotice && (
-          <div className="p-2 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-xs text-emerald-300 font-semibold flex items-center justify-center space-x-1.5">
-            <Check className="w-4 h-4 text-emerald-400" />
-            <span className="truncate">Saved to device storage: {savedNotice}</span>
-          </div>
-        )}
-
-        {/* Call Recording Compliance Notice */}
-        {recordingWarningPlayed && (
-          <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-500/30 text-xs text-amber-300 font-semibold animate-pulse flex items-center justify-center space-x-1.5">
-            <AlertCircle className="w-4 h-4" />
-            <span>Audio recording active · 48 kHz High Fidelity</span>
-          </div>
-        )}
-
-        {/* IN-CALL PRIVATE NOTE TAKING PAD */}
-        {showInCallNotes && (
-          <div className="p-3.5 rounded-2xl bg-slate-950/95 border border-amber-500/40 text-left space-y-2.5 animate-in fade-in zoom-in-95 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-1.5">
-                <StickyNote className="w-4 h-4 text-amber-400" />
-                <span className="text-xs font-bold text-amber-300">In-Call Private Scratchpad</span>
-              </div>
+          {/* Real-time Lossless Recording Active Banner */}
+          {isRecording && (
+            <div className="p-2.5 rounded-2xl bg-rose-950/80 border border-rose-500/50 text-rose-200 text-xs font-semibold flex items-center justify-between animate-pulse">
               <div className="flex items-center space-x-2">
-                {noteSavedNotice ? (
-                  <span className="text-[10px] text-emerald-400 font-semibold flex items-center space-x-1">
-                    <Check className="w-3 h-3" />
-                    <span>Auto-saved</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                <span className="font-black text-rose-100 tracking-wide font-mono">
+                  REC {formatTimer(recordingDuration)}
+                </span>
+                <span className="text-[10px] bg-rose-500/30 px-1.5 py-0.5 rounded font-bold text-rose-200">
+                  Lossless WAV
+                </span>
+              </div>
+              <div className="flex items-center space-x-1 text-[10px] text-slate-300 font-mono">
+                <Folder className="w-3.5 h-3.5 text-amber-400" />
+                <span>CallShield/</span>
+              </div>
+            </div>
+          )}
+
+          {/* Saved Notification */}
+          {savedNotice && (
+            <div className="p-2 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs text-emerald-300 font-bold flex items-center justify-center space-x-2">
+              <Check className="w-4 h-4 text-emerald-400" />
+              <span className="truncate">Saved: {savedNotice}</span>
+            </div>
+          )}
+
+          {/* Recording Warning */}
+          {recordingWarningPlayed && (
+            <div className="p-2 rounded-xl bg-amber-950/70 border border-amber-500/30 text-xs text-amber-300 font-semibold flex items-center justify-center space-x-1.5">
+              <AlertCircle className="w-4 h-4 text-amber-400" />
+              <span>High Fidelity Call Recording Active</span>
+            </div>
+          )}
+        </div>
+
+        {/* Dynamic In-Call Sheets: Keypad, Notes, and Add Call */}
+        <div className="space-y-3">
+          {/* DTMF Dialpad Sheet */}
+          {showInCallKeypad && (
+            <div className="p-4 rounded-3xl bg-slate-900/95 border border-white/20 shadow-2xl space-y-3 animate-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                  {t('keypad')} (DTMF)
+                </span>
+                <div className="font-mono text-base font-bold text-white min-h-[24px] px-2 py-0.5 bg-black/60 rounded-lg border border-white/10 tracking-widest">
+                  {keypadDigits || '—'}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowInCallKeypad(false)}
+                  className="p-1 text-slate-400 hover:text-white rounded-full bg-white/5 active:scale-95"
+                  aria-label="Close Keypad"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5 max-w-[280px] mx-auto py-1">
+                {[
+                  { d: '1', sub: '' },
+                  { d: '2', sub: 'ABC' },
+                  { d: '3', sub: 'DEF' },
+                  { d: '4', sub: 'GHI' },
+                  { d: '5', sub: 'JKL' },
+                  { d: '6', sub: 'MNO' },
+                  { d: '7', sub: 'PQRS' },
+                  { d: '8', sub: 'TUV' },
+                  { d: '9', sub: 'WXYZ' },
+                  { d: '*', sub: '' },
+                  { d: '0', sub: '+' },
+                  { d: '#', sub: '' },
+                ].map(({ d, sub }) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => handleKeypadPress(d)}
+                    className="h-14 rounded-2xl bg-white/10 hover:bg-white/20 active:bg-white/30 border border-white/10 text-white flex flex-col items-center justify-center transition active:scale-90"
+                  >
+                    <span className="text-xl font-black leading-none">{d}</span>
+                    {sub && <span className="text-[8.5px] font-bold text-slate-400 tracking-wider leading-none mt-0.5">{sub}</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* In-Call Notes Scratchpad */}
+          {showInCallNotes && (
+            <div className="p-4 rounded-3xl bg-slate-900/95 border border-amber-500/40 shadow-2xl space-y-3 animate-in zoom-in-95 duration-150 text-left">
+              <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                <div className="flex items-center space-x-2">
+                  <StickyNote className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs font-bold text-amber-300">
+                    In-Call Private Notes
                   </span>
-                ) : (
-                  <span className="text-[10px] text-slate-400 flex items-center space-x-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    <span>Private & Local</span>
-                  </span>
-                )}
+                </div>
+                <div className="flex items-center space-x-2">
+                  {noteSavedNotice ? (
+                    <span className="text-[10px] text-emerald-400 font-bold flex items-center space-x-1">
+                      <Check className="w-3 h-3" />
+                      <span>Auto-saved</span>
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-400">Local Only</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowInCallNotes(false)}
+                    className="p-1 text-slate-400 hover:text-white rounded-full bg-white/5 active:scale-95"
+                    aria-label="Close notes"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Tags */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[10px]">
+                {[
+                  { label: '📍 Address', text: '📍 Address: ' },
+                  { label: '🔢 Ref #', text: '🔢 Ref No: ' },
+                  { label: '💰 Price', text: '💰 Price: ' },
+                  { label: '📅 Meet', text: '📅 Meeting: ' },
+                  { label: '⏰ Callback', text: '⏰ Call back at: ' },
+                ].map((chip) => (
+                  <button
+                    key={chip.label}
+                    type="button"
+                    onClick={() => handleInsertTag(chip.text)}
+                    className="px-2.5 py-1 rounded-full bg-white/10 hover:bg-amber-500/20 hover:text-amber-200 border border-white/10 text-slate-300 font-semibold shrink-0 transition active:scale-95"
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Note Textarea */}
+              <textarea
+                ref={notesInputRef}
+                value={callerNote}
+                onChange={(e) => handleNoteChange(e.target.value)}
+                rows={3}
+                placeholder="Type OTP, address, reference numbers, or reminders..."
+                className="w-full resize-none rounded-2xl border border-white/15 bg-black/60 p-3 text-xs text-white placeholder-slate-500 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+              />
+
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyNote}
+                    disabled={!callerNote.trim()}
+                    className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 disabled:opacity-30 text-xs font-semibold flex items-center space-x-1.5 active:scale-95 transition"
+                  >
+                    {copySuccess ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copySuccess ? 'Copied' : 'Copy'}</span>
+                  </button>
+                  {callerNote.trim() && (
+                    <button
+                      type="button"
+                      onClick={handleClearNote}
+                      className="px-2.5 py-1.5 rounded-xl text-slate-400 hover:text-rose-400 text-xs font-medium active:scale-95 transition"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => setShowInCallNotes(false)}
-                  className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
-                  aria-label="Close notes"
+                  className="px-4 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-extrabold active:scale-95 transition shadow-md"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Add Conference Call Sheet */}
+          {showAddCallPrompt && (
+            <div className="p-3.5 rounded-3xl bg-slate-900/95 border border-white/20 shadow-2xl space-y-2.5 animate-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                  Add Second Call (Conference)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowAddCallPrompt(false)}
+                  className="p-1 text-slate-400 hover:text-white rounded-full bg-white/5"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
-            </div>
-
-            {/* Quick-Insert Tags */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[10px]">
-              <span className="text-slate-500 shrink-0 font-medium">Quick:</span>
-              {[
-                { label: '📍 Address', text: '📍 Address: ' },
-                { label: '🔢 Ref #', text: '🔢 Ref No: ' },
-                { label: '💰 Price', text: '💰 Price: ' },
-                { label: '📅 Meet', text: '📅 Meeting: ' },
-                { label: '⏰ Callback', text: '⏰ Call back at: ' },
-                { label: '📞 Alt No', text: '📞 Alt phone: ' },
-              ].map((chip) => (
-                <button
-                  key={chip.label}
-                  type="button"
-                  onClick={() => handleInsertTag(chip.text)}
-                  className="px-2 py-0.5 rounded-full bg-slate-800 hover:bg-amber-500/20 hover:text-amber-300 border border-slate-700 text-slate-300 shrink-0 font-medium transition active:scale-95"
-                >
-                  {chip.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Note Area */}
-            <textarea
-              ref={notesInputRef}
-              value={callerNote}
-              onChange={(e) => handleNoteChange(e.target.value)}
-              rows={3}
-              placeholder="Jot down notes, address, OTP, codes, or instructions during the call…"
-              className="w-full resize-none rounded-xl border border-slate-700 bg-slate-900/90 p-2.5 text-xs text-white placeholder-slate-500 outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/40 font-sans"
-            />
-
-            {/* Footer Toolbar */}
-            <div className="flex items-center justify-between pt-0.5">
-              <div className="flex items-center space-x-1.5">
+              <div className="flex space-x-2">
+                <input
+                  type="tel"
+                  value={secondCallInput}
+                  onChange={(e) => setSecondCallInput(e.target.value)}
+                  placeholder="Enter phone number to add"
+                  className="flex-1 px-3.5 py-2.5 rounded-2xl bg-black/60 border border-white/20 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-white"
+                />
                 <button
                   type="button"
-                  onClick={handleCopyNote}
-                  disabled={!callerNote.trim()}
-                  className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-30 text-[11px] font-semibold flex items-center space-x-1 transition"
+                  onClick={handleExecuteAddCall}
+                  className="px-4 py-2.5 rounded-2xl bg-white text-slate-950 font-bold text-xs hover:bg-slate-200 active:scale-95 transition flex items-center space-x-1"
                 >
-                  {copySuccess ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                  <span>{copySuccess ? 'Copied' : 'Copy'}</span>
+                  <PhoneCall className="w-3.5 h-3.5" />
+                  <span>Call</span>
                 </button>
-                {callerNote.trim() && (
-                  <button
-                    type="button"
-                    onClick={handleClearNote}
-                    className="px-2 py-1 rounded-lg text-slate-500 hover:text-rose-400 text-[11px] font-medium transition"
-                  >
-                    Clear
-                  </button>
-                )}
               </div>
+            </div>
+          )}
+
+          {/* Secondary Conference Toolbar (Compact Pills) */}
+          <div className="flex items-center justify-center gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                setShowAddCallPrompt((prev) => !prev);
+                setShowInCallNotes(false);
+                setShowInCallKeypad(false);
+              }}
+              className="flex-1 py-2 px-3 rounded-full bg-white/10 hover:bg-white/15 border border-white/10 text-[11px] font-bold text-slate-200 active:scale-95 transition flex items-center justify-center space-x-1.5"
+            >
+              <UserPlus className="w-3.5 h-3.5 text-slate-300" />
+              <span>+ Add Call</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleSwapCalls}
+              className="flex-1 py-2 px-3 rounded-full bg-white/10 hover:bg-white/15 border border-white/10 text-[11px] font-bold text-slate-200 active:scale-95 transition text-center"
+            >
+              Swap Calls
+            </button>
+            <button
+              type="button"
+              onClick={handleMergeCalls}
+              className="flex-1 py-2 px-3 rounded-full bg-white/10 hover:bg-white/15 border border-white/10 text-[11px] font-bold text-slate-200 active:scale-95 transition text-center"
+            >
+              Merge Calls
+            </button>
+          </div>
+
+          {/* ONE-HANDED THUMB DECK: Large High-Contrast Primary Buttons */}
+          <div className="pt-2 space-y-3">
+            {/* ROW 1: The Big 3 Live Controls (Mute, Keypad, Speaker) with 72px Touch Targets */}
+            <div className="grid grid-cols-3 gap-3 place-items-center">
+              {/* 1. Mute Button */}
+              <div className="flex flex-col items-center">
+                <button
+                  type="button"
+                  onClick={handleToggleMute}
+                  aria-label={isMuted ? t('unmute') : t('mute')}
+                  className={`w-[72px] h-[72px] rounded-full flex items-center justify-center transition-all duration-150 active:scale-90 shadow-xl border ${
+                    isMuted
+                      ? 'bg-rose-600 text-white border-rose-400 ring-4 ring-rose-500/30'
+                      : 'bg-white/10 text-white hover:bg-white/15 border-white/15 active:bg-white/20'
+                  }`}
+                >
+                  {isMuted ? (
+                    <MicOff className="w-7 h-7 text-white stroke-[2.5]" />
+                  ) : (
+                    <Mic className="w-7 h-7 text-white stroke-[2.2]" />
+                  )}
+                </button>
+                <span className="text-[11px] font-bold tracking-tight mt-1.5 text-slate-300">
+                  {isMuted ? t('unmute') : t('mute')}
+                </span>
+              </div>
+
+              {/* 2. Keypad Button */}
+              <div className="flex flex-col items-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowInCallKeypad((prev) => !prev);
+                    setShowInCallNotes(false);
+                    setShowAddCallPrompt(false);
+                  }}
+                  aria-label={t('keypad')}
+                  className={`w-[72px] h-[72px] rounded-full flex items-center justify-center transition-all duration-150 active:scale-90 shadow-xl border ${
+                    showInCallKeypad
+                      ? 'bg-white text-slate-950 border-white ring-4 ring-white/30'
+                      : 'bg-white/10 text-white hover:bg-white/15 border-white/15 active:bg-white/20'
+                  }`}
+                >
+                  <Grid className={`w-7 h-7 stroke-[2.2] ${showInCallKeypad ? 'text-slate-950' : 'text-white'}`} />
+                </button>
+                <span className="text-[11px] font-bold tracking-tight mt-1.5 text-slate-300">
+                  {t('keypad')}
+                </span>
+              </div>
+
+              {/* 3. Speaker Button */}
+              <div className="flex flex-col items-center">
+                <button
+                  type="button"
+                  onClick={handleToggleSpeaker}
+                  aria-label={isSpeaker ? t('earpiece') : t('speaker')}
+                  className={`w-[72px] h-[72px] rounded-full flex items-center justify-center transition-all duration-150 active:scale-90 shadow-xl border ${
+                    isSpeaker
+                      ? 'bg-emerald-500 text-white border-emerald-300 ring-4 ring-emerald-500/30'
+                      : 'bg-white/10 text-white hover:bg-white/15 border-white/15 active:bg-white/20'
+                  }`}
+                >
+                  {isSpeaker ? (
+                    <Volume2 className="w-7 h-7 text-white stroke-[2.5]" />
+                  ) : (
+                    <VolumeX className="w-7 h-7 text-white stroke-[2.2]" />
+                  )}
+                </button>
+                <span className="text-[11px] font-bold tracking-tight mt-1.5 text-slate-300">
+                  {isSpeaker ? t('speaker') : t('speaker')}
+                </span>
+              </div>
+            </div>
+
+            {/* ROW 2: Utility In-Call Functions (Notes, Hold, Record) with 60px Touch Targets */}
+            <div className="grid grid-cols-3 gap-3 place-items-center">
+              {/* Notes */}
+              <div className="flex flex-col items-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowInCallNotes((prev) => !prev);
+                    setShowInCallKeypad(false);
+                    setShowAddCallPrompt(false);
+                  }}
+                  aria-label="In-Call Notes"
+                  className={`w-[60px] h-[60px] rounded-full flex items-center justify-center transition-all duration-150 active:scale-90 shadow-lg border relative ${
+                    showInCallNotes
+                      ? 'bg-amber-400 text-slate-950 border-amber-300 ring-4 ring-amber-500/30'
+                      : callerNote.trim()
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 hover:bg-amber-500/30'
+                      : 'bg-white/10 text-slate-300 hover:bg-white/15 border-white/15'
+                  }`}
+                >
+                  <StickyNote className="w-6 h-6 stroke-[2]" />
+                  {callerNote.trim() && (
+                    <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-black" />
+                  )}
+                </button>
+                <span className="text-[10.5px] font-semibold text-slate-300 mt-1">
+                  {callerNote.trim() ? 'Notes (Saved)' : 'Notes'}
+                </span>
+              </div>
+
+              {/* Hold */}
+              <div className="flex flex-col items-center">
+                <button
+                  type="button"
+                  onClick={handleToggleHold}
+                  aria-label={isOnHold ? t('unhold') : t('hold')}
+                  className={`w-[60px] h-[60px] rounded-full flex items-center justify-center transition-all duration-150 active:scale-90 shadow-lg border ${
+                    isOnHold
+                      ? 'bg-amber-500 text-slate-950 border-amber-300 ring-4 ring-amber-500/30'
+                      : 'bg-white/10 text-slate-300 hover:bg-white/15 border-white/15'
+                  }`}
+                >
+                  {isOnHold ? (
+                    <Play className="w-6 h-6 fill-current" />
+                  ) : (
+                    <Pause className="w-6 h-6 stroke-[2]" />
+                  )}
+                </button>
+                <span className="text-[10.5px] font-semibold text-slate-300 mt-1">
+                  {isOnHold ? t('unhold') : t('hold')}
+                </span>
+              </div>
+
+              {/* Record (Lossless 48kHz) */}
+              <div className="flex flex-col items-center">
+                <button
+                  type="button"
+                  onClick={handleToggleRecording}
+                  aria-label={isRecording ? t('recording') : t('record')}
+                  className={`w-[60px] h-[60px] rounded-full flex items-center justify-center transition-all duration-150 active:scale-90 shadow-lg border ${
+                    isRecording
+                      ? 'bg-rose-600 text-white border-rose-400 ring-4 ring-rose-500/40'
+                      : 'bg-white/10 text-slate-300 hover:bg-white/15 border-white/15'
+                  }`}
+                >
+                  <Disc className={`w-6 h-6 stroke-[2] ${isRecording ? 'animate-spin text-white' : ''}`} />
+                </button>
+                <span className="text-[10.5px] font-semibold text-slate-300 mt-1">
+                  {isRecording ? t('recording') : t('record')}
+                </span>
+              </div>
+            </div>
+
+            {/* ROW 3: Massive One-Handed End Call Action Button */}
+            <div className="pt-3 pb-1">
               <button
                 type="button"
-                onClick={() => setShowInCallNotes(false)}
-                className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[11px] font-bold transition shadow-sm"
+                onClick={handleEndCallAction}
+                aria-label={t('end_call')}
+                className="w-full h-16 rounded-full bg-rose-600 hover:bg-rose-500 active:bg-rose-700 active:scale-98 text-white font-black text-base shadow-2xl shadow-rose-950/80 transition-all flex items-center justify-center space-x-3 border border-rose-400/30 select-none ring-4 ring-rose-500/10 cursor-pointer"
               >
-                Done
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                  <PhoneOff className="w-5 h-5 text-white stroke-[2.5]" />
+                </div>
+                <span className="tracking-wider uppercase text-sm font-black">
+                  {t('end_call')}
+                </span>
               </button>
             </div>
           </div>
-        )}
-
-        {/* In-Call In-Screen Keypad Popover */}
-        {showInCallKeypad && (
-          <div className="p-3 rounded-2xl bg-slate-850 border border-slate-700 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-300">DTMF Keypad</span>
-              <span className="text-xs font-mono text-indigo-300 min-h-[16px]">
-                {keypadDigits || 'Dialed digits'}
-              </span>
-              <button
-                onClick={() => setShowInCallKeypad(false)}
-                className="p-0.5 text-slate-400 hover:text-white"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <div className="grid grid-cols-3 gap-1.5 max-w-[200px] mx-auto">
-              {['1','2','3','4','5','6','7','8','9','*','0','#'].map((digit) => (
-                <button
-                  key={digit}
-                  onClick={() => handleKeypadPress(digit)}
-                  className="py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-indigo-600 text-white font-bold text-sm"
-                >
-                  {digit}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Add Call (Conference) Popover */}
-        {showAddCallPrompt && (
-          <div className="p-3 rounded-2xl bg-slate-850 border border-slate-700 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-300">Add Second Call</span>
-              <button
-                onClick={() => setShowAddCallPrompt(false)}
-                className="p-0.5 text-slate-400 hover:text-white"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <div className="flex space-x-2">
-              <input
-                type="tel"
-                value={secondCallInput}
-                onChange={(e) => setSecondCallInput(e.target.value)}
-                placeholder="Enter phone number"
-                className="flex-1 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-              />
-              <button
-                onClick={handleExecuteAddCall}
-                className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white"
-              >
-                Call
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* In-Call Action Grid (6 Key Functions) */}
-        <div className="grid grid-cols-3 gap-2.5 pt-1">
-          {/* Mute */}
-          <button
-            onClick={handleToggleMute}
-            className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition active:scale-95 ${
-              isMuted
-                ? 'bg-rose-500/20 border-rose-500 text-rose-300'
-                : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            {isMuted ? <MicOff className="w-5 h-5 text-rose-400" /> : <Mic className="w-5 h-5" />}
-            <span className="text-[10px] font-semibold mt-1">{isMuted ? t('unmute') : t('mute')}</span>
-          </button>
-
-          {/* Keypad */}
-          <button
-            onClick={() => {
-              setShowInCallKeypad((prev) => !prev);
-              setShowInCallNotes(false);
-              setShowAddCallPrompt(false);
-            }}
-            className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition active:scale-95 ${
-              showInCallKeypad
-                ? 'bg-indigo-600/30 border-indigo-500 text-indigo-300'
-                : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <Grid className="w-5 h-5" />
-            <span className="text-[10px] font-semibold mt-1">{t('keypad')}</span>
-          </button>
-
-          {/* Speaker */}
-          <button
-            onClick={handleToggleSpeaker}
-            className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition active:scale-95 ${
-              isSpeaker
-                ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
-                : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            {isSpeaker ? <Volume2 className="w-5 h-5 text-emerald-400" /> : <VolumeX className="w-5 h-5" />}
-            <span className="text-[10px] font-semibold mt-1">{isSpeaker ? t('earpiece') : t('speaker')}</span>
-          </button>
-
-          {/* In-Call Notes (User's feature request to jot down details during call) */}
-          <button
-            onClick={() => {
-              setShowInCallNotes((prev) => !prev);
-              setShowInCallKeypad(false);
-              setShowAddCallPrompt(false);
-            }}
-            className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition active:scale-95 relative ${
-              showInCallNotes
-                ? 'bg-amber-500/25 border-amber-500 text-amber-300 ring-2 ring-amber-500/40'
-                : callerNote.trim()
-                ? 'bg-amber-500/15 border-amber-500/60 text-amber-300 hover:bg-amber-500/25'
-                : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <StickyNote className="w-5 h-5" />
-            {callerNote.trim() && (
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-amber-400 animate-pulse ring-2 ring-slate-900" />
-            )}
-            <span className="text-[10px] font-semibold mt-1">
-              {callerNote.trim() ? 'Note • Active' : 'Notes'}
-            </span>
-          </button>
-
-          {/* Hold */}
-          <button
-            onClick={handleToggleHold}
-            className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition active:scale-95 ${
-              isOnHold
-                ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            {isOnHold ? <Play className="w-5 h-5 text-amber-400" /> : <Pause className="w-5 h-5" />}
-            <span className="text-[10px] font-semibold mt-1">{isOnHold ? t('unhold') : t('hold')}</span>
-          </button>
-
-          {/* Record - High Quality 48kHz */}
-          <button
-            onClick={handleToggleRecording}
-            className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition active:scale-95 ${
-              isRecording
-                ? 'bg-rose-500/25 border-rose-500 text-rose-300 ring-2 ring-rose-500/40'
-                : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <Disc className={`w-5 h-5 ${isRecording ? 'text-rose-400 animate-spin' : ''}`} />
-            <span className="text-[10px] font-semibold mt-1">
-              {isRecording ? t('recording') : t('record')}
-            </span>
-          </button>
         </div>
 
-        {/* Dual Call Management & Conference toolbar */}
-        <div className="grid grid-cols-3 gap-2 pt-1">
-          <button
-            onClick={() => {
-              setShowAddCallPrompt((prev) => !prev);
-              setShowInCallNotes(false);
-              setShowInCallKeypad(false);
-            }}
-            className="py-1.5 px-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-[10px] font-medium text-slate-300 hover:bg-slate-700 transition flex items-center justify-center space-x-1"
-          >
-            <UserPlus className="w-3.5 h-3.5" />
-            <span>+ Add Call</span>
-          </button>
-          <button
-            onClick={handleSwapCalls}
-            className="py-1.5 px-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-[10px] font-medium text-slate-300 hover:bg-slate-700 transition"
-          >
-            Swap Calls
-          </button>
-          <button
-            onClick={handleMergeCalls}
-            className="py-1.5 px-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-[10px] font-medium text-slate-300 hover:bg-slate-700 transition"
-          >
-            Merge Calls
-          </button>
-        </div>
-
-        {/* Large End Call Button */}
-        <div className="pt-2">
-          <button
-            onClick={handleEndCallAction}
-            className="w-full py-3.5 rounded-2xl bg-rose-600 hover:bg-rose-500 active:scale-98 text-white font-extrabold text-sm shadow-xl shadow-rose-950/60 transition flex items-center justify-center space-x-2"
-          >
-            <PhoneOff className="w-5 h-5" />
-            <span>{t('end_call')}</span>
-          </button>
-        </div>
       </div>
     </div>
   );

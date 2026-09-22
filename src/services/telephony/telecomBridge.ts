@@ -22,7 +22,7 @@ declare global {
       clearStaleCallNotifications?:()=>boolean;
       setSecuritySetting?:(key:string,value:boolean)=>boolean; syncBlockRules?:(json:string)=>boolean; createContact?:(number:string,name?:string)=>boolean;
       silenceRinger?:()=>boolean; isDeviceLocked?:()=>boolean; requestDeviceUnlock?:()=>boolean; onUiReady?:()=>void; syncActiveCalls?:()=>void;
-      pinWidget?:(type:string)=>string; updateWidgetData?:(speedDialJson:string)=>boolean;
+      pinWidget?:(type:string)=>string; updateWidgetData?:(speedDialJson:string)=>boolean; moveTaskToBack?:()=>boolean;
     };
     __onAndroidTelecomEvent?:(eventType:string,payload:any)=>void;
     __onAndroidDialIntent?:(number:string)=>void;
@@ -230,6 +230,14 @@ class TelecomBridgeService {
     if (!this.native() || !window.AndroidTelecomBridge?.updateWidgetData) return false;
     try {
       return Boolean(window.AndroidTelecomBridge.updateWidgetData(JSON.stringify(contacts)));
+    } catch {
+      return false;
+    }
+  }
+  public moveTaskToBack(): boolean {
+    if (!this.native() || !window.AndroidTelecomBridge?.moveTaskToBack) return false;
+    try {
+      return Boolean(window.AndroidTelecomBridge.moveTaskToBack());
     } catch {
       return false;
     }

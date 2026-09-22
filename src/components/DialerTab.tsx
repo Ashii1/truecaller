@@ -144,7 +144,6 @@ const DialerTab = memo(function DialerTab({
       {/* Top Header */}
       <div className={`flex items-center justify-between transition-all ${isCompact ? 'mb-1.5' : 'mb-2.5'}`}>
         <div>
-          <p className={`font-bold uppercase tracking-[.18em] text-slate-500 transition-all ${isCompact ? 'text-[9px]' : 'text-[10px]'}`}>{t('nav_phone')}</p>
           <h1 className={`font-bold tracking-tight text-white transition-all ${isCompact ? 'text-lg' : 'text-xl'}`}>{t('dialer_keypad')}</h1>
         </div>
       </div>
