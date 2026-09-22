@@ -1,11 +1,7 @@
 import { memo, useMemo, useState } from 'react';
+import { AnimatePresence } from 'motion/react';
 import {
-  AlertTriangle,
-  Ban,
-  Bot,
-  ChevronRight,
   Disc,
-  EyeOff,
   ListFilter,
   Phone,
   PhoneIncoming,
@@ -14,17 +10,14 @@ import {
   PhoneOutgoing,
   RefreshCw,
   Search,
-  ShieldAlert,
-  ShieldCheck,
-  Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
 import { CallLogItem, CallDirection, BlockRule, WhitelistEntry, ShieldSettings, CallShieldDirectoryProfile, DisplayDensity } from '../types';
-import { formatPhoneNumber } from '../utils/spamEngine';
 import { groupCallsByNumber, CallGroup } from '../utils/callHistory';
 import { useI18n } from '../i18n/LanguageContext';
 import ModernFilterBar, { FilterTabOption } from './ModernFilterBar';
+import SwipeableCallItem from './SwipeableCallItem';
 
 interface RecentsTabProps {
   calls: CallLogItem[];
@@ -37,6 +30,7 @@ interface RecentsTabProps {
   onBlockNumber: (number: string, label: string) => void;
   onWhitelistNumber: (number: string, name: string) => void;
   onDeleteCall: (id: string) => void;
+  onDeleteCalls?: (ids: string[]) => void;
   onClearAllCalls: () => void;
   onStartScreeningDemo?: (number: string, name: string) => void;
   onSyncDeviceCalls?: () => void;
@@ -64,6 +58,7 @@ function RecentsTab({
   onSelectCall,
   onBlockNumber,
   onDeleteCall,
+  onDeleteCalls,
   onClearAllCalls,
   onSyncDeviceCalls,
   density = 'comfortable',
@@ -71,6 +66,14 @@ function RecentsTab({
   const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('ALL');
+
+  const handleDeleteCalls = (ids: string[]) => {
+    if (onDeleteCalls) {
+      onDeleteCalls(ids);
+    } else {
+      ids.forEach((id) => onDeleteCall(id));
+    }
+  };
 
   const dayLabel = (ts: number) => {
     const d = new Date(ts),
@@ -208,150 +211,25 @@ function RecentsTab({
             <section key={day}>
               <h2 className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-[.18em] text-slate-600">{day}</h2>
               <div className={`overflow-hidden border border-white/10 bg-[#0e141c] transition-all ${isCompact ? 'rounded-xl' : 'rounded-2xl'}`}>
-                {dayGroups.map((g) => {
-                  const p = lookupProfile(g.number),
-                    name =
-                      g.name && g.name !== g.number && !/^unknown caller$/i.test(g.name)
-                        ? g.name
-                        : p.name || g.number || t('unknown_caller'),
-                    spam = g.calls.some((c) => c.isSpam) || p.isSpam,
-                    latest = g.latest;
-                  return (
-                    <div
+                <AnimatePresence initial={false}>
+                  {dayGroups.map((g) => (
+                    <SwipeableCallItem
                       key={g.key}
-                      className={`group flex items-center border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition ${isCompact ? 'gap-2 px-2.5 py-1.5' : 'gap-2.5 px-3 py-2.5'}`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => onSelectCall(latest)}
-                        className={`grid shrink-0 place-items-center rounded-full transition-all ${
-                          isCompact ? 'h-7.5 w-7.5 text-xs' : 'h-9 w-9'
-                        } ${
-                          g.missedCount
-                            ? 'bg-amber-400/10 text-amber-400'
-                            : spam
-                            ? 'bg-rose-400/10 text-rose-400'
-                            : 'bg-white/5 text-slate-400'
-                        }`}
-                      >
-                        {iconFor(latest.type)}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onSelectCall(latest)}
-                        className="min-w-0 flex-1 text-left"
-                      >
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span
-                            className={`truncate font-semibold transition-all ${
-                              isCompact ? 'text-xs' : 'text-sm'
-                            } ${
-                              g.missedCount ? 'text-amber-200' : 'text-white'
-                            }`}
-                          >
-                            {name}
-                          </span>
-                          {spam ? (
-                            <span className="inline-flex items-center gap-1 rounded bg-rose-500/20 px-1.5 py-0.5 text-[8.5px] font-bold text-rose-300">
-                              <ShieldAlert className="h-2.5 w-2.5 text-rose-400" />
-                              {t('spam_badge')}
-                            </span>
-                          ) : latest.isVerifiedBusiness || p.isVerified ? (
-                            <span className="inline-flex items-center gap-1 rounded bg-blue-500/20 px-1.5 py-0.5 text-[8.5px] font-bold text-blue-300">
-                              <ShieldCheck className="h-2.5 w-2.5 text-blue-400" />
-                              {t('verified_badge')}
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[8.5px] font-bold text-emerald-300">
-                              <ShieldCheck className="h-2.5 w-2.5 text-emerald-400" />
-                              {t('safe_badge')}
-                            </span>
-                          )}
-                          {g.calls.some((c) => c.isNeighborSpoof) && (
-                            <span className="inline-flex items-center gap-1 rounded bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.5 text-[8.5px] font-bold text-amber-300">
-                              <AlertTriangle className="h-2.5 w-2.5 text-amber-400" />
-                              Neighbor Spoof
-                            </span>
-                          )}
-                          {g.calls.some((c) => c.isPingBackScam) && (
-                            <span className="inline-flex items-center gap-1 rounded bg-rose-500/20 border border-rose-500/30 px-1.5 py-0.5 text-[8.5px] font-bold text-rose-300">
-                              <ShieldAlert className="h-2.5 w-2.5 text-rose-400" />
-                              1-Ring Trap
-                            </span>
-                          )}
-                          {g.calls.some((c) => Boolean(c.recordingUri)) && (
-                            <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.5 text-[8.5px] font-bold text-emerald-300">
-                              <Disc className="h-2.5 w-2.5 text-emerald-400 animate-pulse" />
-                              REC
-                            </span>
-                          )}
-                          {g.calls.some((c) => c.usedAiScreener) && (
-                            <span className="inline-flex items-center gap-1 rounded bg-indigo-500/20 border border-indigo-500/30 px-1.5 py-0.5 text-[8.5px] font-bold text-indigo-300">
-                              <Bot className="h-2.5 w-2.5 text-indigo-400" />
-                              AI Screened
-                            </span>
-                          )}
-                        </div>
-                        <div className={`flex flex-wrap items-center text-slate-400 transition-all ${isCompact ? 'mt-0 text-[10px] gap-x-1' : 'mt-0.5 text-[11px] gap-x-1.5'}`}>
-                          <span className="font-mono">{formatPhoneNumber(g.number)}</span>
-                          <span>·</span>
-                          <span>{p.location || 'India'}</span>
-                          <span>·</span>
-                          <span>
-                            {g.totalCount} {g.totalCount === 1 ? t('call') : t('calls')}
-                          </span>
-                          <span>·</span>
-                          <span>{timeLabel(latest.timestamp)}</span>
-                        </div>
-                        {latest.usedAiScreener && latest.screeningSummaryBullets && latest.screeningSummaryBullets.length > 0 && (
-                          <div className={`flex items-center gap-1.5 text-indigo-300 ${isCompact ? 'mt-0.5 text-[10px]' : 'mt-1 text-[11px]'}`}>
-                            <Sparkles className="h-2.5 w-2.5 shrink-0 text-indigo-400" />
-                            <span className="truncate">{latest.screeningSummaryBullets[0]}</span>
-                          </div>
-                        )}
-                        {g.missedCount > 0 && (
-                          <div className={`font-semibold text-amber-400 ${isCompact ? 'mt-0 text-[9.5px]' : 'mt-0.5 text-[10px]'}`}>
-                            {g.missedCount} {t('missed')}
-                          </div>
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onInitiateCall(g.number, name)}
-                        className={`grid shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition ${isCompact ? 'h-7 w-7' : 'h-8 w-8'}`}
-                        aria-label={t('nav_phone')}
-                        title="Call"
-                      >
-                        <Phone className={`fill-current ${isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'}`} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onInitiateCall(g.number, name, undefined, true)}
-                        className={`grid shrink-0 place-items-center rounded-full bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 transition ${isCompact ? 'h-7 w-7' : 'h-8 w-8'}`}
-                        aria-label="Call Privately (*67 Masked)"
-                        title={`Call Privately (${settings?.privateCallPrefix || '*67'} Masked)`}
-                      >
-                        <EyeOff className={isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDeleteCall(latest.id)}
-                        className="hidden rounded-full p-1.5 text-slate-700 hover:text-rose-400 sm:block transition"
-                        title={t('delete')}
-                      >
-                        <Trash2 className={isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onBlockNumber(g.number, name)}
-                        className="hidden rounded-full p-1.5 text-slate-700 hover:text-rose-400 sm:block transition"
-                        title={t('block')}
-                      >
-                        <Ban className={isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
-                      </button>
-                    </div>
-                  );
-                })}
+                      group={g}
+                      profile={lookupProfile(g.number)}
+                      settings={settings}
+                      density={density}
+                      isCompact={isCompact}
+                      onSelectCall={onSelectCall}
+                      onInitiateCall={onInitiateCall}
+                      onDeleteCalls={handleDeleteCalls}
+                      onBlockNumber={onBlockNumber}
+                      iconFor={iconFor}
+                      timeLabel={timeLabel}
+                      t={t}
+                    />
+                  ))}
+                </AnimatePresence>
               </div>
             </section>
           ))}

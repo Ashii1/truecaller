@@ -735,6 +735,10 @@ export default function App(){
   }, [rules, whitelist]);
 
   const handleDeleteCall = useCallback((id: string) => setCalls(p => p.filter(c => c.id !== id)), []);
+  const handleDeleteCalls = useCallback((ids: string[]) => {
+    const set = new Set(ids);
+    setCalls(p => p.filter(c => !set.has(c.id)));
+  }, []);
   const handleToggleRule = useCallback((id: string) => setRules(p => p.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r)), []);
   const handleDeleteRule = useCallback((id: string) => setRules(p => p.filter(r => r.id !== id)), []);
   const handleAddRule = useCallback((d: any) => setRules(p => [{ ...d, id: `rule-${Date.now()}`, hitCount: 0, createdAt: Date.now() }, ...p]), []);
@@ -755,7 +759,7 @@ export default function App(){
    <Navigation activeTab={activeTab} onChangeTab={(tab) => { setNavigationSignal(v => v + 1); setActiveTab(tab); }} spamCallsCount={spamCallsCount} activeRulesCount={activeRulesCount} assistantAlertsCount={3} phoneOnly={phoneOnly}/> 
    <main className={phoneOnly ? "min-h-screen w-full" : "mx-auto w-full max-w-4xl px-3 py-3 pb-28 sm:pb-32"}>
     {activeTab==='dialer'&&<DialerTab contacts={contacts} recentCalls={calls} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onOpenCallerDetail={handleOpenCallerDetail} onSaveContact={(n,nm)=>handleUpdateCallerName(n,nm)} selectedSim={selectedSim} onChangeSim={setSelectedSim} initialNumber={dialerInitialNumber} density={density}/>} 
-    {activeTab==='recents'&&<RecentsTab calls={calls} rules={rules} whitelist={whitelist} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onSelectCall={openCaller} onBlockNumber={handleBlockNumber} onWhitelistNumber={handleWhitelistNumber} onDeleteCall={handleDeleteCall} onClearAllCalls={handleClearAllCalls} onSyncDeviceCalls={handleSyncDeviceData} density={density}/>} 
+    {activeTab==='recents'&&<RecentsTab calls={calls} rules={rules} whitelist={whitelist} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onSelectCall={openCaller} onBlockNumber={handleBlockNumber} onWhitelistNumber={handleWhitelistNumber} onDeleteCall={handleDeleteCall} onDeleteCalls={handleDeleteCalls} onClearAllCalls={handleClearAllCalls} onSyncDeviceCalls={handleSyncDeviceData} density={density}/>} 
     {activeTab==='contacts'&&<ContactsTab contacts={contacts} onInitiateCall={handleInitiateCall} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} onDeleteContact={handleDeleteContact} onToggleFavorite={handleToggleFavorite} recentCalls={calls} density={density} onOpenCallerDetail={handleOpenCallerDetail} privateCallPrefix={settings.privateCallPrefix}/>} 
     {activeTab==='protection'&&<ProtectionTab settings={settings} onUpdateSettings={setSettings} rules={rules} onToggleRule={handleToggleRule} onDeleteRule={handleDeleteRule} onAddRule={handleAddRule} whitelist={whitelist} onRemoveWhitelist={handleRemoveWhitelist} timelineEvents={timelineEvents} onTriggerScreeningDemo={handleTriggerScreeningDemo}/>} 
     {activeTab==='assistant'&&<AssistantTab calls={calls} contacts={contacts} rules={rules} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onAddRule={handleAddRule}/>} 
