@@ -90,6 +90,15 @@ class MainActivity : AppCompatActivity() {
         webView.settings.mediaPlaybackRequiresUserGesture = false
         webView.addJavascriptInterface(bridge, AndroidTelephonyBridge.INTERFACE_NAME)
         webView.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                val url = request?.url?.toString() ?: return false
+                return handleExternalUrl(url)
+            }
+            @Suppress("DEPRECATION")
+            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                if (url == null) return false
+                return handleExternalUrl(url)
+            }
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? = request?.url?.let { assetLoader.shouldInterceptRequest(it) }
             @Suppress("DEPRECATION") override fun shouldInterceptRequest(view: WebView?, url: String?): WebResourceResponse? = url?.let { assetLoader.shouldInterceptRequest(Uri.parse(it)) }
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) { uiReportedReady = false; startupCheckAttempts = 0; lastConsoleError = null; showLoading() }
@@ -108,6 +117,74 @@ class MainActivity : AppCompatActivity() {
         // Do not interrupt widget/phone-surface launches with a system role dialog.
     }
 
+    private fun handleExternalUrl(url: String): Boolean {
+        val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return true
+        val scheme = uri.scheme?.lowercase() ?: return true
+
+        // Do not intercept internal web assets
+        if (url.startsWith(APP_ASSET_URL) || uri.host == "appassets.androidplatform.net") {
+            return false
+        }
+
+        // For all external URLs, launch intent and always return true
+        // so WebView NEVER tries to navigate itself to unknown schemes (like whatsapp://)
+        tryLaunchExternalIntent(url)
+        return true
+    }
+
+    private fun tryLaunchExternalIntent(url: String): Boolean {
+        return runCatching {
+            val uri = Uri.parse(url)
+            val scheme = uri.scheme?.lowercase() ?: ""
+
+            // Specialized WhatsApp handling
+            if (scheme == "whatsapp" || url.contains("api.whatsapp.com") || url.contains("wa.me")) {
+                val phone = if (scheme == "whatsapp") {
+                    uri.getQueryParameter("phone").orEmpty()
+                } else {
+                    uri.getQueryParameter("phone") ?: uri.pathSegments.lastOrNull().orEmpty()
+                }.filter { it.isDigit() }
+
+                val pm = packageManager
+                // 1. Try official WhatsApp app
+                val whatsappIntent = Intent(Intent.ACTION_VIEW, Uri.parse("whatsapp://send?phone=$phone")).apply {
+                    setPackage("com.whatsapp")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                if (whatsappIntent.resolveActivity(pm) != null) {
+                    startActivity(whatsappIntent)
+                    return true
+                }
+
+                // 2. Try WhatsApp Business app
+                val w4bIntent = Intent(Intent.ACTION_VIEW, Uri.parse("whatsapp://send?phone=$phone")).apply {
+                    setPackage("com.whatsapp.w4b")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                if (w4bIntent.resolveActivity(pm) != null) {
+                    startActivity(w4bIntent)
+                    return true
+                }
+
+                // 3. Fallback to external web browser
+                val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com/send?phone=$phone")).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(browserIntent)
+                return true
+            }
+
+            val intent = if (url.startsWith("intent://")) {
+                Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
+            } else {
+                Intent(Intent.ACTION_VIEW, uri)
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+            true
+        }.getOrDefault(false)
+    }
+
     private fun shouldSuppressMainUiForCall(value: Intent?): Boolean {
         if (!hasActiveOrRingingCall()) return false
         if (value == null) return true
@@ -118,12 +195,13 @@ class MainActivity : AppCompatActivity() {
         if (action == Intent.ACTION_MAIN && categories.contains(Intent.CATEGORY_LAUNCHER)) return false
         if (action == Intent.ACTION_DIAL || action == Intent.ACTION_VIEW || action == Intent.ACTION_CALL) return false
         if (action == "com.vigilshield.telecom.OPEN_OUTGOING_CALL") return false
+        if (action == "com.vigilshield.telecom.OPEN_INCOMING_CALL") return false
         if (value.getBooleanExtra("phone_surface", false)) return false
         if (!value.getStringExtra("open_call_id").isNullOrBlank()) return false
 
         // A system-created/empty launch while the phone is ringing must not open
         // the normal CallShield application screen.
-        return action.isNullOrBlank() || action == "com.vigilshield.telecom.OPEN_INCOMING_CALL"
+        return action.isNullOrBlank()
     }
 
     private fun hasActiveOrRingingCall(): Boolean {
@@ -209,7 +287,7 @@ class MainActivity : AppCompatActivity() {
         val tab = current.getStringExtra("open_tab")
         val action = current.getStringExtra("notification_action") ?: current.action ?: ""
         val isIncoming = isIncomingCallIntent(current)
-        val phoneSurface = current.getBooleanExtra("phone_surface", false)
+        val phoneSurface = current.getBooleanExtra("phone_surface", false) || isIncoming
         bridge.dispatchWebEvent("PHONE_SURFACE_CHANGED", JSONObject().put("phoneOnly", phoneSurface))
         hideLoading()
         hideError()
@@ -340,7 +418,8 @@ class MainActivity : AppCompatActivity() {
     private fun isRingingOrIncoming(): Boolean {
         return NativeInCallService.isRinging() ||
                NativeInCallService.activeCalls.values.any { it.state == android.telecom.Call.STATE_RINGING } ||
-               intent?.getBooleanExtra("is_incoming_call", false) == true
+               intent?.getBooleanExtra("is_incoming_call", false) == true ||
+               NativeInCallService.activeCalls.isNotEmpty()
     }
 
     private fun silenceIncomingRinger() {

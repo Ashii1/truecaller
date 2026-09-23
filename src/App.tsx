@@ -75,8 +75,8 @@ export default function App(){
 
  const lastBackPressTimeRef = useRef<number>(0);
  const initiateCallRef = useRef<(number: string, name?: string, sim?: Sim, isPrivate?: boolean) => void>(() => {});
- const dataRef = useRef({ rules, whitelist, contacts, settings, autoCancelEnabled, calls, selectedSim });
- dataRef.current = { rules, whitelist, contacts, settings, autoCancelEnabled, calls, selectedSim };
+ const dataRef = useRef({ rules, whitelist, contacts, settings, autoCancelEnabled, calls, selectedSim, phoneOnly });
+ dataRef.current = { rules, whitelist, contacts, settings, autoCancelEnabled, calls, selectedSim, phoneOnly };
  const stateRef = useRef({
    activeTab,
    isCallerModalOpen,
@@ -401,6 +401,9 @@ export default function App(){
         }
       } else if (eventType === 'CALL_REMOVED' || eventType === 'CALL_DISCONNECTED' || eventType === 'CALL_REJECTED') {
         setActiveIncomingCall(null);
+        if (dataRef.current.phoneOnly) {
+          telecomBridge.finishAppSurface();
+        }
         setActiveCallSession((prev) => {
           if (!prev || prev.id !== callId) return prev;
           const dur = prev.durationSeconds || 1;
@@ -757,7 +760,10 @@ export default function App(){
       }
     }
     setActiveCallSession(null);
-  }, [activeCallSession]);
+    if (phoneOnly) {
+      telecomBridge.finishAppSurface();
+    }
+  }, [activeCallSession, phoneOnly]);
 
   const openCaller = useCallback((call: CallLogItem) => {
     setSelectedProfile(lookupCallShieldDirectory(call.number, rules, whitelist));
@@ -881,7 +887,10 @@ export default function App(){
     }
 
     setActiveIncomingCall(null);
-  }, [activeIncomingCall, handleBlockNumber, selectedSim]);
+    if (phoneOnly) {
+      telecomBridge.finishAppSurface();
+    }
+  }, [activeIncomingCall, handleBlockNumber, selectedSim, phoneOnly]);
 
   const handleAnswerIncomingCall = useCallback((screeningData?: { transcript: ScreeningTranscriptEntry[]; intent: string | null }) => {
     telecomBridge.silenceRinger();
@@ -923,6 +932,38 @@ export default function App(){
     setIsOngoingCallMinimized(false);
   }, [activeIncomingCall, selectedSim]);
 
+  // When phone is opened strictly as the phone surface for an incoming call,
+  // do NOT open the main app tabs, navigation or header in the background.
+  // Display only the caller UI!
+  if (phoneOnly && activeIncomingCall) {
+    return (
+      <div className="fixed inset-0 z-[99999] bg-[#030712] select-none">
+        <IncomingCallOverlay
+          call={activeIncomingCall}
+          isDeviceLocked={isDeviceLocked}
+          autoCancelEnabled={autoCancelEnabled}
+          settings={settings}
+          onCancelCall={handleCancelIncomingCall}
+          onAnswerCall={handleAnswerIncomingCall}
+          onExpand={() => setActiveIncomingCall(prev => prev ? { ...prev, viewMode: 'fullscreen' } : null)}
+          onMinimize={() => setActiveIncomingCall(prev => prev ? { ...prev, viewMode: 'popup' } : null)}
+          onScreenCall={() => {
+            telecomBridge.silenceRinger();
+            setActiveIncomingCall(prev => prev ? { ...prev, status: 'SCREENING' } : null);
+          }}
+          onDismiss={() => {
+            if (activeIncomingCall?.callId) {
+              telecomBridge.rejectCall(activeIncomingCall.callId, 'Dismissed');
+            }
+            telecomBridge.clearStaleCallNotifications();
+            setActiveIncomingCall(null);
+            telecomBridge.finishAppSurface();
+          }}
+        />
+      </div>
+    );
+  }
+
   return <div className="min-h-screen bg-[#070b10] text-white">
    {!phoneOnly && <Header closeSettingsSignal={navigationSignal} settings={settings} onUpdateSettings={setSettings} isDefaultDialer={isDefaultDialer} onRequestDefaultDialer={handleRequestDefaultDialer} onOpenPermissionCenter={()=>setIsPermissionCenterOpen(true)} onSyncDatabase={handleSyncDeviceData} isSyncing={isSyncing} autoCancelEnabled={autoCancelEnabled} onToggleAutoCancel={()=>setAutoCancelEnabled(v=>!v)} onOpenInstallModal={()=>setIsInstallModalOpen(true)} onOpenDataSources={()=>setIsDataSourcesModalOpen(true)} onOpenDiagnostics={()=>setIsDiagnosticsModalOpen(true)} recentSpamCalls={recentSpamCalls} onSelectCall={openCaller} onOpenRecents={()=>setActiveTab('recents')} onOpenProtection={()=>setActiveTab('protection')} density={density} onDensityChange={handleDensityChange} activeIncomingCall={activeIncomingCall} onAnswerIncomingCall={handleAnswerIncomingCall} onDeclineIncomingCall={() => handleCancelIncomingCall('Declined by user', false)} onExpandIncomingCall={() => { if (activeIncomingCall) setActiveIncomingCall(prev => prev ? { ...prev, viewMode: 'fullscreen' } : null); }} isDeviceLocked={isDeviceLocked} onToggleLockDevice={() => setIsDeviceLocked(v => !v)} onTriggerIncomingCall={() => handleTriggerScreeningDemo()} activeCallSession={activeCallSession} onMaximizeOngoingCall={() => setIsOngoingCallMinimized(false)} onEndOngoingCall={handleEndCall}/>} 
    <Navigation activeTab={activeTab} onChangeTab={(tab) => { setNavigationSignal(v => v + 1); setActiveTab(tab); }} spamCallsCount={spamCallsCount} activeRulesCount={activeRulesCount} assistantAlertsCount={3} phoneOnly={phoneOnly}/> 
@@ -943,6 +984,8 @@ export default function App(){
       settings={settings}
       onCancelCall={handleCancelIncomingCall}
       onAnswerCall={handleAnswerIncomingCall}
+      onExpand={() => setActiveIncomingCall(prev => prev ? { ...prev, viewMode: 'fullscreen' } : null)}
+      onMinimize={() => setActiveIncomingCall(prev => prev ? { ...prev, viewMode: 'popup' } : null)}
       onScreenCall={() => {
         telecomBridge.silenceRinger();
         setActiveIncomingCall(prev => prev ? { ...prev, status: 'SCREENING' } : null);

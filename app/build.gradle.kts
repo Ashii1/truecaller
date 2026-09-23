@@ -1,12 +1,12 @@
 import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.Exec
 
-// Versioning: Set strictly above 402 build so Android package manager performs
+// Versioning: Set strictly above previous builds so Android package manager performs
 // a clean in-place update over the existing installed app without requiring uninstallation.
-val baseVersionCode = 403
+val baseVersionCode = 650
 val ciRunNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
-val finalVersionCode = maxOf(baseVersionCode, 403 + ciRunNumber)
-val finalVersionName = "1.5.3"
+val finalVersionCode = maxOf(baseVersionCode, 650 + ciRunNumber)
+val finalVersionName = "1.5.5"
 
 val envKeystorePath = System.getenv("VIGILSHIELD_KEYSTORE_FILE")
 val envKeystorePassword = System.getenv("VIGILSHIELD_KEYSTORE_PASSWORD")

@@ -10,7 +10,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
-  VolumeX,
 } from 'lucide-react';
 import { IncomingCallState, ScreeningTranscriptEntry, ShieldSettings } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
@@ -28,6 +27,8 @@ interface IncomingCallOverlayProps {
   onAnswerCall: (screeningData?: { transcript: ScreeningTranscriptEntry[]; intent: string | null }) => void;
   onDismiss: () => void;
   onScreenCall?: (call: IncomingCallState) => void;
+  onExpand?: () => void;
+  onMinimize?: () => void;
   initialMode?: 'popup' | 'fullscreen';
 }
 
@@ -40,6 +41,8 @@ export default function IncomingCallOverlay({
   onAnswerCall,
   onDismiss,
   onScreenCall,
+  onExpand,
+  onMinimize,
   initialMode,
 }: IncomingCallOverlayProps) {
   const { t } = useI18n();
@@ -291,20 +294,19 @@ export default function IncomingCallOverlay({
     }
   };
 
-  const handleSilenceClick = (e?: MouseEvent) => {
-    e?.stopPropagation();
-    handleSilence();
-  };
-
   // Clicking on the in-app popup banner directly opens fullscreen caller
-  const handleBannerClick = () => {
+  const handleBannerClick = (e?: MouseEvent) => {
+    e?.stopPropagation();
     setDisplayMode('fullscreen');
+    onExpand?.();
   };
 
-  const rawNumStr = typeof call.number === 'string' ? call.number : String(call.number ?? '');
+  const rawNumStr = typeof call.number === 'string' ? call.number.trim() : call.number != null ? String(call.number).trim() : '';
   const formattedNumber = formatPhoneNumber(rawNumStr);
-  const hasSpecificName = Boolean(call.callerName && call.callerName.trim() && call.callerName.replace(/\D/g, '') !== rawNumStr.replace(/\D/g, ''));
-  const callerDisplayName = hasSpecificName ? (call.callerName as string) : formattedNumber;
+  const callerNameStr = typeof call.callerName === 'string' ? call.callerName.trim() : call.callerName != null ? String(call.callerName).trim() : '';
+  const hasSpecificName = Boolean(callerNameStr && callerNameStr.replace(/\D/g, '') !== rawNumStr.replace(/\D/g, ''));
+  const callerDisplayName = hasSpecificName ? callerNameStr : formattedNumber;
+  const avatarInitial = (callerDisplayName?.trim()?.[0] || '📞').toUpperCase();
 
   // =========================================================================
   // 1. IN-APP POPUP BANNER (Rendered ONLY when NOT on lockscreen & mode === 'popup')
@@ -331,7 +333,7 @@ export default function IncomingCallOverlay({
                   ? 'bg-amber-950 text-amber-200 border border-amber-500/50'
                   : 'bg-emerald-950 text-emerald-200 border border-emerald-500/50'
               }`}>
-                {callerDisplayName.slice(0, 1).toUpperCase()}
+                {avatarInitial}
               </div>
             </div>
             <div className="min-w-0 flex-1">
@@ -397,7 +399,7 @@ export default function IncomingCallOverlay({
         role="button"
         tabIndex={0}
       >
-        {/* Top meta row with trust status, collapse handle & silence ringer */}
+        {/* Top meta row with trust status and collapse handle */}
         <div className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-2.5">
           <div className="flex items-center gap-1.5 min-w-0">
             {critical ? (
@@ -444,26 +446,6 @@ export default function IncomingCallOverlay({
           <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
             <button
               type="button"
-              onClick={handleSilenceClick}
-              className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition active:scale-95 ${
-                silenced
-                  ? 'border border-slate-700 bg-slate-800 text-slate-400'
-                  : 'border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
-              }`}
-              title={
-                silenced
-                  ? 'Ringtone silenced'
-                  : settings?.volumeButtonAction === 'REJECT_CALL'
-                  ? 'Mute ringtone (Vol key rejects call)'
-                  : 'Silence ringtone (or press Vol key)'
-              }
-              aria-label={silenced ? 'Ringtone silenced' : 'Silence ringtone'}
-            >
-              <VolumeX className="h-3 w-3" />
-              <span>{silenced ? 'Silenced' : 'Mute'}</span>
-            </button>
-            <button
-              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsCollapsed(true);
@@ -491,7 +473,7 @@ export default function IncomingCallOverlay({
                 ? 'bg-amber-950 text-amber-200 border-2 border-amber-500/60 shadow-amber-950/50'
                 : 'bg-indigo-950 text-indigo-200 border-2 border-indigo-500/60 shadow-indigo-950/50'
             }`}>
-              {callerDisplayName.slice(0, 1).toUpperCase()}
+              {avatarInitial}
             </div>
           </div>
 
@@ -561,20 +543,6 @@ export default function IncomingCallOverlay({
             </button>
           </div>
         </div>
-
-        {/* Hardware Key Helper Bar in In-App Popup */}
-        <div className="flex items-center justify-between text-[10px] text-slate-400/80 pt-2 mt-2 border-t border-white/[0.06] select-none">
-          <span className="flex items-center gap-1">
-            <span className="rounded bg-slate-800 px-1 py-0.2 font-mono text-[9px] text-slate-300 font-semibold">Vol Key</span>
-            <span>{settings?.volumeButtonAction === 'REJECT_CALL' ? 'Reject Call' : (silenced ? 'Muted' : 'Mute Ringer')}</span>
-          </span>
-          {settings?.powerButtonEndsCall && (
-            <span className="flex items-center gap-1">
-              <span className="rounded bg-slate-800 px-1 py-0.2 font-mono text-[9px] text-slate-300 font-semibold">Power</span>
-              <span>Decline</span>
-            </span>
-          )}
-        </div>
       </div>
     );
   }
@@ -620,7 +588,10 @@ export default function IncomingCallOverlay({
           {!isDeviceLocked && (
             <button
               type="button"
-              onClick={() => setDisplayMode('popup')}
+              onClick={() => {
+                setDisplayMode('popup');
+                onMinimize?.();
+              }}
               className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition"
               title="Minimize to in-app banner"
               aria-label="Minimize to in-app banner"
@@ -629,20 +600,6 @@ export default function IncomingCallOverlay({
               <span className="hidden sm:inline">Banner</span>
             </button>
           )}
-
-          <button
-            type="button"
-            onClick={handleSilenceClick}
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${
-              silenced
-                ? 'bg-slate-800/80 text-slate-400 border border-slate-700/60'
-                : 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
-            }`}
-            aria-label={silenced ? 'Ringtone Silenced' : 'Silence Ringtone'}
-          >
-            <VolumeX className="h-3.5 w-3.5" />
-            <span>{silenced ? 'Silenced' : 'Silence'}</span>
-          </button>
         </div>
       </div>
 
@@ -662,7 +619,7 @@ export default function IncomingCallOverlay({
               ? 'bg-amber-950/60 text-amber-200 border-amber-500/50 shadow-amber-950/50'
               : 'bg-indigo-950/60 text-indigo-200 border-indigo-500/50 shadow-indigo-950/50'
           }`}>
-            {callerDisplayName.slice(0, 1).toUpperCase()}
+            {avatarInitial}
           </div>
         </div>
 
@@ -678,39 +635,6 @@ export default function IncomingCallOverlay({
           <span>•</span>
           <span>{call.location || 'India'}</span>
         </div>
-
-        {settings?.volumeButtonAction === 'REJECT_CALL' ? (
-          <div className="mt-3 flex items-center justify-center gap-2.5 text-[11px] text-slate-400">
-            <span className="flex items-center gap-1">
-              <span className="rounded bg-rose-950/80 border border-rose-800/60 px-1.5 py-0.5 font-mono text-[10px] text-rose-300 font-bold">Vol Key</span>
-              <span className="text-rose-300 font-medium">Reject Call</span>
-            </span>
-            {settings?.powerButtonEndsCall && (
-              <span className="flex items-center gap-1">
-                <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-300">Power</span>
-                <span>End</span>
-              </span>
-            )}
-          </div>
-        ) : silenced ? (
-          <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-slate-700/80 bg-slate-900/90 px-3.5 py-1 text-xs text-slate-300 animate-in fade-in">
-            <VolumeX className="h-3.5 w-3.5 text-amber-400" />
-            <span>Ringtone silenced (Volume key or button)</span>
-          </div>
-        ) : (
-          <div className="mt-3 flex items-center justify-center gap-2.5 text-[11px] text-slate-400">
-            <span className="flex items-center gap-1">
-              <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-300">Vol Key</span>
-              <span>Silence</span>
-            </span>
-            {settings?.powerButtonEndsCall && (
-              <span className="flex items-center gap-1">
-                <span className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-300">Power</span>
-                <span>End</span>
-              </span>
-            )}
-          </div>
-        )}
 
         {/* Neighbor Spoof High-Visibility Banner */}
         {call.isNeighborSpoof && (
@@ -749,7 +673,12 @@ export default function IncomingCallOverlay({
           <div className="mt-3 w-full space-y-2 rounded-2xl border border-slate-800 bg-slate-950/80 p-3.5 text-left text-xs text-slate-400">
             <div className="flex justify-between"><span>{t('carrier_label')}</span><span className="text-slate-200">{call.carrier || 'Cellular'}</span></div>
             <div className="flex justify-between"><span>{t('location_label')}</span><span className="max-w-[65%] text-right text-slate-200">{call.location || 'Unavailable'}</span></div>
-            {call.reportsCount > 0 && <div className="flex justify-between"><span>{t('spam_reports_count')}</span><span className="text-slate-200">{call.reportsCount.toLocaleString()}</span></div>}
+            {typeof call.reportsCount === 'number' && call.reportsCount > 0 && (
+              <div className="flex justify-between">
+                <span>{t('spam_reports_count')}</span>
+                <span className="text-slate-200">{call.reportsCount.toLocaleString()}</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -775,45 +704,32 @@ export default function IncomingCallOverlay({
           <Sparkles className="h-3.5 w-3.5 text-indigo-300" />
         </button>
 
-        {/* Primary Large Call Actions */}
-        <div className="grid grid-cols-3 gap-3 pt-1">
+        {/* Primary Large Call Actions (Clean 2-button layout: Decline and Answer) */}
+        <div className="grid grid-cols-2 gap-6 pt-2 max-w-xs mx-auto w-full">
           {/* Decline */}
-          <div className="flex flex-col items-center gap-1.5">
+          <div className="flex flex-col items-center gap-2">
             <button
               type="button"
               onClick={handleDecline}
-              className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-600 font-bold text-white hover:bg-rose-500 shadow-lg shadow-rose-950/60 active:scale-90 transition"
+              className="flex h-18 w-18 sm:h-20 sm:w-20 items-center justify-center rounded-full bg-rose-600 font-bold text-white hover:bg-rose-500 shadow-xl shadow-rose-950/70 active:scale-90 transition transform"
               aria-label={t('decline')}
             >
-              <PhoneOff className="h-7 w-7" />
+              <PhoneOff className="h-8 w-8" />
             </button>
-            <span className="text-xs font-semibold text-slate-300">{t('decline')}</span>
-          </div>
-
-          {/* Quick Silence */}
-          <div className="flex flex-col items-center gap-1.5">
-            <button
-              type="button"
-              onClick={handleSilence}
-              className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white shadow-lg active:scale-90 transition"
-              aria-label={silenced ? 'Silenced' : 'Silence'}
-            >
-              <VolumeX className="h-6 w-6" />
-            </button>
-            <span className="text-xs font-semibold text-slate-400">{silenced ? 'Silenced' : 'Silence'}</span>
+            <span className="text-xs font-bold text-slate-300">{t('decline')}</span>
           </div>
 
           {/* Answer */}
-          <div className="flex flex-col items-center gap-1.5">
+          <div className="flex flex-col items-center gap-2">
             <button
               type="button"
               onClick={handleAnswer}
-              className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-600 font-bold text-white hover:bg-emerald-500 shadow-lg shadow-emerald-950/60 active:scale-90 transition"
+              className="flex h-18 w-18 sm:h-20 sm:w-20 items-center justify-center rounded-full bg-emerald-600 font-bold text-white hover:bg-emerald-500 shadow-xl shadow-emerald-950/70 active:scale-90 transition transform animate-pulse"
               aria-label={t('answer')}
             >
-              <Phone className="h-7 w-7" />
+              <Phone className="h-8 w-8" />
             </button>
-            <span className="text-xs font-semibold text-slate-300">{t('answer')}</span>
+            <span className="text-xs font-bold text-emerald-400">{t('answer')}</span>
           </div>
         </div>
       </div>

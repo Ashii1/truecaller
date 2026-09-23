@@ -248,8 +248,11 @@ export function startIncomingCallAlerts(options: {
   playRingtone?: boolean;
 }): IncomingCallAlertController {
   const mode = options.ringerMode || 'NORMAL';
-  const shouldPlayAudio = mode === 'NORMAL' && options.playRingtone !== false;
-  const shouldVibrate = mode === 'NORMAL' || mode === 'VIBRATE';
+  const isAndroid = typeof window !== 'undefined' && Boolean((window as any).AndroidTelecomBridge);
+  // On native Android, VigilShieldInCallService handles the phone's actual default ringtone and vibration.
+  // Web Audio simulated tone is only for browser preview.
+  const shouldPlayAudio = !isAndroid && mode === 'NORMAL' && options.playRingtone !== false;
+  const shouldVibrate = !isAndroid && (mode === 'NORMAL' || mode === 'VIBRATE');
 
   let ringController: RingController | null = null;
   let vibrateInterval: number | null = null;

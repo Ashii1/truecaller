@@ -68,11 +68,19 @@ object CallNotificationHelper {
         return builder
     }
 
-    private fun incomingCallActivityIntent(context: Context, callId: String, displayName: String, number: String): Intent = Intent(context, IncomingCallActivity::class.java).apply {
+    private fun incomingCallActivityIntent(context: Context, callId: String, displayName: String, number: String): Intent = Intent(context, MainActivity::class.java).apply {
+        action = "com.vigilshield.telecom.OPEN_INCOMING_CALL"
         putExtra("open_call_id", callId)
         putExtra("open_call_number", number)
-        putExtra("display_name", displayName)
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        putExtra("open_call_name", displayName)
+        putExtra("is_incoming_call", true)
+        putExtra("phone_surface", true)
+        putExtra("open_tab", "incoming")
+        addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK or
+            Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+            Intent.FLAG_ACTIVITY_SINGLE_TOP
+        )
     }
 
     private fun callActivityIntent(context: Context, callId: String, name: String, number: String): Intent = Intent(context, MainActivity::class.java).apply {

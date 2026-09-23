@@ -3,13 +3,7 @@ build/
 dist/
 coverage/
 .DS_Store
+# Ephemeral logs
 *.log
 .env*
 !.env.example
-
-# Signing keys and credential files
-*.jks
-*.keystore
-keystore_base64.txt
-public/keystore_base64.txt
-release-keystore.jks

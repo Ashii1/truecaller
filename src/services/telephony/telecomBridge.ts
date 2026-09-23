@@ -24,6 +24,7 @@ declare global {
       silenceRinger?:()=>boolean; isDeviceLocked?:()=>boolean; requestDeviceUnlock?:()=>boolean; onUiReady?:()=>void; syncActiveCalls?:()=>void;
       getRingerMode?:()=>string; setHardwareKeyConfig?:(configJson:string)=>boolean;
       vibrate?:(durationMs:number)=>boolean;
+      finishAppSurface?:()=>boolean; openExternalApp?:(url:string)=>boolean;
       pinWidget?:(type:string)=>string; updateWidgetData?:(speedDialJson:string)=>boolean;
     };
     __onAndroidTelecomEvent?:(eventType:string,payload:any)=>void;
@@ -114,6 +115,21 @@ class TelecomBridgeService {
   public rejectCall(id:string,reason?:string){if(!this.native())return false;const res=window.AndroidTelecomBridge!.rejectCall(id,reason);this.clearStaleCallNotifications();return res;}
   public disconnectCall(id:string,number?:string){if(!this.native())return false;const res=window.AndroidTelecomBridge!.disconnectCall(id,number);this.clearStaleCallNotifications();return res;}
   public silenceRinger(){if(!this.native()||!window.AndroidTelecomBridge?.silenceRinger)return false;try{return window.AndroidTelecomBridge.silenceRinger();}catch{return false;}}
+  public finishAppSurface(): boolean {
+    if (!this.native() || !window.AndroidTelecomBridge?.finishAppSurface) return false;
+    try { return Boolean(window.AndroidTelecomBridge.finishAppSurface()); } catch { return false; }
+  }
+  public openExternalApp(url: string): boolean {
+    if (!url) return false;
+    if (this.native() && window.AndroidTelecomBridge?.openExternalApp) {
+      try {
+        return Boolean(window.AndroidTelecomBridge.openExternalApp(url));
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
   public vibratePhone(pattern: number | number[] = 250): boolean {
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator && navigator.vibrate) {
       try { navigator.vibrate(pattern); } catch {}

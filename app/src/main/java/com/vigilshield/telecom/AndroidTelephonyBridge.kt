@@ -23,6 +23,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.provider.CallLog
 import android.provider.ContactsContract
+import android.provider.Settings
 import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.InCallService
@@ -262,6 +263,70 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
         }
         true
     }.getOrDefault(false)
+    @JavascriptInterface fun silenceRinger(): Boolean {
+        VigilShieldInCallService.stopRinging()
+        return true
+    }
+    @JavascriptInterface fun finishAppSurface(): Boolean {
+        activity.runOnUiThread {
+            if (!activity.isFinishing) {
+                activity.finishAndRemoveTask()
+            }
+        }
+        return true
+    }
+    @JavascriptInterface fun openExternalApp(url: String): Boolean {
+        return runCatching {
+            val uri = Uri.parse(url)
+            val scheme = uri.scheme?.lowercase() ?: ""
+
+            // Dedicated WhatsApp handling
+            if (scheme == "whatsapp" || url.contains("api.whatsapp.com") || url.contains("wa.me")) {
+                val phone = if (scheme == "whatsapp") {
+                    uri.getQueryParameter("phone").orEmpty()
+                } else {
+                    uri.getQueryParameter("phone") ?: uri.pathSegments.lastOrNull().orEmpty()
+                }.filter { it.isDigit() }
+
+                val pm = activity.packageManager
+                // 1. Try official WhatsApp
+                val whatsappIntent = Intent(Intent.ACTION_VIEW, Uri.parse("whatsapp://send?phone=$phone")).apply {
+                    setPackage("com.whatsapp")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                if (whatsappIntent.resolveActivity(pm) != null) {
+                    activity.startActivity(whatsappIntent)
+                    return true
+                }
+
+                // 2. Try WhatsApp Business
+                val w4bIntent = Intent(Intent.ACTION_VIEW, Uri.parse("whatsapp://send?phone=$phone")).apply {
+                    setPackage("com.whatsapp.w4b")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                if (w4bIntent.resolveActivity(pm) != null) {
+                    activity.startActivity(w4bIntent)
+                    return true
+                }
+
+                // 3. Fallback to external browser
+                val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com/send?phone=$phone")).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                activity.startActivity(browserIntent)
+                return true
+            }
+
+            val intent = if (url.startsWith("intent://")) {
+                Intent.parseUri(url, Intent.URI_INTENT_SCHEME)
+            } else {
+                Intent(Intent.ACTION_VIEW, uri)
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            activity.startActivity(intent)
+            true
+        }.getOrDefault(false)
+    }
     fun isDefaultDialer(): Boolean = if (Build.VERSION.SDK_INT >= 29) activity.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_DIALER) else telecom.defaultDialerPackage == activity.packageName
     fun hasPermission(permission: String): Boolean = ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED
     fun hasCallLogPermission(): Boolean = hasPermission(Manifest.permission.READ_CALL_LOG)
@@ -308,7 +373,51 @@ class VigilShieldInCallService : InCallService() {
                 instance?.emit(call, call.state)
             }
         }
-        private fun startRinging() { stopRinging(); val context = appContext ?: return; val audio = context.getSystemService(AudioManager::class.java); val uri = RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE) ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE); when (audio.ringerMode) { AudioManager.RINGER_MODE_VIBRATE -> { vibrator = context.getSystemService(Vibrator::class.java); val pattern = longArrayOf(0, 450, 350, 450, 700); if (Build.VERSION.SDK_INT >= 26) vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0)) else @Suppress("DEPRECATION") vibrator?.vibrate(pattern, 0); vibrating = true }; AudioManager.RINGER_MODE_SILENT -> { ringtone = RingtoneManager.getRingtone(context, uri); ringtone?.audioAttributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build(); ringtone?.play() }; else -> { ringtone = RingtoneManager.getRingtone(context, uri); ringtone?.audioAttributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build(); ringtone?.play() } } }
+        private fun startRinging() {
+            stopRinging()
+            val context = appContext ?: return
+            val audio = context.getSystemService(AudioManager::class.java)
+            if (audio.ringerMode == AudioManager.RINGER_MODE_SILENT) {
+                // In silent mode: never play ringtone or audio alerts
+                return
+            }
+            if (audio.ringerMode == AudioManager.RINGER_MODE_VIBRATE) {
+                vibrator = context.getSystemService(Vibrator::class.java)
+                val pattern = longArrayOf(0, 450, 350, 450, 700)
+                if (Build.VERSION.SDK_INT >= 26) {
+                    vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator?.vibrate(pattern, 0)
+                }
+                vibrating = true
+                return
+            }
+
+            // Normal ringer mode: query phone's actual default ringtone
+            runCatching {
+                val uri = RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_RINGTONE)
+                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                    ?: Settings.System.DEFAULT_RINGTONE_URI
+
+                ringtone = RingtoneManager.getRingtone(context, uri)
+                if (ringtone == null) {
+                    ringtone = RingtoneManager.getRingtone(context, RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE))
+                }
+
+                ringtone?.let { r ->
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        r.isLooping = true
+                    }
+                    r.audioAttributes = AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .setLegacyStreamType(AudioManager.STREAM_RING)
+                        .build()
+                    r.play()
+                }
+            }
+        }
         fun wakeScreenUp(context: Context) {
             runCatching {
                 val pm = context.getSystemService(PowerManager::class.java) ?: return
@@ -330,6 +439,7 @@ class VigilShieldInCallService : InCallService() {
                     putExtra("open_call_number", number)
                     putExtra("open_call_name", name)
                     putExtra("is_incoming_call", true)
+                    putExtra("phone_surface", true)
                     putExtra("open_tab", "incoming")
                     addFlags(
                         Intent.FLAG_ACTIVITY_NEW_TASK or
@@ -395,7 +505,9 @@ class VigilShieldInCallService : InCallService() {
                     val number = c.details.handle?.schemeSpecificPart.orEmpty()
                     val name = bridge?.lookupName(number).orEmpty().ifBlank { c.details.callerDisplayName.orEmpty() }.ifBlank { number.ifBlank { "Unknown caller" } }
                     CallNotificationHelper.showIncomingCall(applicationContext, id, name, number)
-                    if (!MainActivity.isAppVisible) launchIncomingCallActivity(applicationContext, id, name, number)
+                    val km = applicationContext.getSystemService(android.app.KeyguardManager::class.java)
+                    val isLocked = km?.isKeyguardLocked == true
+                    if (isLocked && !MainActivity.isAppVisible) launchIncomingCallActivity(applicationContext, id, name, number)
                 } else if (state == Call.STATE_DIALING || state == Call.STATE_CONNECTING || state == Call.STATE_ACTIVE) {
                     stopRinging()
                     if (state == Call.STATE_ACTIVE) {
@@ -439,7 +551,9 @@ class VigilShieldInCallService : InCallService() {
             startRinging()
             wakeScreenUp(applicationContext)
             CallNotificationHelper.showIncomingCall(applicationContext, id, name, number)
-            if (!MainActivity.isAppVisible) launchIncomingCallActivity(applicationContext, id, name, number)
+            val km = applicationContext.getSystemService(android.app.KeyguardManager::class.java)
+            val isLocked = km?.isKeyguardLocked == true
+            if (isLocked && !MainActivity.isAppVisible) launchIncomingCallActivity(applicationContext, id, name, number)
         } else {
             // Publish the ongoing-call notification immediately from InCallService.
             // It must remain available after the user leaves CallShield for the launcher.

@@ -45,6 +45,7 @@ import { useI18n } from '../i18n/LanguageContext';
 import { callRecordingService, normalizePhoneNumber } from '../services/callRecordingService';
 import { externalDirectoryService } from '../services/externalDirectoryService';
 import { detectNeighborSpoof, detectPingBackScam } from '../utils/spoofEngine';
+import { telecomBridge } from '../services/telephony/telecomBridge';
 import AudioRecordingPlayer from './AudioRecordingPlayer';
 
 interface CallerDetailModalProps {
@@ -333,37 +334,33 @@ export default function CallerDetailModal({
 
     return {
       intl,
-      whatsapp: `https://wa.me/${intl}`,
+      whatsapp: `https://api.whatsapp.com/send?phone=${intl}`,
       whatsappApp: `whatsapp://send?phone=${intl}`,
-      telegram: `https://t.me/+${intl}`,
-      signal: `https://signal.me/#p/+${intl}`,
       sms: `sms:${number.startsWith('+') ? `+${intl}` : intl}`,
-      viber: `viber://chat?number=%2B${intl}`,
     };
   }, [number]);
 
-  const handleOpenSocialChat = (platform: 'whatsapp' | 'telegram' | 'signal' | 'sms' | 'viber') => {
+  const handleOpenSocialChat = (platform: 'whatsapp' | 'sms') => {
     if (!socialAccounts) return;
-    const url = socialAccounts[platform];
-    if (!url) return;
 
     const names = {
       whatsapp: 'WhatsApp',
-      telegram: 'Telegram',
-      signal: 'Signal',
       sms: 'SMS Messages',
-      viber: 'Viber',
     };
 
     setSocialToast(`Opening ${names[platform]} chat with ${number}...`);
     setTimeout(() => setSocialToast(null), 3000);
 
-    if (platform === 'sms') {
-      window.location.href = url;
-    } else {
-      const win = window.open(url, '_blank', 'noopener,noreferrer');
-      if (!win) {
-        window.location.href = url;
+    if (platform === 'whatsapp') {
+      const opened = telecomBridge.openExternalApp(socialAccounts.whatsappApp) ||
+                     telecomBridge.openExternalApp(socialAccounts.whatsapp);
+      if (!opened) {
+        window.open(socialAccounts.whatsapp, '_blank', 'noopener,noreferrer');
+      }
+    } else if (platform === 'sms') {
+      const opened = telecomBridge.openExternalApp(socialAccounts.sms);
+      if (!opened) {
+        window.open(socialAccounts.sms, '_blank', 'noopener,noreferrer');
       }
     }
   };
@@ -927,7 +924,7 @@ export default function CallerDetailModal({
                   </button>
                 </div>
 
-                <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                <div className="mt-3 grid grid-cols-2 gap-2.5">
                   {/* WhatsApp Direct Chat Button */}
                   <button
                     type="button"
@@ -942,25 +939,7 @@ export default function CallerDetailModal({
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="font-bold text-xs text-white group-hover:text-[#25D366] transition">WhatsApp</div>
-                      <div className="text-[10.5px] text-slate-400 truncate">Open Direct Chat</div>
-                    </div>
-                  </button>
-
-                  {/* Telegram Chat Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleOpenSocialChat('telegram')}
-                    className="group relative flex items-center gap-3 rounded-xl border border-[#229ED9]/40 bg-[#229ED9]/10 p-3 hover:bg-[#229ED9]/20 transition text-left active:scale-98 shadow-sm"
-                  >
-                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#229ED9] text-white shadow-md shadow-[#229ED9]/30 group-hover:scale-105 transition-transform">
-                      {/* Telegram Plane SVG */}
-                      <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z" />
-                      </svg>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-bold text-xs text-white group-hover:text-[#229ED9] transition">Telegram</div>
-                      <div className="text-[10.5px] text-slate-400 truncate">Chat via Phone</div>
+                      <div className="text-[10.5px] text-slate-400 truncate">Direct Chat</div>
                     </div>
                   </button>
 
@@ -968,13 +947,13 @@ export default function CallerDetailModal({
                   <button
                     type="button"
                     onClick={() => handleOpenSocialChat('sms')}
-                    className="group relative flex items-center gap-3 rounded-xl border border-purple-500/40 bg-purple-500/10 p-3 hover:bg-purple-500/20 transition text-left active:scale-98 shadow-sm col-span-2 sm:col-span-1"
+                    className="group relative flex items-center gap-3 rounded-xl border border-purple-500/40 bg-purple-500/10 p-3 hover:bg-purple-500/20 transition text-left active:scale-98 shadow-sm"
                   >
                     <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-purple-600 text-white shadow-md shadow-purple-600/30 group-hover:scale-105 transition-transform">
                       <MessageSquare className="h-5 w-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="font-bold text-xs text-white group-hover:text-purple-300 transition">SMS / RCS</div>
+                      <div className="font-bold text-xs text-white group-hover:text-purple-300 transition">SMS / Messages</div>
                       <div className="text-[10.5px] text-slate-400 truncate">Carrier Messaging</div>
                     </div>
                   </button>
@@ -1381,7 +1360,7 @@ export default function CallerDetailModal({
                           </span>
                         </div>
                         <p className="text-xs text-slate-400 mt-0.5">
-                          Open WhatsApp mobile app or WhatsApp Web directly
+                          Open WhatsApp mobile app directly
                         </p>
                       </div>
                     </div>
@@ -1390,70 +1369,6 @@ export default function CallerDetailModal({
                       type="button"
                       onClick={() => handleOpenSocialChat('whatsapp')}
                       className="rounded-xl bg-[#25D366] hover:bg-[#20ba5a] px-4 py-2 text-xs font-bold text-black shadow-md shadow-[#25D366]/20 transition active:scale-95 flex items-center gap-1.5 shrink-0"
-                    >
-                      <span>Open Chat</span>
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* TELEGRAM CARD */}
-                <div className="rounded-2xl border border-[#229ED9]/40 bg-[#0c141c] p-4 hover:border-[#229ED9] transition">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3.5">
-                      <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#229ED9] text-white shadow-lg shadow-[#229ED9]/30">
-                        <svg className="h-6 w-6 fill-current" viewBox="0 0 24 24">
-                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-white">Telegram</h4>
-                          <span className="rounded-full bg-[#229ED9]/20 border border-[#229ED9]/30 px-2 py-0.5 text-[10px] font-bold text-[#229ED9]">
-                            Direct Phone
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          Open Telegram chat by verified telephone link
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleOpenSocialChat('telegram')}
-                      className="rounded-xl bg-[#229ED9] hover:bg-[#1f8fc4] px-4 py-2 text-xs font-bold text-white shadow-md shadow-[#229ED9]/20 transition active:scale-95 flex items-center gap-1.5 shrink-0"
-                    >
-                      <span>Open Chat</span>
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* SIGNAL ENCRYPTED MESSENGER */}
-                <div className="rounded-2xl border border-[#3A76F0]/40 bg-[#0c1322] p-4 hover:border-[#3A76F0] transition">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3.5">
-                      <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#3A76F0] text-white shadow-lg shadow-[#3A76F0]/30">
-                        <ShieldCheck className="h-6 w-6" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-white">Signal Messenger</h4>
-                          <span className="rounded-full bg-[#3A76F0]/20 border border-[#3A76F0]/30 px-2 py-0.5 text-[10px] font-bold text-[#3A76F0]">
-                            Private
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          End-to-end encrypted messaging via Signal
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleOpenSocialChat('signal')}
-                      className="rounded-xl bg-[#3A76F0] hover:bg-[#2d64d8] px-4 py-2 text-xs font-bold text-white shadow-md shadow-[#3A76F0]/20 transition active:scale-95 flex items-center gap-1.5 shrink-0"
                     >
                       <span>Open Chat</span>
                       <ExternalLink className="h-3.5 w-3.5" />
@@ -1470,13 +1385,13 @@ export default function CallerDetailModal({
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-white">Native SMS / RCS</h4>
+                          <h4 className="text-sm font-bold text-white">SMS / Messages</h4>
                           <span className="rounded-full bg-purple-500/20 border border-purple-500/30 px-2 py-0.5 text-[10px] font-bold text-purple-300">
                             Carrier
                           </span>
                         </div>
                         <p className="text-xs text-slate-400 mt-0.5">
-                          Default messaging application on this device
+                          Carrier text messaging on this device
                         </p>
                       </div>
                     </div>
@@ -1488,37 +1403,6 @@ export default function CallerDetailModal({
                     >
                       <span>Send SMS</span>
                       <Send className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* VIBER MESSENGER */}
-                <div className="rounded-2xl border border-[#7360F2]/40 bg-[#100e1c] p-4 hover:border-[#7360F2] transition">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3.5">
-                      <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#7360F2] text-white shadow-lg shadow-[#7360F2]/30">
-                        <Phone className="h-6 w-6" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-white">Viber Messenger</h4>
-                          <span className="rounded-full bg-[#7360F2]/20 border border-[#7360F2]/30 px-2 py-0.5 text-[10px] font-bold text-[#9788f8]">
-                            VoIP Chat
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          Chat and call over Viber protocol
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleOpenSocialChat('viber')}
-                      className="rounded-xl bg-[#7360F2] hover:bg-[#614ef0] px-4 py-2 text-xs font-bold text-white shadow-md shadow-[#7360F2]/20 transition active:scale-95 flex items-center gap-1.5 shrink-0"
-                    >
-                      <span>Open Viber</span>
-                      <ExternalLink className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 </div>
