@@ -108,8 +108,6 @@ export default function ActiveCallModal({
     return () => clearInterval(interval);
   }, [isRecording]);
 
-  if (!session) return null;
-
   const saveNoteLocally = (text: string) => {
     if (!session?.number) return;
     const cleanKey = session.number.replace(/\D/g, '');
@@ -284,6 +282,8 @@ export default function ActiveCallModal({
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [session, powerButtonEndsCall]);
+
+  if (!session) return null;
 
   const callerProfile = lookupProfile(session.number);
   const initials = session.name
