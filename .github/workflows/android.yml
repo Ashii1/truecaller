@@ -66,7 +66,7 @@ jobs:
             echo "VIGILSHIELD_KEY_PASSWORD=$KEY_PASSWORD"
           } >> "$GITHUB_ENV"
       - name: Build release APK
-        run: gradle :app:assembleRelease --no-daemon
+        run: gradle :app:assembleRelease --no-daemon --stacktrace
       - name: Verify APK signature and version
         run: |
           APK=$(find app/build/outputs/apk/release -name "*.apk" -type f | head -n 1)

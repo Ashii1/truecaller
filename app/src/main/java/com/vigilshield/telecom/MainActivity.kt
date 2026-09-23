@@ -394,7 +394,7 @@ class MainActivity : AppCompatActivity() {
         return super.dispatchKeyEvent(event)
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         val isVolumeKey = keyCode == KeyEvent.KEYCODE_VOLUME_DOWN ||
                           keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
                           keyCode == KeyEvent.KEYCODE_VOLUME_MUTE
@@ -405,7 +405,7 @@ class MainActivity : AppCompatActivity() {
         return super.onKeyDown(keyCode, event)
     }
 
-    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
         val isVolumeKey = keyCode == KeyEvent.KEYCODE_VOLUME_DOWN ||
                           keyCode == KeyEvent.KEYCODE_VOLUME_UP ||
                           keyCode == KeyEvent.KEYCODE_VOLUME_MUTE

@@ -505,7 +505,7 @@ class VigilShieldInCallService : InCallService() {
                     val number = c.details.handle?.schemeSpecificPart.orEmpty()
                     val name = bridge?.lookupName(number).orEmpty().ifBlank { c.details.callerDisplayName.orEmpty() }.ifBlank { number.ifBlank { "Unknown caller" } }
                     CallNotificationHelper.showIncomingCall(applicationContext, id, name, number)
-                    val km = applicationContext.getSystemService(android.app.KeyguardManager::class.java)
+                    val km = applicationContext.getSystemService(KeyguardManager::class.java)
                     val isLocked = km?.isKeyguardLocked == true
                     if (isLocked && !MainActivity.isAppVisible) launchIncomingCallActivity(applicationContext, id, name, number)
                 } else if (state == Call.STATE_DIALING || state == Call.STATE_CONNECTING || state == Call.STATE_ACTIVE) {
@@ -551,7 +551,7 @@ class VigilShieldInCallService : InCallService() {
             startRinging()
             wakeScreenUp(applicationContext)
             CallNotificationHelper.showIncomingCall(applicationContext, id, name, number)
-            val km = applicationContext.getSystemService(android.app.KeyguardManager::class.java)
+            val km = applicationContext.getSystemService(KeyguardManager::class.java)
             val isLocked = km?.isKeyguardLocked == true
             if (isLocked && !MainActivity.isAppVisible) launchIncomingCallActivity(applicationContext, id, name, number)
         } else {
