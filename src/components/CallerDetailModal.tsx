@@ -10,20 +10,32 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock,
+  Copy,
   Disc,
   Edit2,
+  ExternalLink,
   EyeOff,
   Flag,
   Folder,
   Globe,
   Info,
+  MessageSquare,
   Mic,
   MicOff,
   Phone,
+  PhoneIncoming,
+  PhoneMissed,
+  PhoneOff,
+  PhoneOutgoing,
+  Send,
+  Share2,
+  Shield,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  Star,
   StickyNote,
+  Trash2,
   UserCheck,
   UserPlus,
   X,
@@ -53,7 +65,13 @@ interface CallerDetailModalProps {
   onSaveNote?: (callId: string, note: string) => void;
 }
 
-const duration = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+const formatDuration = (s: number) => {
+  if (!s || s <= 0) return '0s';
+  const mins = Math.floor(s / 60);
+  const secs = s % 60;
+  if (mins === 0) return `${secs}s`;
+  return `${mins}m ${secs.toString().padStart(2, '0')}s`;
+};
 
 export default function CallerDetailModal({
   call,
@@ -73,12 +91,13 @@ export default function CallerDetailModal({
   onSaveNote,
 }: CallerDetailModalProps) {
   const { t } = useI18n();
-  const [expanded, setExpanded] = useState(true);
-  const [recordingsExpanded, setRecordingsExpanded] = useState(true);
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'HISTORY' | 'SOCIAL' | 'RECORDINGS' | 'SECURITY'>('OVERVIEW');
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
   const [note, setNote] = useState('');
   const [noteSavedFeedback, setNoteSavedFeedback] = useState(false);
+  const [copiedNumberFeedback, setCopiedNumberFeedback] = useState(false);
+  const [socialToast, setSocialToast] = useState<string | null>(null);
   const [isDictating, setIsDictating] = useState(false);
   const [dictationError, setDictationError] = useState<string | null>(null);
   const speechRecognitionRef = useRef<any>(null);
@@ -99,13 +118,13 @@ export default function CallerDetailModal({
 
   useEffect(() => {
     if (isOpen) {
-      setExpanded(true);
-      setRecordingsExpanded(true);
+      setActiveTab('OVERVIEW');
       setEditing(false);
       setName(call?.callerName || profile?.name || '');
       setIsInaccuracyModalOpen(false);
       setInaccuracyFeedback(null);
       setContactSavedFeedback(false);
+      setCopiedNumberFeedback(false);
 
       let existingNote = call?.notes || '';
       if (!existingNote && number) {
@@ -122,7 +141,6 @@ export default function CallerDetailModal({
       // Load all call recordings for this specific number from device storage
       if (number) {
         callRecordingService.getRecordingsForNumber(number).then((items) => {
-          // Also check calls list for any recordingUri
           const callsWithRecs = calls
             .filter((c) => normalizePhoneNumber(c.number) === key && c.recordingUri)
             .map((c) => ({
@@ -267,6 +285,96 @@ export default function CallerDetailModal({
       ? t('verified_caller')
       : `${t('safe_badge')} · ${t('public_directory_verified')}`;
 
+  // Call history statistics
+  const callStats = useMemo(() => {
+    let totalSeconds = 0;
+    let incomingCount = 0;
+    let outgoingCount = 0;
+    let missedCount = 0;
+    let blockedCount = 0;
+
+    entries.forEach((e) => {
+      totalSeconds += e.durationSeconds || 0;
+      if (e.type === 'INCOMING') incomingCount++;
+      else if (e.type === 'OUTGOING') outgoingCount++;
+      else if (e.type === 'MISSED') missedCount++;
+      else if (e.type === 'BLOCKED_CANCELLED') blockedCount++;
+    });
+
+    const avgDuration = entries.length > 0 ? Math.round(totalSeconds / entries.length) : 0;
+
+    return {
+      totalCalls: entries.length,
+      incomingCount,
+      outgoingCount,
+      missedCount,
+      blockedCount,
+      totalDurationFormatted: formatDuration(totalSeconds),
+      avgDurationFormatted: formatDuration(avgDuration),
+      lastCallTimestamp: entries[0]?.timestamp || Date.now(),
+    };
+  }, [entries]);
+
+  // Direct Social Media and Messaging Links (WhatsApp, Telegram, Signal, Viber, SMS)
+  const socialAccounts = useMemo(() => {
+    if (!number) return null;
+    const digits = number.replace(/\D/g, '');
+    if (!digits || digits.length < 5) return null;
+
+    let intl = digits;
+    // Format Indian mobile: 10 digits starting with 6-9
+    if (digits.length === 10 && /^[6-9]/.test(digits)) {
+      intl = `91${digits}`;
+    } else if (number.startsWith('+')) {
+      intl = digits;
+    } else if (digits.length === 10) {
+      intl = `1${digits}`;
+    }
+
+    return {
+      intl,
+      whatsapp: `https://wa.me/${intl}`,
+      whatsappApp: `whatsapp://send?phone=${intl}`,
+      telegram: `https://t.me/+${intl}`,
+      signal: `https://signal.me/#p/+${intl}`,
+      sms: `sms:${number.startsWith('+') ? `+${intl}` : intl}`,
+      viber: `viber://chat?number=%2B${intl}`,
+    };
+  }, [number]);
+
+  const handleOpenSocialChat = (platform: 'whatsapp' | 'telegram' | 'signal' | 'sms' | 'viber') => {
+    if (!socialAccounts) return;
+    const url = socialAccounts[platform];
+    if (!url) return;
+
+    const names = {
+      whatsapp: 'WhatsApp',
+      telegram: 'Telegram',
+      signal: 'Signal',
+      sms: 'SMS Messages',
+      viber: 'Viber',
+    };
+
+    setSocialToast(`Opening ${names[platform]} chat with ${number}...`);
+    setTimeout(() => setSocialToast(null), 3000);
+
+    if (platform === 'sms') {
+      window.location.href = url;
+    } else {
+      const win = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!win) {
+        window.location.href = url;
+      }
+    }
+  };
+
+  const handleCopyNumber = () => {
+    if (!number) return;
+    navigator.clipboard?.writeText(number);
+    setCopiedNumberFeedback(true);
+    setTimeout(() => setCopiedNumberFeedback(false), 2000);
+  };
+
   const saveNote = () => {
     try {
       const raw = localStorage.getItem('vigilshield_call_notes_v1') || '{}';
@@ -348,7 +456,6 @@ export default function CallerDetailModal({
     }
   }, [isDictating, note]);
 
-  // Clean up dictation when modal closes or unmounts
   useEffect(() => {
     if (!isOpen && isDictating) {
       if (speechRecognitionRef.current) {
@@ -365,7 +472,6 @@ export default function CallerDetailModal({
     setRecordings((prev) => prev.filter((r) => r.id !== id));
   };
 
-  // Quick save to device contacts
   const handleQuickSaveContact = (contactName: string) => {
     if (!number.trim()) return;
     if (onAddContact) {
@@ -380,21 +486,15 @@ export default function CallerDetailModal({
     setTimeout(() => setContactSavedFeedback(false), 2500);
   };
 
-  // Apply Name Inaccuracy Correction
   const handleApplyNameCorrection = () => {
     const trimmed = inaccuracyCorrectedName.trim();
     if (!trimmed) return;
 
-    // 1. Persist local override
     externalDirectoryService.setUserNameOverride(number, trimmed, inaccuracyReason);
-
-    // 2. Update caller name in app state
     setName(trimmed);
     if (onUpdateCallerName) {
       onUpdateCallerName(number, trimmed);
     }
-
-    // 3. If community submission enabled, report dispute
     if (inaccuracySubmitCommunity && onOpenDisputeModal) {
       onOpenDisputeModal(number, trimmed);
     }
@@ -409,81 +509,593 @@ export default function CallerDetailModal({
   if (!shouldRender) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] isolate flex items-center justify-center bg-black/90 p-0 sm:p-4" style={{ backdropFilter: "none", WebkitBackdropFilter: "none", filter: "none", transform: "none" }} role="dialog" aria-modal="true">
-      <section className="flex h-full w-full max-w-2xl flex-col overflow-hidden bg-[#0a1017] sm:h-auto sm:max-h-[92vh] sm:rounded-[28px] sm:border sm:border-slate-800 sm:shadow-2xl" style={{ backdropFilter: "none", WebkitBackdropFilter: "none", filter: "none", transform: "none" }}>
-        {/* Header */}
-        <header className={`border-b px-5 pb-5 safe-top-modal sm:pt-5 ${isSpam ? 'border-rose-900/60 bg-rose-950/20' : 'border-slate-800 bg-[#0e1622]'}`}>
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              {/* Badges Row */}
-              <div className="mb-2.5 flex flex-wrap items-center gap-2">
-                <span className={`rounded-full px-3 py-1 text-[11px] font-bold ${isSpam ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30' : isVerified ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30' : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'}`}>
-                  {isSpam ? '⚠ ' : ''}{label}
-                </span>
+    <div
+      className="fixed inset-0 z-[9999] isolate flex items-center justify-center bg-black/85 p-0 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200"
+      style={{ backdropFilter: 'none', WebkitBackdropFilter: 'none', filter: 'none', transform: 'none' }}
+      role="dialog"
+      aria-modal="true"
+    >
+      <section
+        className={`flex h-full w-full max-w-2xl flex-col overflow-hidden bg-[#090d14] sm:h-auto sm:max-h-[92vh] sm:rounded-[30px] sm:border ${
+          isSpam ? 'sm:border-rose-900/60' : isVerified ? 'sm:border-blue-900/50' : 'sm:border-slate-800'
+        } sm:shadow-2xl transition-all`}
+        style={{ backdropFilter: 'none', WebkitBackdropFilter: 'none', filter: 'none', transform: 'none' }}
+      >
+        {/* Floating Social Toast */}
+        {socialToast && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white shadow-lg shadow-black/50 animate-in fade-in slide-in-from-top-2 flex items-center gap-2">
+            <ExternalLink className="h-3.5 w-3.5 animate-pulse" />
+            <span>{socialToast}</span>
+          </div>
+        )}
 
-                {/* Clear Visual Distinction Badge for Name Source */}
-                {nameOrigin === 'SAVED_CONTACT' ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-1 text-[11px] font-bold text-emerald-300">
-                    <BookUser className="h-3.5 w-3.5" />
-                    Saved Name (Device Contacts)
-                  </span>
-                ) : nameOrigin === 'USER_OVERRIDE' ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/20 border border-cyan-500/40 px-2.5 py-1 text-[11px] font-bold text-cyan-300">
-                    <Sparkles className="h-3.5 w-3.5" />
-                    Corrected Name (Local Override)
-                  </span>
+        {/* HERO CALLER PROFILE HEADER */}
+        <header
+          className={`relative border-b px-5 pt-5 pb-4 safe-top-modal transition-colors ${
+            isSpam
+              ? 'border-rose-900/50 bg-gradient-to-b from-rose-950/40 via-[#0e131d] to-[#090d14]'
+              : isVerified
+              ? 'border-blue-900/40 bg-gradient-to-b from-blue-950/30 via-[#0e1422] to-[#090d14]'
+              : 'border-slate-800 bg-gradient-to-b from-slate-900/50 via-[#0d121c] to-[#090d14]'
+          }`}
+        >
+          {/* Top Bar with Dismiss and Badges */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                  isSpam
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                    : isVerified
+                    ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                }`}
+              >
+                {isSpam ? <ShieldAlert className="h-3 w-3" /> : isVerified ? <ShieldCheck className="h-3 w-3" /> : <Shield className="h-3 w-3" />}
+                {label}
+              </span>
+
+              {call?.sim && (
+                <span className="rounded-full bg-slate-800/80 border border-slate-700/60 px-2 py-0.5 text-[10px] font-medium text-slate-300">
+                  {call.sim}
+                </span>
+              )}
+            </div>
+
+            <button
+              onClick={handleClose}
+              className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition active:scale-95 shrink-0"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Hero Profile Info */}
+          <div className="mt-3 flex items-start gap-4">
+            {/* Avatar with Dynamic Aura Ring */}
+            <div className="relative shrink-0">
+              <div
+                className={`grid h-16 w-16 place-items-center rounded-2xl font-black text-2xl shadow-xl transition-transform ${
+                  isSpam
+                    ? 'bg-gradient-to-br from-rose-600 to-rose-900 text-white ring-2 ring-rose-500/40'
+                    : isVerified
+                    ? 'bg-gradient-to-br from-blue-500 to-indigo-700 text-white ring-2 ring-blue-400/40'
+                    : 'bg-gradient-to-br from-emerald-600 to-teal-800 text-white ring-2 ring-emerald-500/30'
+                }`}
+              >
+                {profile?.isVerified ? (
+                  <Building2 className="h-8 w-8" />
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/20 border border-indigo-500/40 px-2.5 py-1 text-[11px] font-bold text-indigo-300">
-                    <Globe className="h-3.5 w-3.5" />
-                    Suggested Name (Directory)
-                  </span>
+                  (displayName || number).slice(0, 1).toUpperCase()
                 )}
+              </div>
+              {isVerified && (
+                <div className="absolute -bottom-1 -right-1 rounded-full bg-blue-500 p-1 text-white shadow-md">
+                  <CheckCircle2 className="h-3 w-3" />
+                </div>
+              )}
+              {isSpam && (
+                <div className="absolute -bottom-1 -right-1 rounded-full bg-rose-600 p-1 text-white shadow-md">
+                  <ShieldAlert className="h-3 w-3" />
+                </div>
+              )}
+            </div>
 
-                <span className="text-[11px] text-slate-400 font-medium">
-                  {entries.length} {entries.length === 1 ? t('call') : t('calls')}
-                </span>
-
-                {recordings.length > 0 && (
-                  <span className="rounded-full bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-bold text-emerald-300 flex items-center gap-1">
-                    <Disc className="h-3 w-3 animate-pulse" />
-                    {recordings.length} {recordings.length === 1 ? 'Recording' : 'Recordings'}
-                  </span>
+            {/* Caller Identification and Origin */}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                {editing ? (
+                  <div className="flex items-center gap-1.5 w-full">
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Enter contact name"
+                      className="flex-1 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1 text-sm font-semibold text-white outline-none focus:border-indigo-500"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => {
+                        setEditing(false);
+                        if (onUpdateCallerName && name.trim()) {
+                          onUpdateCallerName(number, name.trim());
+                        }
+                      }}
+                      className="rounded-lg bg-indigo-600 px-3 py-1 text-xs font-bold text-white hover:bg-indigo-500 transition"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditing(false);
+                        setName(call?.callerName || profile?.name || '');
+                      }}
+                      className="rounded-lg bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700 transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <h2 className="truncate text-xl font-black text-white tracking-tight">
+                      {displayName}
+                    </h2>
+                    <button
+                      onClick={() => setEditing(true)}
+                      className="rounded-md p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition"
+                      title="Edit display name"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </button>
+                  </>
                 )}
               </div>
 
-              {/* Caller Display Name with Inline Edit & Report Inaccuracy */}
-              {editing ? (
-                <div className="flex gap-2">
-                  <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="min-w-0 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 font-semibold text-white outline-none"
-                    autoFocus
-                  />
+              {/* Identity Origin Chip */}
+              <div className="mt-1 flex items-center gap-2 flex-wrap">
+                {nameOrigin === 'SAVED_CONTACT' ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
+                    <BookUser className="h-3.5 w-3.5" />
+                    Saved in Device Contacts
+                  </span>
+                ) : nameOrigin === 'USER_OVERRIDE' ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-400">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Custom Override Saved
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-400">
+                    <Globe className="h-3.5 w-3.5" />
+                    Directory / Truecaller Registry
+                  </span>
+                )}
+
+                <span className="text-slate-600 text-xs">·</span>
+
+                {/* Copyable Phone Number */}
+                <button
+                  type="button"
+                  onClick={handleCopyNumber}
+                  className="group inline-flex items-center gap-1.5 font-mono text-xs text-slate-300 hover:text-white transition rounded px-1.5 py-0.5 hover:bg-white/5"
+                  title="Click to copy phone number"
+                >
+                  <span>{number}</span>
+                  {copiedNumberFeedback ? (
+                    <span className="text-emerald-400 font-sans text-[10px] font-bold animate-in fade-in">Copied!</span>
+                  ) : (
+                    <Copy className="h-3 w-3 text-slate-500 group-hover:text-slate-300" />
+                  )}
+                </button>
+              </div>
+
+              {/* Carrier & Location Info */}
+              <div className="mt-1 text-[11px] text-slate-400">
+                {profile?.carrier ? `${profile.carrier} · ` : ''}
+                {profile?.circle || profile?.country || 'India'}
+                {profile?.businessCategory ? ` · ${profile.businessCategory}` : ''}
+              </div>
+            </div>
+          </div>
+
+          {/* Spam / Scam Warning or Safety Indicator */}
+          {isSpam ? (
+            <div className="mt-3 rounded-xl border border-rose-800/60 bg-rose-950/30 p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-bold text-rose-300">
+                  <ShieldAlert className="h-4 w-4 text-rose-400 shrink-0" />
+                  <span>{profile?.spamCategory ? `${profile.spamCategory} Alert` : 'High Spam Risk'}</span>
+                </div>
+                <span className="rounded bg-rose-500/20 border border-rose-500/30 px-2 py-0.5 text-[10px] font-bold text-rose-200">
+                  {risk || 95}% Risk Score
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-rose-300/90">
+                {profile?.spamReason || call?.spamReason || 'Identified with high risk spam signals in CallShield community database.'}
+              </p>
+              <div className="mt-2 flex items-center justify-between text-[10px] text-rose-400/80 font-medium">
+                <span>{profile?.spamReportsCount || call?.reportsCount || 64} community reports</span>
+                {onMarkSafe && (
                   <button
-                    onClick={() => {
-                      if (name.trim() && onUpdateCallerName) onUpdateCallerName(number, name.trim());
-                      setEditing(false);
-                    }}
-                    className="rounded-xl bg-blue-600 p-2 text-white"
+                    onClick={() => onMarkSafe(number, displayName)}
+                    className="text-emerald-400 hover:underline font-bold"
                   >
-                    <CheckCircle2 className="h-4 w-4" />
+                    Mark as Safe
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Risk meter strip */
+            <div className="mt-3 flex items-center justify-between rounded-xl border border-white/5 bg-black/30 px-3 py-1.5 text-[11px]">
+              <div className="flex items-center gap-2 text-slate-400">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                <span>CallShield Reputation:</span>
+                <span className="font-semibold text-emerald-400">Clean (0% Risk)</span>
+              </div>
+              <div className="text-[10px] text-slate-500">
+                {callStats.totalCalls} total {callStats.totalCalls === 1 ? 'call' : 'calls'} recorded
+              </div>
+            </div>
+          )}
+
+          {/* Neighbor Spoof & Ping-back Scam Banners */}
+          {isNeighborSpoof && (
+            <div className="mt-2.5 flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs text-amber-200">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+              <div>
+                <span className="font-bold text-amber-300">Neighbor Spoof Detected: </span>
+                <span className="text-[11px] text-amber-200/90">Matches your phone's area prefix to trick you into picking up.</span>
+              </div>
+            </div>
+          )}
+
+          {isPingBackScam && (
+            <div className="mt-2.5 flex items-start gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 p-2.5 text-xs text-rose-200">
+              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
+              <div>
+                <span className="font-bold text-rose-300">1-Ring Wangiri Trap: </span>
+                <span className="text-[11px] text-rose-200/90">Call was disconnected after 1 ring to bait costly international callbacks.</span>
+              </div>
+            </div>
+          )}
+
+          {/* PRIMARY QUICK ACTIONS DOCK */}
+          <div className="mt-3.5 grid grid-cols-5 gap-2">
+            <button
+              onClick={() => onInitiateCall?.(number, displayName)}
+              className="flex flex-col items-center justify-center gap-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 py-2.5 text-white font-bold text-[11px] shadow-lg shadow-emerald-600/20 transition active:scale-95"
+            >
+              <Phone className="h-4 w-4 fill-current" />
+              <span>Call</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onInitiateCall?.(number, displayName, undefined, true)}
+              className="flex flex-col items-center justify-center gap-1 rounded-xl border border-indigo-500/40 bg-indigo-950/60 py-2.5 text-indigo-200 hover:bg-indigo-900/60 font-semibold text-[11px] transition active:scale-95"
+              title="Return call with *67 Caller ID suppression"
+            >
+              <EyeOff className="h-4 w-4 text-indigo-400" />
+              <span>Private</span>
+            </button>
+
+            <button
+              onClick={() => handleOpenSocialChat('sms')}
+              className="flex flex-col items-center justify-center gap-1 rounded-xl border border-purple-500/40 bg-purple-950/50 py-2.5 text-purple-200 hover:bg-purple-900/60 font-semibold text-[11px] transition active:scale-95"
+              title="Send native SMS/RCS message"
+            >
+              <MessageSquare className="h-4 w-4 text-purple-400" />
+              <span>SMS</span>
+            </button>
+
+            <button
+              onClick={() => onBlockNumber(number, displayName)}
+              className={`flex flex-col items-center justify-center gap-1 rounded-xl border py-2.5 font-semibold text-[11px] transition active:scale-95 ${
+                isSpam
+                  ? 'border-rose-700 bg-rose-950/70 text-rose-200 hover:bg-rose-900/70'
+                  : 'border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <Ban className="h-4 w-4" />
+              <span>Block</span>
+            </button>
+
+            {!savedContact ? (
+              <button
+                onClick={() => handleQuickSaveContact(displayName)}
+                className="flex flex-col items-center justify-center gap-1 rounded-xl border border-blue-500/40 bg-blue-950/50 py-2.5 text-blue-200 hover:bg-blue-900/60 font-semibold text-[11px] transition active:scale-95"
+              >
+                {contactSavedFeedback ? (
+                  <>
+                    <Check className="h-4 w-4 text-emerald-400" />
+                    <span className="text-emerald-300">Saved</span>
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="h-4 w-4 text-blue-400" />
+                    <span>Save</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setInaccuracyCorrectedName(displayName || '');
+                  setIsInaccuracyModalOpen(true);
+                }}
+                className="flex flex-col items-center justify-center gap-1 rounded-xl border border-slate-700 bg-slate-900 py-2.5 text-slate-200 hover:bg-slate-800 font-semibold text-[11px] transition active:scale-95"
+              >
+                <UserCheck className="h-4 w-4 text-emerald-400" />
+                <span>Contact</span>
+              </button>
+            )}
+          </div>
+
+          {/* NAVIGATION TABS */}
+          <div className="mt-3 flex items-center gap-1.5 border-t border-slate-800/80 pt-2.5 overflow-x-auto scrollbar-none">
+            <button
+              type="button"
+              onClick={() => setActiveTab('OVERVIEW')}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition whitespace-nowrap ${
+                activeTab === 'OVERVIEW'
+                  ? 'bg-white/10 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              }`}
+            >
+              Overview
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('HISTORY')}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
+                activeTab === 'HISTORY'
+                  ? 'bg-white/10 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              }`}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              <span>Call History</span>
+              <span className="rounded-full bg-slate-800 px-1.5 py-0.2 text-[10px]">{entries.length}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('SOCIAL')}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
+                activeTab === 'SOCIAL'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              }`}
+            >
+              <MessageSquare className="h-3.5 w-3.5 text-emerald-400" />
+              <span>Social & Chat</span>
+              <span className="rounded-full bg-emerald-500/20 text-emerald-400 px-1.5 py-0.2 text-[9px] font-bold">WhatsApp</span>
+            </button>
+            {recordings.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('RECORDINGS')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
+                  activeTab === 'RECORDINGS'
+                    ? 'bg-white/10 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                }`}
+              >
+                <Disc className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Recordings ({recordings.length})</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setActiveTab('SECURITY')}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
+                activeTab === 'SECURITY'
+                  ? 'bg-white/10 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              }`}
+            >
+              <Shield className="h-3.5 w-3.5 text-indigo-400" />
+              <span>Notes & Identity</span>
+            </button>
+          </div>
+        </header>
+
+        {/* MODAL BODY CONTENT */}
+        <div className="flex-1 space-y-4 overflow-y-auto p-5 scrollbar-thin scrollbar-thumb-slate-800">
+          {/* TAB 1: OVERVIEW */}
+          {activeTab === 'OVERVIEW' && (
+            <div className="space-y-4">
+              {/* SOCIAL MEDIA & MESSAGING CHAT SHORTCUTS (WhatsApp, Telegram, etc.) */}
+              <section className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/20 via-[#0c141d] to-[#0a1017] p-4 shadow-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400">
+                      <MessageSquare className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Social & Instant Messaging</h3>
+                      <p className="text-[11px] text-slate-400">Tap to open 1-on-1 direct chat with {number}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('SOCIAL')}
+                    className="text-xs font-semibold text-emerald-400 hover:underline flex items-center gap-1"
+                  >
+                    <span>View all</span>
+                    <ChevronDown className="h-3 w-3 -rotate-90" />
                   </button>
                 </div>
-              ) : (
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <h2 className="truncate text-2xl font-bold text-white">{displayName}</h2>
-                  {onUpdateCallerName && (
-                    <button
-                      onClick={() => setEditing(true)}
-                      className="rounded-lg p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 transition"
-                      title="Edit display name"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                  )}
 
-                  {/* PROMINENT REPORT NAME INACCURACY BUTTON IN HEADER */}
+                <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  {/* WhatsApp Direct Chat Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenSocialChat('whatsapp')}
+                    className="group relative flex items-center gap-3 rounded-xl border border-[#25D366]/40 bg-[#25D366]/10 p-3 hover:bg-[#25D366]/20 transition text-left active:scale-98 shadow-sm"
+                  >
+                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#25D366] text-white shadow-md shadow-[#25D366]/30 group-hover:scale-105 transition-transform">
+                      {/* Official WhatsApp SVG Icon */}
+                      <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
+                        <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2M12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.58 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 15 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67M9.05 7.42C8.87 7.42 8.57 7.49 8.32 7.76C8.07 8.04 7.35 8.71 7.35 10.07C7.35 11.43 8.34 12.74 8.48 12.93C8.62 13.12 10.42 15.91 13.18 17.1C15.47 18.09 15.94 17.89 16.43 17.85C16.92 17.8 18 17.21 18.23 16.56C18.46 15.91 18.46 15.35 18.39 15.24C18.32 15.13 18.14 15.06 17.86 14.92C17.58 14.78 16.21 14.11 15.96 14.02C15.71 13.93 15.53 13.88 15.35 14.16C15.17 14.44 14.65 15.05 14.49 15.24C14.33 15.42 14.17 15.45 13.89 15.31C13.61 15.17 12.71 14.88 11.65 13.93C10.82 13.19 10.26 12.28 10.1 12C9.94 11.72 10.08 11.58 10.22 11.44C10.35 11.31 10.51 11.1 10.65 10.94C10.79 10.78 10.84 10.66 10.93 10.48C11.02 10.3 10.97 10.14 10.9 10C10.83 9.86 10.28 8.52 10.05 7.97C9.83 7.44 9.61 7.51 9.44 7.5C9.28 7.49 9.09 7.42 9.05 7.42Z" />
+                      </svg>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-xs text-white group-hover:text-[#25D366] transition">WhatsApp</div>
+                      <div className="text-[10.5px] text-slate-400 truncate">Open Direct Chat</div>
+                    </div>
+                  </button>
+
+                  {/* Telegram Chat Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenSocialChat('telegram')}
+                    className="group relative flex items-center gap-3 rounded-xl border border-[#229ED9]/40 bg-[#229ED9]/10 p-3 hover:bg-[#229ED9]/20 transition text-left active:scale-98 shadow-sm"
+                  >
+                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#229ED9] text-white shadow-md shadow-[#229ED9]/30 group-hover:scale-105 transition-transform">
+                      {/* Telegram Plane SVG */}
+                      <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z" />
+                      </svg>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-xs text-white group-hover:text-[#229ED9] transition">Telegram</div>
+                      <div className="text-[10.5px] text-slate-400 truncate">Chat via Phone</div>
+                    </div>
+                  </button>
+
+                  {/* Native SMS Chat Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenSocialChat('sms')}
+                    className="group relative flex items-center gap-3 rounded-xl border border-purple-500/40 bg-purple-500/10 p-3 hover:bg-purple-500/20 transition text-left active:scale-98 shadow-sm col-span-2 sm:col-span-1"
+                  >
+                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-purple-600 text-white shadow-md shadow-purple-600/30 group-hover:scale-105 transition-transform">
+                      <MessageSquare className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-xs text-white group-hover:text-purple-300 transition">SMS / RCS</div>
+                      <div className="text-[10.5px] text-slate-400 truncate">Carrier Messaging</div>
+                    </div>
+                  </button>
+                </div>
+              </section>
+
+              {/* CALL HISTORY SUMMARY STRIP */}
+              <section className="rounded-2xl border border-slate-800 bg-[#0e141d] p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-blue-400" />
+                    <span className="text-sm font-bold text-white">Call Summary & Activity</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('HISTORY')}
+                    className="text-xs font-semibold text-blue-400 hover:underline flex items-center gap-1"
+                  >
+                    <span>Full Timeline</span>
+                    <ChevronDown className="h-3 w-3 -rotate-90" />
+                  </button>
+                </div>
+
+                <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs">
+                  <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-2.5">
+                    <div className="text-[10px] text-slate-500 font-medium">Total Calls</div>
+                    <div className="mt-1 text-base font-black text-white">{callStats.totalCalls}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-2.5">
+                    <div className="text-[10px] text-emerald-400 font-medium">Incoming</div>
+                    <div className="mt-1 text-base font-black text-emerald-300">{callStats.incomingCount}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-2.5">
+                    <div className="text-[10px] text-sky-400 font-medium">Outgoing</div>
+                    <div className="mt-1 text-base font-black text-sky-300">{callStats.outgoingCount}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-2.5">
+                    <div className="text-[10px] text-rose-400 font-medium">Missed</div>
+                    <div className="mt-1 text-base font-black text-rose-300">{callStats.missedCount}</div>
+                  </div>
+                </div>
+
+                {/* Last 2 recent calls preview */}
+                <div className="mt-3 divide-y divide-slate-800/60 border-t border-slate-800/80 pt-2">
+                  {entries.slice(0, 3).map((item) => (
+                    <div key={item.id} className="flex items-center justify-between py-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        {item.type === 'INCOMING' ? (
+                          <PhoneIncoming className="h-3.5 w-3.5 text-emerald-400" />
+                        ) : item.type === 'OUTGOING' ? (
+                          <PhoneOutgoing className="h-3.5 w-3.5 text-sky-400" />
+                        ) : item.type === 'MISSED' ? (
+                          <PhoneMissed className="h-3.5 w-3.5 text-rose-400" />
+                        ) : (
+                          <PhoneOff className="h-3.5 w-3.5 text-amber-400" />
+                        )}
+                        <span className="font-semibold text-slate-200">
+                          {item.type === 'INCOMING' ? 'Incoming Call' : item.type === 'OUTGOING' ? 'Outgoing Call' : item.type === 'MISSED' ? 'Missed Call' : 'Blocked Call'}
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {item.recordingUri && (
+                          <span className="rounded bg-emerald-500/15 text-emerald-400 px-1.5 py-0.2 text-[9px] font-bold flex items-center gap-0.5">
+                            <Disc className="h-2.5 w-2.5" />
+                            REC
+                          </span>
+                        )}
+                        <span className="font-mono text-slate-400 text-[11px]">
+                          {formatDuration(item.durationSeconds || 0)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* DEDICATED AI VOICE SCREENER SUMMARY (If available) */}
+              {latestScreenedEntry && (
+                <section className="rounded-2xl border border-indigo-500/30 bg-[#0c1222] shadow-lg overflow-hidden">
+                  <div className="px-4 py-3 border-b border-indigo-500/20 bg-indigo-950/40 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Bot className="h-4 w-4 text-indigo-400" />
+                      <span className="text-xs font-bold text-white">AI Voice Screener Spoken Summary</span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-indigo-500/30 bg-indigo-500/20 px-2 py-0.5 text-[9px] font-bold text-indigo-300">
+                        <Sparkles className="h-2.5 w-2.5 text-indigo-400" />
+                        Gemini AI
+                      </span>
+                    </div>
+                    {latestScreenedEntry.screeningDetectedIntent && (
+                      <span className="rounded-lg bg-indigo-900/60 px-2 py-0.5 text-[10px] font-semibold text-indigo-200 border border-indigo-500/30">
+                        {latestScreenedEntry.screeningDetectedIntent}
+                      </span>
+                    )}
+                  </div>
+                  <div className="p-4 space-y-2.5 bg-[#080d17]">
+                    {latestScreenedEntry.screeningSummaryBullets && latestScreenedEntry.screeningSummaryBullets.length > 0 ? (
+                      <ul className="space-y-1.5 text-xs text-slate-200">
+                        {latestScreenedEntry.screeningSummaryBullets.map((bullet, idx) => (
+                          <li key={idx} className="flex items-start gap-2 rounded-lg bg-white/[0.03] p-2 border border-white/5">
+                            <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400" />
+                            <span className="leading-relaxed text-slate-200">{bullet}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-slate-300 leading-relaxed">{latestScreenedEntry.screeningSummary}</p>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {/* IDENTITY ATTRIBUTION CARD */}
+              <section className="rounded-2xl border border-slate-800 bg-[#0e141c] p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+                    <BookUser className="h-4 w-4 text-blue-400" />
+                    Caller Identity Records
+                  </div>
                   <button
                     type="button"
                     onClick={() => {
@@ -491,775 +1103,668 @@ export default function CallerDetailModal({
                       setInaccuracyFeedback(null);
                       setIsInaccuracyModalOpen(true);
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 active:scale-95 transition"
-                    title="Report wrong caller name or submit data correction"
+                    className="text-xs font-semibold text-amber-400 hover:text-amber-300 hover:underline inline-flex items-center gap-1"
                   >
-                    <Flag className="h-3.5 w-3.5 text-amber-400" />
-                    Report Name Inaccuracy
+                    <Flag className="h-3 w-3" />
+                    Report Inaccuracy
                   </button>
                 </div>
-              )}
 
-              {/* Number and Location */}
-              <p className="mt-1 font-mono text-sm text-slate-400">
-                {number}
-                {(() => {
-                  const loc = (profile?.location || call?.location || '').replace(/,\s*India,\s*India/g, ', India').replace(/India,\s*India/g, 'India');
-                  const carr = profile?.carrier || call?.carrier || '';
-                  return (
-                    <>
-                      {loc ? ` · ${loc}` : ''}
-                      {carr ? ` · ${carr}` : ''}
-                    </>
-                  );
-                })()}
-              </p>
-
-              {/* Cross-Identity Comparison Banner */}
-              {nameOrigin === 'SAVED_CONTACT' && suggestedDirectoryName && suggestedDirectoryName !== savedContactName && (
-                <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-900/80 border border-slate-700/60 p-2.5 text-xs text-slate-300">
-                  <div className="flex items-center gap-2">
-                    <Globe className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
-                    <span>
-                      Directory Suggestion: <strong className="text-white">{suggestedDirectoryName}</strong>
-                      <span className="ml-1 text-[11px] text-slate-400">({profile?.source || 'Community Record'})</span>
-                    </span>
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500 font-medium">Device Contacts Name</span>
+                      {savedContactName && (
+                        <span className="rounded-md bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400">
+                          Active
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 font-semibold text-white flex items-center gap-1.5">
+                      {savedContactName ? (
+                        <>
+                          <Check className="h-3.5 w-3.5 text-emerald-400" />
+                          <span>{savedContactName}</span>
+                        </>
+                      ) : (
+                        <span className="text-slate-500 font-normal italic">Not in device contacts</span>
+                      )}
+                    </div>
                   </div>
-                  <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded-md">
-                    Device Contact Overrides Directory
-                  </span>
-                </div>
-              )}
 
-              {nameOrigin === 'DIRECTORY_SUGGESTED' && (
-                <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-indigo-950/30 border border-indigo-500/20 p-2.5 text-xs">
-                  <div className="flex items-center gap-2 text-indigo-200">
-                    <Info className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
-                    <span>Suggested by public directory & community data. Not saved in device contacts.</span>
+                  <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500 font-medium">Directory & Truecaller Name</span>
+                      {suggestedDirectoryName && (
+                        <span className="rounded-md bg-indigo-500/15 border border-indigo-500/30 px-1.5 py-0.5 text-[10px] font-bold text-indigo-300">
+                          Verified
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 font-semibold text-white flex items-center gap-1.5">
+                      {suggestedDirectoryName ? (
+                        <>
+                          <Globe className="h-3.5 w-3.5 text-indigo-400" />
+                          <span className="truncate">{suggestedDirectoryName}</span>
+                        </>
+                      ) : (
+                        <span className="text-slate-500 font-normal italic">No public directory match</span>
+                      )}
+                    </div>
                   </div>
-                  {onAddContact && (
-                    <button
-                      type="button"
-                      onClick={() => handleQuickSaveContact(displayName)}
-                      className="inline-flex items-center gap-1 rounded-lg bg-indigo-600/90 hover:bg-indigo-600 px-2.5 py-1 text-[11px] font-bold text-white transition shadow-sm"
-                    >
-                      <UserPlus className="h-3 w-3" />
-                      {contactSavedFeedback ? 'Saved to Contacts ✓' : 'Save to Contacts'}
-                    </button>
-                  )}
                 </div>
-              )}
-            </div>
+              </section>
 
-            <button
-              onClick={handleClose}
-              className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition shrink-0"
-              aria-label="Close"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-
-          {isSpam && (
-            <div className="mt-4 flex gap-3 rounded-2xl border border-rose-800/60 bg-rose-950/40 p-3.5">
-              <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-rose-400" />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-rose-200">
-                    {profile?.spamCategory ? `${profile.spamCategory} Alert` : 'Spam Signals Detected'}
-                  </span>
-                  {profile?.topTags && profile.topTags.length > 0 && (
-                    <span className="rounded-md bg-rose-500/20 border border-rose-500/30 px-2 py-0.5 text-[10px] font-bold text-rose-300">
-                      {profile.topTags[0]}
-                    </span>
-                  )}
-                </div>
-                <div className="mt-1 text-xs leading-5 text-rose-300/90">
-                  {profile?.spamReason || call?.spamReason || 'Identified with high risk protection signals in CallShield community database.'}
-                </div>
-                {profile?.topTags && profile.topTags.length > 1 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {profile.topTags.map((tag, idx) => (
-                      <span key={idx} className="rounded-full bg-rose-900/40 border border-rose-700/50 px-2 py-0.5 text-[10px] font-medium text-rose-200">
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <div className="mt-2 text-xs font-semibold text-rose-300">
-                  {profile?.spamReportsCount || call?.reportsCount || 66} community reports · {risk || 98}% risk
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Neighbor Spoof Detection Banner */}
-          {isNeighborSpoof && (
-            <div className="mt-3 flex items-start gap-2.5 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-              <div>
-                <p className="font-semibold text-amber-300">Neighbor Spoof Detected</p>
-                <p className="mt-0.5 leading-relaxed text-amber-200/90">
-                  This number shares your local area prefix to trick you into answering, but is not in your contacts.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Ping-Back Wangiri Scam Banner */}
-          {isPingBackScam && (
-            <div className="mt-3 flex items-start gap-2.5 rounded-2xl border border-rose-500/40 bg-rose-500/10 p-3 text-xs text-rose-200">
-              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
-              <div>
-                <p className="font-semibold text-rose-300">1-Ring Ping-Back Scam Risk</p>
-                <p className="mt-0.5 leading-relaxed text-rose-200/90">
-                  This call was dropped after 1 ring. Spammers use this Wangiri trap to bait expensive international callbacks.
-                </p>
-              </div>
-            </div>
-          )}
-        </header>
-
-        {/* Content Body */}
-        <div className="flex-1 space-y-4 overflow-y-auto p-5">
-          {/* Action buttons */}
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={() => onInitiateCall?.(number, displayName)}
-              className="flex h-11 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-semibold text-xs text-white shadow-md shadow-emerald-600/20 transition active:scale-95"
-            >
-              <Phone className="h-4 w-4 fill-current" />
-              {t('call_action')}
-            </button>
-            <button
-              type="button"
-              onClick={() => onInitiateCall?.(number, displayName, undefined, true)}
-              className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-950/50 font-semibold text-xs text-indigo-200 hover:bg-indigo-900/70 transition active:scale-95 shadow-sm"
-              title="Return call with *67 Caller ID suppression"
-            >
-              <EyeOff className="h-4 w-4 text-indigo-400" />
-              Private Call
-            </button>
-            <button
-              onClick={() => onBlockNumber(number, displayName)}
-              className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 font-semibold text-xs text-slate-200 hover:bg-slate-800 transition active:scale-95"
-            >
-              <Ban className="h-4 w-4" />
-              {t('block_action')}
-            </button>
-          </div>
-
-          {/* Caller Identity Details: Saved Name vs Suggested Directory Name */}
-          <section className="rounded-2xl border border-slate-800 bg-[#0e141c] p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
-                <BookUser className="h-4 w-4 text-blue-400" />
-                Caller Identity Source
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setInaccuracyCorrectedName(displayName || '');
-                  setInaccuracyFeedback(null);
-                  setIsInaccuracyModalOpen(true);
-                }}
-                className="text-xs font-semibold text-amber-400 hover:text-amber-300 hover:underline inline-flex items-center gap-1"
-              >
-                <Flag className="h-3 w-3" />
-                Report Inaccuracy
-              </button>
-            </div>
-
-            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3">
+              {/* QUICK PRIVATE CALLER NOTE */}
+              <section className="rounded-2xl border border-slate-800 bg-[#0e141c] p-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-500 font-medium">Saved Name (Device Contacts)</span>
-                  {savedContactName && (
-                    <span className="rounded-md bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400">
-                      Active
-                    </span>
-                  )}
-                </div>
-                <div className="mt-1 font-semibold text-white flex items-center gap-1.5">
-                  {savedContactName ? (
-                    <>
-                      <Check className="h-3.5 w-3.5 text-emerald-400" />
-                      <span>{savedContactName}</span>
-                    </>
-                  ) : (
-                    <span className="text-slate-400 font-normal italic">Not in device contacts</span>
-                  )}
-                </div>
-                {onAddContact && !savedContactName && (
+                  <div className="flex items-center gap-2 text-sm font-bold text-white">
+                    <StickyNote className="h-4 w-4 text-amber-400" />
+                    <span>Caller Note</span>
+                  </div>
                   <button
-                    onClick={() => handleQuickSaveContact(displayName)}
-                    className="mt-2 text-[11px] font-semibold text-emerald-400 hover:underline flex items-center gap-1"
+                    type="button"
+                    onClick={toggleDictation}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition ${
+                      isDictating
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
+                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'
+                    }`}
                   >
-                    <UserPlus className="h-3 w-3" />
-                    Save as Contact
+                    <Mic className="h-3.5 w-3.5 text-amber-400" />
+                    <span>{isDictating ? 'Listening…' : 'Dictate note'}</span>
                   </button>
-                )}
-              </div>
+                </div>
 
-              <div className="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500 font-medium">Suggested Name (Directory)</span>
-                  {!savedContactName && suggestedDirectoryName && (
-                    <span className="rounded-md bg-indigo-500/15 border border-indigo-500/30 px-1.5 py-0.5 text-[10px] font-bold text-indigo-300">
-                      Suggested
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  rows={2}
+                  placeholder="Add a private note about this caller (auto-saved locally)..."
+                  className="mt-2.5 w-full resize-none rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-white placeholder-slate-600 outline-none focus:border-amber-500/50"
+                />
+
+                <div className="mt-2 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={saveNote}
+                    className="rounded-lg bg-amber-500 hover:bg-amber-400 px-3 py-1.5 text-xs font-bold text-slate-950 transition"
+                  >
+                    Save Note
+                  </button>
+                  {noteSavedFeedback && (
+                    <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
+                      <Check className="h-3.5 w-3.5" />
+                      Note Saved
                     </span>
                   )}
                 </div>
-                <div className="mt-1 font-semibold text-white flex items-center gap-1.5">
-                  {suggestedDirectoryName ? (
-                    <>
-                      <Globe className="h-3.5 w-3.5 text-indigo-400" />
-                      <span className="truncate">{suggestedDirectoryName}</span>
-                    </>
-                  ) : (
-                    <span className="text-slate-400 font-normal italic">No directory listing</span>
-                  )}
-                </div>
-                <div className="mt-1 text-[10px] text-slate-500">
-                  Source: {profile?.source || 'Public Directory & Community Crowd'}
-                </div>
-              </div>
+              </section>
             </div>
-          </section>
-
-          {/* DEDICATED AI VOICE SCREENER SPOKEN SUMMARY SECTION */}
-          {latestScreenedEntry && (
-            <section className="rounded-2xl border border-indigo-500/30 bg-[#0c1222] shadow-lg shadow-indigo-950/20 overflow-hidden">
-              <div className="px-4 py-3 border-b border-indigo-500/20 bg-indigo-950/40 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Bot className="h-4 w-4 text-indigo-400" />
-                  <span className="text-sm font-bold text-white">AI Screener Spoken Summary</span>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-indigo-500/30 bg-indigo-500/20 px-2 py-0.5 text-[9px] font-bold text-indigo-300">
-                    <Sparkles className="h-2.5 w-2.5 text-indigo-400" />
-                    Gemini AI
-                  </span>
-                </div>
-                {latestScreenedEntry.screeningDetectedIntent && (
-                  <span className="rounded-lg bg-indigo-900/60 px-2 py-0.5 text-[10px] font-semibold text-indigo-200 border border-indigo-500/30">
-                    {latestScreenedEntry.screeningDetectedIntent}
-                  </span>
-                )}
-              </div>
-              <div className="p-4 space-y-3 bg-[#080d17]">
-                {latestScreenedEntry.screeningSummaryBullets && latestScreenedEntry.screeningSummaryBullets.length > 0 ? (
-                  <div className="space-y-2">
-                    <div className="text-[11px] font-semibold uppercase tracking-wider text-indigo-400/90">
-                      Spoken Content Key Bullets
-                    </div>
-                    <ul className="space-y-2 text-xs text-slate-200">
-                      {latestScreenedEntry.screeningSummaryBullets.map((bullet, idx) => (
-                        <li key={idx} className="flex items-start gap-2 rounded-lg bg-white/[0.03] p-2 border border-white/5">
-                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400" />
-                          <span className="leading-relaxed text-slate-200">{bullet}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : latestScreenedEntry.screeningSummary ? (
-                  <p className="text-xs leading-relaxed text-slate-200">{latestScreenedEntry.screeningSummary}</p>
-                ) : (
-                  <p className="text-xs text-slate-400 italic">Call was screened by AI Voice Screener.</p>
-                )}
-
-                {latestScreenedEntry.screeningTranscript && latestScreenedEntry.screeningTranscript.length > 0 && (
-                  <details className="mt-2 text-xs text-slate-400 group">
-                    <summary className="cursor-pointer font-semibold text-indigo-300 hover:text-indigo-200 transition select-none flex items-center gap-1">
-                      <span>View Spoken Transcript ({latestScreenedEntry.screeningTranscript.length} lines)</span>
-                    </summary>
-                    <div className="mt-2 space-y-1.5 max-h-48 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-[11px]">
-                      {latestScreenedEntry.screeningTranscript.map((t, tIdx) => (
-                        <div key={tIdx} className={`p-1.5 rounded-lg ${t.sender === 'caller' ? 'bg-slate-900 text-slate-200' : 'bg-indigo-950/40 text-indigo-200'}`}>
-                          <span className="font-bold text-[10px] uppercase opacity-70 block mb-0.5">
-                            {t.sender === 'caller' ? 'Caller' : 'AI Voice Screener'}:
-                          </span>
-                          <span>{t.text}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                )}
-              </div>
-            </section>
           )}
 
-          {/* DEDICATED CALL RECORDINGS SECTION FOR THIS NUMBER */}
-          {recordings.length > 0 && (
-            <section className="rounded-2xl border border-emerald-500/30 bg-[#0e1722] shadow-lg shadow-black/30 overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setRecordingsExpanded((v) => !v)}
-                className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-white/[0.02] transition"
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Disc className="h-4 w-4 text-emerald-400 animate-pulse" />
-                    <span className="text-sm font-bold text-white">
-                      Recorded Calls ({recordings.length})
-                    </span>
-                    <span className="rounded-md bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
-                      48 kHz HD
-                    </span>
+          {/* TAB 2: CALL HISTORY & TIMELINE */}
+          {activeTab === 'HISTORY' && (
+            <div className="space-y-4">
+              {/* Analytics Header Card */}
+              <div className="rounded-2xl border border-slate-800 bg-[#0e141d] p-4">
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Call History & Talk Time</div>
+                <div className="mt-3 grid grid-cols-3 gap-3 text-center">
+                  <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3">
+                    <div className="text-[10px] text-slate-500 font-medium">Total Calls</div>
+                    <div className="mt-1 text-lg font-black text-white">{callStats.totalCalls}</div>
                   </div>
-                  <div className="mt-0.5 flex items-center gap-1 text-xs text-slate-400">
-                    <Folder className="h-3.5 w-3.5 text-amber-400/80" />
-                    <span className="font-mono text-[11px]">Saved in: Internal Storage/Recordings/CallShield/</span>
+                  <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3">
+                    <div className="text-[10px] text-slate-500 font-medium">Total Talk Time</div>
+                    <div className="mt-1 text-lg font-black text-emerald-400">{callStats.totalDurationFormatted}</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3">
+                    <div className="text-[10px] text-slate-500 font-medium">Avg Call Length</div>
+                    <div className="mt-1 text-lg font-black text-blue-400">{callStats.avgDurationFormatted}</div>
                   </div>
                 </div>
-                <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${recordingsExpanded ? 'rotate-180' : ''}`} />
-              </button>
-
-              {recordingsExpanded && (
-                <div className="border-t border-slate-800 p-3 space-y-3 bg-[#080d13]">
-                  {recordings.map((rec) => (
-                    <AudioRecordingPlayer
-                      key={rec.id}
-                      recording={rec}
-                      onDelete={handleDeleteRecording}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
-          )}
-
-          {/* Call Timeline / History for this Number */}
-          <section className="rounded-2xl border border-slate-800 bg-[#0e141c] shadow-lg shadow-black/20 overflow-hidden">
-            <button
-              onClick={() => setExpanded((v) => !v)}
-              className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-white/[0.02] transition"
-            >
-              <div>
-                <div className="text-sm font-bold text-white">{t('call_history_header')}</div>
-                <div className="text-xs text-slate-500">Timeline & records for {number}</div>
               </div>
-              <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-            </button>
 
-            {expanded && (
-              <div className="border-t border-slate-800">
-                {entries.map((item) => {
-                  // Find if this specific call item has an associated recording
-                  const itemRec = recordings.find(
-                    (r) => r.callId === item.id || (Math.abs(r.timestamp - item.timestamp) < 5000)
-                  );
+              {/* Chronological Timeline */}
+              {entries.length === 0 ? (
+                <div className="rounded-2xl border border-slate-800 bg-[#0e141c] p-8 text-center text-slate-500">
+                  <Clock className="mx-auto h-8 w-8 text-slate-600 mb-2" />
+                  <p className="text-sm font-semibold text-slate-300">No previous call history with this number</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Calls made to or received from {number} will appear here.</p>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {entries.map((item) => {
+                    const itemRec = recordings.find(
+                      (r) => r.callId === item.id || Math.abs(r.timestamp - item.timestamp) < 5000
+                    );
 
-                  return (
-                    <div key={item.id} className="border-b border-slate-800/80 px-4 py-3 last:border-0 hover:bg-white/[0.01] transition">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div
-                            className={`text-xs font-bold ${
-                              item.type === 'MISSED' || item.type === 'BLOCKED_CANCELLED'
-                                ? 'text-rose-400'
-                                : 'text-slate-200'
-                            }`}
-                          >
-                            {item.type === 'MISSED'
-                              ? t('missed_call')
-                              : item.type === 'BLOCKED_CANCELLED'
-                              ? t('blocked_call')
-                              : item.type === 'INCOMING'
-                              ? t('incoming_call')
-                              : t('outgoing_call')}
-                          </div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            {new Date(item.timestamp).toLocaleString()}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {itemRec && (
-                            <span className="flex items-center gap-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400">
-                              <Disc className="h-3 w-3 animate-pulse" />
-                              Recorded
-                            </span>
-                          )}
-                          <span className="text-xs font-mono text-slate-400">
-                            {duration(item.durationSeconds || 0)}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* If this call entry has a recording, render the full-featured audio player */}
-                      {itemRec && (
-                        <div className="mt-2.5">
-                          <AudioRecordingPlayer
-                            recording={itemRec}
-                            onDelete={handleDeleteRecording}
-                            compact
-                          />
-                        </div>
-                      )}
-
-                      {/* If item has recordingUri but no indexed recording, render audio player */}
-                      {!itemRec && item.recordingUri && (
-                        <div className="mt-2.5">
-                          <AudioRecordingPlayer
-                            recording={{
-                              id: `rec-${item.id}`,
-                              callId: item.id,
-                              number: item.number,
-                              callerName: item.callerName,
-                              timestamp: item.timestamp,
-                              durationSeconds: item.durationSeconds || 15,
-                              folderPath: 'Internal Storage/Recordings/CallShield/',
-                              fileName: `REC_${normalizePhoneNumber(item.number)}_${new Date(item.timestamp).toISOString().slice(0, 10)}.wav`,
-                              fileSizeBytes: 128000,
-                              mimeType: 'audio/wav',
-                              dataUri: item.recordingUri,
-                              quality: '48 kHz Studio HD',
-                            }}
-                            compact
-                          />
-                        </div>
-                      )}
-
-                      {/* AI Voice Screener Summary & Spoken Content */}
-                      {(item.usedAiScreener || (item.screeningSummaryBullets && item.screeningSummaryBullets.length > 0) || item.screeningSummary) && (
-                        <div className="mt-2.5 rounded-xl border border-indigo-500/30 bg-[#0d1322] p-3 shadow-sm space-y-2">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-300">
-                              <Bot className="h-3.5 w-3.5 text-indigo-400" />
-                              <span>AI Screener Spoken Summary</span>
-                              <span className="inline-flex items-center gap-0.5 rounded-full border border-indigo-500/30 bg-indigo-500/20 px-1.5 py-0.2 text-[8.5px] font-bold text-indigo-300">
-                                <Sparkles className="h-2 w-2 text-indigo-400" />
-                                Gemini
-                              </span>
+                    return (
+                      <div
+                        key={item.id}
+                        className="rounded-2xl border border-slate-800 bg-[#0e141d] p-4 shadow-sm hover:border-slate-700 transition"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-3">
+                            <div
+                              className={`p-2.5 rounded-xl shrink-0 mt-0.5 ${
+                                item.type === 'INCOMING'
+                                  ? 'bg-emerald-500/10 text-emerald-400'
+                                  : item.type === 'OUTGOING'
+                                  ? 'bg-sky-500/10 text-sky-400'
+                                  : item.type === 'MISSED'
+                                  ? 'bg-rose-500/10 text-rose-400'
+                                  : 'bg-amber-500/10 text-amber-400'
+                              }`}
+                            >
+                              {item.type === 'INCOMING' ? (
+                                <PhoneIncoming className="h-4 w-4" />
+                              ) : item.type === 'OUTGOING' ? (
+                                <PhoneOutgoing className="h-4 w-4" />
+                              ) : item.type === 'MISSED' ? (
+                                <PhoneMissed className="h-4 w-4" />
+                              ) : (
+                                <PhoneOff className="h-4 w-4" />
+                              )}
                             </div>
-                            {item.screeningDetectedIntent && (
-                              <span className="rounded bg-indigo-950/80 px-1.5 py-0.5 text-[9.5px] font-medium text-indigo-300 border border-indigo-500/20">
-                                {item.screeningDetectedIntent}
+
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-sm text-white">
+                                  {item.type === 'INCOMING'
+                                    ? 'Incoming Call'
+                                    : item.type === 'OUTGOING'
+                                    ? 'Outgoing Call'
+                                    : item.type === 'MISSED'
+                                    ? 'Missed Call'
+                                    : 'Blocked / Cancelled'}
+                                </span>
+                                {item.sim && (
+                                  <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[9.5px] font-medium text-slate-400">
+                                    {item.sim}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="mt-0.5 text-xs text-slate-400">
+                                {new Date(item.timestamp).toLocaleDateString([], {
+                                  weekday: 'short',
+                                  month: 'short',
+                                  day: 'numeric',
+                                })}{' '}
+                                at{' '}
+                                {new Date(item.timestamp).toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <div className="font-mono text-xs font-semibold text-slate-300">
+                              {item.type === 'MISSED' ? '0s' : formatDuration(item.durationSeconds || 0)}
+                            </div>
+                            {itemRec && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 mt-1">
+                                <Disc className="h-3 w-3 animate-pulse" />
+                                Recorded
                               </span>
                             )}
                           </div>
-
-                          {item.screeningSummaryBullets && item.screeningSummaryBullets.length > 0 ? (
-                            <ul className="space-y-1 text-[11.5px] text-slate-200">
-                              {item.screeningSummaryBullets.map((bullet, bIdx) => (
-                                <li key={bIdx} className="flex items-start gap-1.5">
-                                  <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-indigo-400" />
-                                  <span className="leading-snug text-slate-200">{bullet}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : item.screeningSummary ? (
-                            <p className="text-[11.5px] text-slate-300 leading-snug">{item.screeningSummary}</p>
-                          ) : null}
                         </div>
-                      )}
 
-                      {item.notes && (
-                        <div className="mt-2 flex gap-2 rounded-xl bg-amber-500/10 border border-amber-500/20 p-2.5 text-xs text-slate-300">
-                          <StickyNote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
-                          {item.notes}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+                        {/* Inline Audio Player if recording exists */}
+                        {itemRec && (
+                          <div className="mt-3 pt-3 border-t border-slate-800/80">
+                            <AudioRecordingPlayer recording={itemRec} onDelete={handleDeleteRecording} compact />
+                          </div>
+                        )}
 
-          {/* Caller note */}
-          <section className="rounded-2xl border border-slate-800 bg-[#0e141c] p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-bold text-white">
-                <StickyNote className="h-4 w-4 text-amber-400" />
-                Caller note
-              </div>
-              <button
-                type="button"
-                onClick={toggleDictation}
-                title={isDictating ? 'Stop dictation' : 'Dictate note with microphone using Web Speech API'}
-                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition ${
-                  isDictating
-                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
-                    : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60'
-                }`}
-              >
-                {isDictating ? (
-                  <>
-                    <span className="relative flex h-2 w-2">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75"></span>
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500"></span>
-                    </span>
-                    <Mic className="h-3.5 w-3.5 text-rose-400" />
-                    <span>Listening…</span>
-                  </>
-                ) : (
-                  <>
-                    <Mic className="h-3.5 w-3.5 text-amber-400" />
-                    <span>Dictate note</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={3}
-              placeholder={isDictating ? "Listening to speech... speak your note now…" : "Write or dictate a private note about this caller…"}
-              className={`mt-3 w-full resize-none rounded-xl border bg-slate-950 p-3 text-sm text-white outline-none placeholder-slate-600 transition ${
-                isDictating ? 'border-rose-500/60 ring-1 ring-rose-500/30' : 'border-slate-700 focus:border-amber-500/40'
-              }`}
-            />
-
-            {dictationError && (
-              <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-300">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-400" />
-                <span>{dictationError}</span>
-              </div>
-            )}
-
-            <div className="mt-2 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={saveNote}
-                  disabled={!number}
-                  className="rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-bold text-slate-950 disabled:opacity-40 transition"
-                >
-                  Save note
-                </button>
-                {noteSavedFeedback && (
-                  <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1 animate-in fade-in">
-                    <Check className="w-3.5 h-3.5" />
-                    Saved note
-                  </span>
-                )}
-              </div>
-
-              {isDictating && (
-                <button
-                  type="button"
-                  onClick={toggleDictation}
-                  className="text-xs text-rose-400 hover:text-rose-300 underline font-medium"
-                >
-                  Done speaking
-                </button>
+                        {/* AI Screener summary note if screened */}
+                        {(item.usedAiScreener || item.screeningSummaryBullets) && (
+                          <div className="mt-3 rounded-xl border border-indigo-500/20 bg-indigo-950/30 p-2.5 text-xs text-slate-300">
+                            <div className="flex items-center gap-1.5 font-bold text-indigo-300 mb-1">
+                              <Bot className="h-3.5 w-3.5 text-indigo-400" />
+                              <span>AI Voice Screener Summary</span>
+                            </div>
+                            {item.screeningSummaryBullets && item.screeningSummaryBullets.length > 0 ? (
+                              <ul className="space-y-1 text-[11px] text-slate-300">
+                                {item.screeningSummaryBullets.map((b, bIdx) => (
+                                  <li key={bIdx} className="flex items-start gap-1.5">
+                                    <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-indigo-400" />
+                                    <span>{b}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="text-[11px] text-slate-300">{item.screeningSummary}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
-          </section>
+          )}
 
-          {/* Protection details */}
-          <section className="rounded-2xl border border-slate-800 bg-[#0e141c] p-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
-              {isSpam ? <ShieldAlert className="h-4 w-4 text-rose-400" /> : <ShieldCheck className="h-4 w-4 text-blue-400" />}
-              Protection details
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-              <div>
-                <span className="text-slate-500">Status</span>
-                <div className={`mt-1 font-semibold ${isSpam ? 'text-rose-300' : isVerified ? 'text-emerald-300' : 'text-slate-300'}`}>
-                  {label}
+          {/* TAB 3: SOCIAL MEDIA & CHAT ACCOUNTS */}
+          {activeTab === 'SOCIAL' && (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-4">
+                <div className="flex items-center gap-2 text-emerald-400">
+                  <MessageSquare className="h-5 w-5" />
+                  <h3 className="text-sm font-bold text-white">Direct Social & Chat Accounts</h3>
+                </div>
+                <p className="mt-1 text-xs text-slate-300 leading-relaxed">
+                  Click any platform below to immediately start a direct message or chat with{' '}
+                  <span className="font-mono text-emerald-400">{number}</span>.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {/* WHATSAPP CARD */}
+                <div className="rounded-2xl border border-[#25D366]/40 bg-[#0e1713] p-4 hover:border-[#25D366] transition">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3.5">
+                      <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#25D366] text-white shadow-lg shadow-[#25D366]/30">
+                        <svg className="h-6 w-6 fill-current" viewBox="0 0 24 24">
+                          <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2M12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.58 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 15 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67M9.05 7.42C8.87 7.42 8.57 7.49 8.32 7.76C8.07 8.04 7.35 8.71 7.35 10.07C7.35 11.43 8.34 12.74 8.48 12.93C8.62 13.12 10.42 15.91 13.18 17.1C15.47 18.09 15.94 17.89 16.43 17.85C16.92 17.8 18 17.21 18.23 16.56C18.46 15.91 18.46 15.35 18.39 15.24C18.32 15.13 18.14 15.06 17.86 14.92C17.58 14.78 16.21 14.11 15.96 14.02C15.71 13.93 15.53 13.88 15.35 14.16C15.17 14.44 14.65 15.05 14.49 15.24C14.33 15.42 14.17 15.45 13.89 15.31C13.61 15.17 12.71 14.88 11.65 13.93C10.82 13.19 10.26 12.28 10.1 12C9.94 11.72 10.08 11.58 10.22 11.44C10.35 11.31 10.51 11.1 10.65 10.94C10.79 10.78 10.84 10.66 10.93 10.48C11.02 10.3 10.97 10.14 10.9 10C10.83 9.86 10.28 8.52 10.05 7.97C9.83 7.44 9.61 7.51 9.44 7.5C9.28 7.49 9.09 7.42 9.05 7.42Z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-white">WhatsApp</h4>
+                          <span className="rounded-full bg-[#25D366]/20 border border-[#25D366]/30 px-2 py-0.5 text-[10px] font-bold text-[#25D366]">
+                            Available
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Open WhatsApp mobile app or WhatsApp Web directly
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenSocialChat('whatsapp')}
+                      className="rounded-xl bg-[#25D366] hover:bg-[#20ba5a] px-4 py-2 text-xs font-bold text-black shadow-md shadow-[#25D366]/20 transition active:scale-95 flex items-center gap-1.5 shrink-0"
+                    >
+                      <span>Open Chat</span>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* TELEGRAM CARD */}
+                <div className="rounded-2xl border border-[#229ED9]/40 bg-[#0c141c] p-4 hover:border-[#229ED9] transition">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3.5">
+                      <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#229ED9] text-white shadow-lg shadow-[#229ED9]/30">
+                        <svg className="h-6 w-6 fill-current" viewBox="0 0 24 24">
+                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-white">Telegram</h4>
+                          <span className="rounded-full bg-[#229ED9]/20 border border-[#229ED9]/30 px-2 py-0.5 text-[10px] font-bold text-[#229ED9]">
+                            Direct Phone
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Open Telegram chat by verified telephone link
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenSocialChat('telegram')}
+                      className="rounded-xl bg-[#229ED9] hover:bg-[#1f8fc4] px-4 py-2 text-xs font-bold text-white shadow-md shadow-[#229ED9]/20 transition active:scale-95 flex items-center gap-1.5 shrink-0"
+                    >
+                      <span>Open Chat</span>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* SIGNAL ENCRYPTED MESSENGER */}
+                <div className="rounded-2xl border border-[#3A76F0]/40 bg-[#0c1322] p-4 hover:border-[#3A76F0] transition">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3.5">
+                      <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#3A76F0] text-white shadow-lg shadow-[#3A76F0]/30">
+                        <ShieldCheck className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-white">Signal Messenger</h4>
+                          <span className="rounded-full bg-[#3A76F0]/20 border border-[#3A76F0]/30 px-2 py-0.5 text-[10px] font-bold text-[#3A76F0]">
+                            Private
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          End-to-end encrypted messaging via Signal
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenSocialChat('signal')}
+                      className="rounded-xl bg-[#3A76F0] hover:bg-[#2d64d8] px-4 py-2 text-xs font-bold text-white shadow-md shadow-[#3A76F0]/20 transition active:scale-95 flex items-center gap-1.5 shrink-0"
+                    >
+                      <span>Open Chat</span>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* NATIVE SMS / RCS MESSAGING */}
+                <div className="rounded-2xl border border-purple-500/40 bg-[#120e1c] p-4 hover:border-purple-500 transition">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3.5">
+                      <div className="grid h-12 w-12 place-items-center rounded-2xl bg-purple-600 text-white shadow-lg shadow-purple-600/30">
+                        <MessageSquare className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-white">Native SMS / RCS</h4>
+                          <span className="rounded-full bg-purple-500/20 border border-purple-500/30 px-2 py-0.5 text-[10px] font-bold text-purple-300">
+                            Carrier
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Default messaging application on this device
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenSocialChat('sms')}
+                      className="rounded-xl bg-purple-600 hover:bg-purple-500 px-4 py-2 text-xs font-bold text-white shadow-md shadow-purple-600/20 transition active:scale-95 flex items-center gap-1.5 shrink-0"
+                    >
+                      <span>Send SMS</span>
+                      <Send className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* VIBER MESSENGER */}
+                <div className="rounded-2xl border border-[#7360F2]/40 bg-[#100e1c] p-4 hover:border-[#7360F2] transition">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3.5">
+                      <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#7360F2] text-white shadow-lg shadow-[#7360F2]/30">
+                        <Phone className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-white">Viber Messenger</h4>
+                          <span className="rounded-full bg-[#7360F2]/20 border border-[#7360F2]/30 px-2 py-0.5 text-[10px] font-bold text-[#9788f8]">
+                            VoIP Chat
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Chat and call over Viber protocol
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenSocialChat('viber')}
+                      className="rounded-xl bg-[#7360F2] hover:bg-[#614ef0] px-4 py-2 text-xs font-bold text-white shadow-md shadow-[#7360F2]/20 transition active:scale-95 flex items-center gap-1.5 shrink-0"
+                    >
+                      <span>Open Viber</span>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
-              <div>
-                <span className="text-slate-500">Risk</span>
-                <div className="mt-1 font-semibold text-slate-200">{risk}%</div>
-              </div>
-              <div>
-                <span className="text-slate-500">Calls</span>
-                <div className="mt-1 font-semibold text-slate-200">{entries.length}</div>
-              </div>
-              <div>
-                <span className="text-slate-500">Reports</span>
-                <div className="mt-1 font-semibold text-slate-200">
-                  {profile?.spamReportsCount || Math.max(...entries.map((x) => x.reportsCount || 0), 0)}
+            </div>
+          )}
+
+          {/* TAB 4: CALL RECORDINGS */}
+          {activeTab === 'RECORDINGS' && (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Disc className="h-5 w-5 text-emerald-400 animate-pulse" />
+                    <h3 className="text-sm font-bold text-white">Recorded Calls ({recordings.length})</h3>
+                  </div>
+                  <span className="rounded-md bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+                    48 kHz Studio HD
+                  </span>
+                </div>
+                <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-400">
+                  <Folder className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Saved in: Internal Storage/Recordings/CallShield/</span>
                 </div>
               </div>
+
+              {recordings.length === 0 ? (
+                <div className="rounded-2xl border border-slate-800 bg-[#0e141c] p-8 text-center text-slate-500">
+                  <Disc className="mx-auto h-8 w-8 text-slate-600 mb-2" />
+                  <p className="text-sm font-semibold text-slate-300">No recorded calls for this number</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Automatic call recording can be toggled in Protection Settings.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {recordings.map((rec) => (
+                    <AudioRecordingPlayer key={rec.id} recording={rec} onDelete={handleDeleteRecording} />
+                  ))}
+                </div>
+              )}
             </div>
-          </section>
+          )}
 
-          {/* Additional Actions */}
-          <div className="flex flex-wrap gap-2 pt-1">
-            {isSpam && (
-              <button
-                onClick={() => onMarkSafe(number, displayName)}
-                className="rounded-xl border border-emerald-900 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20 transition"
-              >
-                {t('not_spam')}
-              </button>
-            )}
-            <button
-              onClick={() => onOpenReportModal(number)}
-              className="rounded-xl border border-slate-800 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 transition"
-            >
-              {t('report_spam')}
-            </button>
+          {/* TAB 5: NOTES & IDENTITY */}
+          {activeTab === 'SECURITY' && (
+            <div className="space-y-4">
+              {/* Private Dictated Note */}
+              <section className="rounded-2xl border border-slate-800 bg-[#0e141c] p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-bold text-white">
+                    <StickyNote className="h-4 w-4 text-amber-400" />
+                    <span>Private Caller Note</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleDictation}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition ${
+                      isDictating
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
+                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    <Mic className="h-3.5 w-3.5 text-amber-400" />
+                    <span>{isDictating ? 'Listening…' : 'Dictate with Voice'}</span>
+                  </button>
+                </div>
 
-            {/* REPORT NAME INACCURACY ACTION BUTTON */}
-            <button
-              onClick={() => {
-                setInaccuracyCorrectedName(displayName || '');
-                setInaccuracyFeedback(null);
-                setIsInaccuracyModalOpen(true);
-              }}
-              className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 transition inline-flex items-center gap-1.5"
-            >
-              <Flag className="h-3.5 w-3.5 text-amber-400" />
-              Report Name Inaccuracy
-            </button>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  rows={4}
+                  placeholder={isDictating ? 'Listening to speech... speak your note now...' : 'Write or dictate a private note about this caller...'}
+                  className={`mt-3 w-full resize-none rounded-xl border bg-slate-950 p-3 text-sm text-white outline-none placeholder-slate-600 transition ${
+                    isDictating ? 'border-rose-500/60 ring-1 ring-rose-500/30' : 'border-slate-800 focus:border-amber-500/40'
+                  }`}
+                />
 
-            <button
-              onClick={() => onOpenDisputeModal(number, displayName)}
-              className="rounded-xl border border-slate-800 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 transition"
-            >
-              {t('dispute_label')}
-            </button>
-            {onOpenSmartBlock && (
-              <button
-                onClick={() => onOpenSmartBlock(number, number.slice(0, 5))}
-                className="rounded-xl border border-slate-800 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 transition"
-              >
-                Smart block
-              </button>
-            )}
-            {onInitiateCall && (
-              <button
-                onClick={() => onInitiateCall(number, displayName)}
-                className="inline-flex items-center gap-1 rounded-xl border border-slate-800 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 transition"
-              >
-                <UserPlus className="h-3.5 w-3.5" />
-                Save / contact
-              </button>
-            )}
-          </div>
+                {dictationError && (
+                  <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-300">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+                    <span>{dictationError}</span>
+                  </div>
+                )}
+
+                <div className="mt-3 flex items-center justify-between">
+                  <button
+                    onClick={saveNote}
+                    disabled={!number}
+                    className="rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-bold text-slate-950 disabled:opacity-40 transition"
+                  >
+                    Save Note
+                  </button>
+                  {noteSavedFeedback && (
+                    <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" />
+                      Saved Successfully
+                    </span>
+                  )}
+                </div>
+              </section>
+
+              {/* Name Inaccuracy Correction Card */}
+              <section className="rounded-2xl border border-slate-800 bg-[#0e141c] p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+                    <Flag className="h-4 w-4 text-amber-400" />
+                    <span>Name Inaccuracy & Community Dispute</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInaccuracyCorrectedName(displayName || '');
+                      setIsInaccuracyModalOpen(true);
+                    }}
+                    className="rounded-lg bg-amber-500/15 border border-amber-500/30 px-3 py-1 text-xs font-bold text-amber-300 hover:bg-amber-500/25 transition"
+                  >
+                    Correct Name
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-slate-400 leading-relaxed">
+                  If the caller's name is wrong, misspelled, or outdated in the directory, you can submit an official dispute and save your own corrected name locally.
+                </p>
+              </section>
+
+              {/* Community Spam Reports */}
+              <section className="rounded-2xl border border-slate-800 bg-[#0e141c] p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+                    <ShieldAlert className="h-4 w-4 text-rose-400" />
+                    <span>Community Safety & Spam Reporting</span>
+                  </div>
+                  <button
+                    onClick={() => onOpenReportModal(number)}
+                    className="rounded-lg bg-rose-500/15 border border-rose-500/30 px-3 py-1 text-xs font-bold text-rose-300 hover:bg-rose-500/25 transition"
+                  >
+                    Report Number
+                  </button>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                  <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-2.5">
+                    <span className="text-slate-500">Risk Score</span>
+                    <div className="mt-1 font-bold text-slate-200">{risk}%</div>
+                  </div>
+                  <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-2.5">
+                    <span className="text-slate-500">Community Reports</span>
+                    <div className="mt-1 font-bold text-slate-200">
+                      {profile?.spamReportsCount || Math.max(...entries.map((x) => x.reportsCount || 0), 0)}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
         </div>
       </section>
 
-      {/* DEDICATED REPORT NAME INACCURACY MODAL */}
+      {/* NAME INACCURACY REPORTING MODAL */}
       {isInaccuracyModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-4 animate-in fade-in duration-150" style={{ backdropFilter: "none", WebkitBackdropFilter: "none" }}>
-          <div className="w-full max-w-lg rounded-3xl border border-slate-800 bg-[#0c1219] p-6 shadow-2xl space-y-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
-                  <Flag className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">Report Name Inaccuracy</h3>
-                  <p className="text-xs text-slate-400">Correct misidentified caller data or submit community update</p>
-                </div>
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-[#101722] p-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Flag className="h-5 w-5 text-amber-400" />
+                <h3 className="font-bold text-white text-base">Report Inaccurate Name</h3>
               </div>
               <button
                 onClick={() => setIsInaccuracyModalOpen(false)}
-                className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition"
+                className="rounded-full p-1 text-slate-400 hover:text-white"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Current details recap */}
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3.5 text-xs space-y-2">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Phone Number:</span>
-                <span className="font-mono font-semibold text-slate-200">{number}</span>
+            <div className="mt-4 space-y-3 text-xs">
+              <div>
+                <label className="block font-medium text-slate-400 mb-1">Phone Number</label>
+                <div className="font-mono text-sm text-slate-200 bg-slate-950 px-3 py-2 rounded-xl border border-slate-800">
+                  {number}
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Current Displayed Name:</span>
-                <span className="font-semibold text-amber-300">{displayName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Identified Source:</span>
-                <span className="text-slate-400">
-                  {nameOrigin === 'SAVED_CONTACT'
-                    ? 'Device Contacts'
-                    : nameOrigin === 'USER_OVERRIDE'
-                    ? 'Custom Local Override'
-                    : 'Public Directory / CallShield Community'}
-                </span>
-              </div>
-            </div>
 
-            {/* Input field for accurate name */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                What is the correct caller name? <span className="text-rose-400">*</span>
+              <div>
+                <label className="block font-medium text-slate-400 mb-1">Current Display Name</label>
+                <div className="text-sm text-slate-400 bg-slate-950 px-3 py-2 rounded-xl border border-slate-800">
+                  {displayName}
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-300 mb-1">Correct Caller Name *</label>
+                <input
+                  type="text"
+                  value={inaccuracyCorrectedName}
+                  onChange={(e) => setInaccuracyCorrectedName(e.target.value)}
+                  placeholder="e.g. John Doe / City Hospital / FastCourier"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-sm text-white outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-300 mb-1">Reason for Inaccuracy</label>
+                <select
+                  value={inaccuracyReason}
+                  onChange={(e) => setInaccuracyReason(e.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-xs text-white outline-none focus:border-amber-400"
+                >
+                  <option value="Wrong Individual">Wrong Individual</option>
+                  <option value="Wrong Business">Wrong Business / Company</option>
+                  <option value="Typo / Spelling Error">Typo or Spelling Error</option>
+                  <option value="Outdated / Number Reassigned">Outdated or Number Reassigned</option>
+                  <option value="Privacy / Defamation Concern">Privacy Concern</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-300 mb-1">Additional Notes (Optional)</label>
+                <textarea
+                  value={inaccuracyNotes}
+                  onChange={(e) => setInaccuracyNotes(e.target.value)}
+                  rows={2}
+                  placeholder="Provide any additional context or reference..."
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 p-2.5 text-xs text-white outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <label className="flex items-center gap-2 text-slate-300 cursor-pointer pt-1">
+                <input
+                  type="checkbox"
+                  checked={inaccuracySubmitCommunity}
+                  onChange={(e) => setInaccuracySubmitCommunity(e.target.checked)}
+                  className="rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-0"
+                />
+                <span className="text-[11px]">Submit dispute to CallShield community directory for review</span>
               </label>
-              <input
-                type="text"
-                value={inaccuracyCorrectedName}
-                onChange={(e) => setInaccuracyCorrectedName(e.target.value)}
-                placeholder="e.g. Dr. Rajesh Sharma, Apex Logistics, Personal, etc."
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm font-semibold text-white placeholder-slate-500 outline-none focus:border-amber-500"
-                autoFocus
-              />
+
+              {inaccuracyFeedback && (
+                <div className="rounded-xl bg-emerald-500/20 border border-emerald-500/30 p-2 text-center text-xs text-emerald-300 font-semibold">
+                  {inaccuracyFeedback}
+                </div>
+              )}
             </div>
 
-            {/* Inaccuracy Reason Selectable Chips */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Reason for Inaccuracy
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  'Wrong Individual',
-                  'Business / Enterprise Name',
-                  'Spam / Impersonator Alias',
-                  'Outdated Directory Record',
-                  'Spelling / Typo Correction',
-                  'Personal Friend / Family',
-                ].map((reason) => (
-                  <button
-                    key={reason}
-                    type="button"
-                    onClick={() => setInaccuracyReason(reason)}
-                    className={`rounded-xl px-2.5 py-1.5 text-xs font-medium transition border ${
-                      inaccuracyReason === reason
-                        ? 'bg-amber-500/25 border-amber-500/60 text-amber-200'
-                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
-                    }`}
-                  >
-                    {reason}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Optional Notes */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Additional Notes (Optional)
-              </label>
-              <textarea
-                value={inaccuracyNotes}
-                onChange={(e) => setInaccuracyNotes(e.target.value)}
-                placeholder="Provide any context (e.g. Official bank customer care, verified relative, previous owner of number)..."
-                rows={2}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-slate-700"
-              />
-            </div>
-
-            {/* Community Contribution Toggle */}
-            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer pt-1">
-              <input
-                type="checkbox"
-                checked={inaccuracySubmitCommunity}
-                onChange={(e) => setInaccuracySubmitCommunity(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-amber-500 accent-amber-500"
-              />
-              <span>Submit correction to community directory & dispute registry</span>
-            </label>
-
-            {inaccuracyFeedback && (
-              <div className="flex items-center gap-2 rounded-xl bg-emerald-950/60 border border-emerald-800/60 p-3 text-xs text-emerald-300">
-                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                <span>{inaccuracyFeedback}</span>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+            <div className="mt-5 flex items-center justify-end gap-2 border-t border-slate-800 pt-3">
               <button
                 type="button"
                 onClick={() => setIsInaccuracyModalOpen(false)}
-                className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition"
+                className="rounded-xl bg-slate-800 hover:bg-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 transition"
               >
                 Cancel
               </button>
@@ -1267,16 +1772,15 @@ export default function CallerDetailModal({
                 type="button"
                 onClick={handleApplyNameCorrection}
                 disabled={!inaccuracyCorrectedName.trim()}
-                className="rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 px-4 py-2 text-xs font-bold text-slate-950 shadow-md shadow-amber-500/20 transition flex items-center gap-1.5"
+                className="rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-bold text-slate-950 transition disabled:opacity-40"
               >
-                <Check className="h-4 w-4" />
-                Apply Name Correction
+                Apply Correction
               </button>
             </div>
           </div>
         </div>
       )}
     </div>,
-    document.body,
+    document.body
   );
 }

@@ -329,16 +329,16 @@ npx cap open android # Opens Android Studio to click "Build APK"`;
           {/* TAB 5: In-Place Updates & Signing */}
           {activeTab === 'UPDATES' && (
             <div className="space-y-4">
-              <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/30 flex items-start space-x-3.5">
-                <div className="p-2.5 rounded-xl bg-amber-600/20 text-amber-400 shrink-0 mt-0.5">
+              <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 flex items-start space-x-3.5">
+                <div className="p-2.5 rounded-xl bg-emerald-600/20 text-emerald-400 shrink-0 mt-0.5">
                   <ShieldCheck className="w-5 h-5" />
                 </div>
                 <div>
                   <h4 className="text-sm font-bold text-white">
-                    Why Updates Failed & How It Is Now Resolved
+                    Seamless In-Place APK Updates (Works on Build 402 & Newer)
                   </h4>
                   <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                    Android strictly requires two conditions for a new APK to update an existing installed app without uninstalling:
+                    Android package manager allows updating directly over your installed app (preserving call logs, contacts, recordings, and custom blocklists) without uninstalling:
                   </p>
                 </div>
               </div>
@@ -346,37 +346,37 @@ npx cap open android # Opens Android Studio to click "Build APK"`;
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2">
                   <div className="font-bold text-white flex items-center space-x-2">
-                    <span className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-[10px]">1</span>
-                    <span>Identical Signing Key</span>
+                    <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-300 flex items-center justify-center text-[10px]">1</span>
+                    <span>Exact Matching Certificate</span>
                   </div>
                   <p className="text-slate-400 leading-relaxed">
-                    If an older build was signed with Android's random debug key and the new one with a release key, Android rejects the install with <code className="text-amber-400 font-mono">INSTALL_FAILED_UPDATE_INCOMPATIBLE</code>.
+                    Previously, CI generated a randomized ephemeral signing key per run, which triggered <code className="text-amber-400 font-mono">INSTALL_FAILED_UPDATE_INCOMPATIBLE</code>.
                   </p>
                   <div className="text-[11px] text-emerald-400 bg-emerald-950/30 p-2 rounded-xl border border-emerald-500/20 font-medium">
-                    ✓ Fixed: Gradle now signs both Debug and Release with the persistent <code className="font-mono">release-keystore.jks</code>.
+                    ✓ Fixed: Both CI and Gradle now sign using the persistent <code className="font-mono">release-keystore.jks</code> matching Build 402.
                   </div>
                 </div>
 
                 <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2">
                   <div className="font-bold text-white flex items-center space-x-2">
-                    <span className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-[10px]">2</span>
-                    <span>Higher versionCode</span>
+                    <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-300 flex items-center justify-center text-[10px]">2</span>
+                    <span>Higher versionCode (403+)</span>
                   </div>
                   <p className="text-slate-400 leading-relaxed">
-                    Android blocks any APK whose internal <code className="text-amber-400 font-mono">versionCode</code> is equal to or lower than the installed version (<code className="text-amber-400 font-mono">INSTALL_FAILED_VERSION_DOWNGRADE</code>).
+                    Android rejects installing an APK if its <code className="text-amber-400 font-mono">versionCode</code> is equal to or lower than the installed version.
                   </p>
                   <div className="text-[11px] text-emerald-400 bg-emerald-950/30 p-2 rounded-xl border border-emerald-500/20 font-medium">
-                    ✓ Fixed: Base <code className="font-mono">versionCode</code> bumped to 200+ and auto-increments with each build.
+                    ✓ Fixed: VersionCode is now bumped to <code className="font-mono">403+</code> (above Build 402) so Android treats it as an in-place upgrade!
                   </div>
                 </div>
               </div>
 
               <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2.5">
-                <h5 className="text-xs font-bold text-slate-200">How to transition your current device:</h5>
+                <h5 className="text-xs font-bold text-slate-200">How to update your current 402 build:</h5>
                 <ol className="text-xs text-slate-400 space-y-1.5 list-decimal list-inside leading-relaxed">
-                  <li><strong>One-time step:</strong> If you previously installed an old build signed with an incompatible debug key, uninstall it once from your device to clear the conflicting certificate.</li>
-                  <li><strong>Install the new unified build:</strong> Install the new APK (v1.5.1, versionCode 200+).</li>
-                  <li><strong>Future updates work seamlessly:</strong> Every subsequent APK built locally or via GitHub CI uses this exact same signing certificate and a higher versionCode, updating directly in-place without uninstallation!</li>
+                  <li><strong>Keep your existing app installed:</strong> Do not uninstall Build 402. All your contacts and call recordings will be preserved.</li>
+                  <li><strong>Install the new update APK:</strong> Tap the new APK build (v1.5.3, versionCode 403+).</li>
+                  <li><strong>Android Package Installer prompt:</strong> Android will recognize it as an update and display <em>"Do you want to update this app? Your existing data won't be lost."</em> Tap <strong>Update</strong> to complete!</li>
                 </ol>
               </div>
             </div>
@@ -387,7 +387,7 @@ npx cap open android # Opens Android Studio to click "Build APK"`;
         <div className="px-6 py-3.5 bg-slate-850 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center space-x-1.5">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>CallShield Native Android & PWA v1.5.1</span>
+            <span>CallShield Native Android & PWA v1.5.3 (Build 403+)</span>
           </div>
           <button
             onClick={onClose}

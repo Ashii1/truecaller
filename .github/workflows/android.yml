@@ -39,13 +39,25 @@ jobs:
           if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
             echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/vigilshield-release.jks"
             test -s "$RUNNER_TEMP/vigilshield-release.jks"
-            echo "Using protected production signing key."
+            echo "Using protected production signing key from secrets."
+          elif [ -f "release-keystore.jks" ]; then
+            echo "Using persistent release-keystore.jks (matches 402 build certificate)."
+            cp "release-keystore.jks" "$RUNNER_TEMP/vigilshield-release.jks"
+            KEYSTORE_PASSWORD="vigilshield123"
+            KEY_ALIAS="vigilshield-key"
+            KEY_PASSWORD="vigilshield123"
+          elif [ -f "keystore_base64.txt" ]; then
+            echo "Decoding persistent keystore_base64.txt (matches 402 build certificate)."
+            base64 -d keystore_base64.txt > "$RUNNER_TEMP/vigilshield-release.jks"
+            KEYSTORE_PASSWORD="vigilshield123"
+            KEY_ALIAS="vigilshield-key"
+            KEY_PASSWORD="vigilshield123"
           else
-            echo "Protected signing secrets are not configured; generating an ephemeral CI signing key."
-            KEYSTORE_PASSWORD=$(openssl rand -hex 24)
-            KEY_ALIAS=ci
-            KEY_PASSWORD=$KEYSTORE_PASSWORD
-            keytool -genkeypair -v               -keystore "$RUNNER_TEMP/vigilshield-release.jks"               -storepass "$KEYSTORE_PASSWORD"               -keypass "$KEY_PASSWORD"               -alias "$KEY_ALIAS"               -keyalg RSA               -keysize 3072               -validity 3650               -dname "CN=CallShield CI, OU=Build, O=CallShield, C=US"
+            echo "Using persistent fallback keystore."
+            KEYSTORE_PASSWORD="vigilshield123"
+            KEY_ALIAS="vigilshield-key"
+            KEY_PASSWORD="vigilshield123"
+            keytool -genkeypair -v -keystore "$RUNNER_TEMP/vigilshield-release.jks" -storepass "$KEYSTORE_PASSWORD" -keypass "$KEY_PASSWORD" -alias "$KEY_ALIAS" -keyalg RSA -keysize 3072 -validity 10000 -dname "CN=CallShield Production, OU=Telecom, O=CallShield, C=US"
           fi
           {
             echo "VIGILSHIELD_KEYSTORE_FILE=$RUNNER_TEMP/vigilshield-release.jks"

@@ -235,7 +235,7 @@ export function triggerHapticFeedback(pattern: number | number[] = 25) {
 }
 
 export function triggerCallConnectedHaptic() {
-  triggerHapticFeedback([40, 50, 40]);
+  triggerHapticFeedback([180, 90, 220]);
 }
 
 export interface IncomingCallAlertController {

@@ -21,11 +21,13 @@ import {
   StickyNote,
   Copy,
   Trash2,
-  PhoneCall
+  PhoneCall,
+  Minimize2,
+  Maximize2
 } from 'lucide-react';
 import { ActiveCallSession, CallShieldDirectoryProfile, CallRecordingItem } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
-import { playDtmfTone, triggerHapticFeedback, playNotificationChime } from '../utils/audioAlerts';
+import { playDtmfTone, triggerHapticFeedback, playNotificationChime, triggerCallConnectedHaptic } from '../utils/audioAlerts';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 import { useI18n } from '../i18n/LanguageContext';
 import { callRecordingService } from '../services/callRecordingService';
@@ -36,6 +38,8 @@ interface ActiveCallModalProps {
   lookupProfile: (num: string) => CallShieldDirectoryProfile;
   onAddCall?: (number: string) => void;
   powerButtonEndsCall?: boolean;
+  isMinimized?: boolean;
+  onToggleMinimize?: (minimized: boolean) => void;
 }
 
 export default function ActiveCallModal({
@@ -44,6 +48,8 @@ export default function ActiveCallModal({
   lookupProfile,
   onAddCall,
   powerButtonEndsCall = false,
+  isMinimized,
+  onToggleMinimize,
 }: ActiveCallModalProps) {
   const { t } = useI18n();
   const [duration, setDuration] = useState(session?.durationSeconds || 0);
@@ -58,6 +64,33 @@ export default function ActiveCallModal({
   const [keypadDigits, setKeypadDigits] = useState('');
   const [showAddCallPrompt, setShowAddCallPrompt] = useState(false);
   const [secondCallInput, setSecondCallInput] = useState('');
+  const [internalMinimized, setInternalMinimized] = useState(false);
+
+  // Call is considered attended if status is CONNECTED/MUTED/HELD or duration has elapsed
+  const isAttended = session?.status === 'CONNECTED' || session?.status === 'MUTED' || session?.status === 'HELD' || duration > 0;
+  const prevAttendedRef = useRef(isAttended);
+
+  // When call status becomes attended / answered, vibrate the phone so the user feels they answered
+  useEffect(() => {
+    if (!prevAttendedRef.current && isAttended) {
+      triggerCallConnectedHaptic();
+      telecomBridge.vibratePhone([180, 90, 220]);
+    }
+    prevAttendedRef.current = isAttended;
+  }, [isAttended]);
+
+  // Sync duration if session provides connected duration
+  useEffect(() => {
+    if (session?.durationSeconds && session.durationSeconds > duration) {
+      setDuration(session.durationSeconds);
+    }
+  }, [session?.durationSeconds]);
+
+  const isCallMinimized = isMinimized !== undefined ? isMinimized : internalMinimized;
+  const setCallMinimized = (val: boolean) => {
+    setInternalMinimized(val);
+    onToggleMinimize?.(val);
+  };
 
   // In-Call Private Notes state for jotting down details during the live call
   const [showInCallNotes, setShowInCallNotes] = useState(false);
@@ -68,6 +101,32 @@ export default function ActiveCallModal({
 
   const durationRef = useRef(duration);
   durationRef.current = duration;
+
+  // Reset internal minimized state if a new call starts
+  useEffect(() => {
+    if (session?.id) {
+      setInternalMinimized(false);
+    }
+  }, [session?.id]);
+
+  // System notification when ongoing call is minimized so user can easily return
+  useEffect(() => {
+    if (!session || !isCallMinimized) return;
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        const durStr = `${Math.floor(duration / 60).toString().padStart(2, '0')}:${(duration % 60).toString().padStart(2, '0')}`;
+        const notif = new Notification(`Ongoing Call: ${session.name || formatPhoneNumber(session.number)}`, {
+          body: !isAttended ? 'Calling...' : `${formatPhoneNumber(session.number)} • ${durStr} • Tap to view call screen`,
+          tag: 'vigilshield-active-call',
+          icon: '/favicon.ico',
+        });
+        notif.onclick = () => {
+          window.focus();
+          setCallMinimized(false);
+        };
+      } catch {}
+    }
+  }, [session, isCallMinimized, Math.floor(duration / 5), isAttended]);
 
   // Load existing notes for this caller on session start
   useEffect(() => {
@@ -87,14 +146,14 @@ export default function ActiveCallModal({
     }
   }, [session?.number, session?.notes]);
 
-  // Call timer increment
+  // Call timer increment ONLY when attended!
   useEffect(() => {
-    if (!session) return;
+    if (!session || !isAttended) return;
     const interval = setInterval(() => {
       setDuration((prev) => prev + 1);
     }, 1000);
     return () => clearInterval(interval);
-  }, [session]);
+  }, [session, isAttended]);
 
   // Recording timer increment
   useEffect(() => {
@@ -286,8 +345,10 @@ export default function ActiveCallModal({
   if (!session) return null;
 
   const callerProfile = lookupProfile(session.number);
-  const initials = session.name
-    ? session.name
+  const callerDisplayName = session.name || callerProfile?.name || t('unknown_caller');
+  const formattedNumber = formatPhoneNumber(session.number);
+  const initials = callerDisplayName
+    ? callerDisplayName
         .split(' ')
         .filter(Boolean)
         .slice(0, 2)
@@ -296,6 +357,137 @@ export default function ActiveCallModal({
         .toUpperCase()
     : '👤';
 
+  // =========================================================================
+  // 1. MINIMIZED ONGOING CALL NOTIFICATION CARD (Floating at top of viewport)
+  // =========================================================================
+  if (isCallMinimized) {
+    return (
+      <div
+        id="ongoing-call-minimized-notification"
+        onClick={() => setCallMinimized(false)}
+        className="fixed top-3 left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-lg z-[99999] rounded-2xl border border-emerald-500/40 bg-[#070b13]/98 p-3.5 text-white shadow-2xl shadow-black/95 backdrop-blur-2xl cursor-pointer select-none transition-all duration-200 animate-spring-down animate-ongoing-glow hover:border-emerald-400/60 active:scale-[0.99]"
+        title="Tap to expand fullscreen call"
+        role="button"
+        tabIndex={0}
+      >
+        {/* Top Bar: Live Status & Equalizer & Elapsed Duration */}
+        <div className="flex items-center justify-between border-b border-white/[0.08] pb-2">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+            </span>
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400">
+              {isOnHold ? t('on_hold') : !isAttended ? 'Calling...' : 'Call In Progress'}
+            </span>
+            {/* Live Audio Equalizer Waveform */}
+            {isAttended && !isOnHold && (
+              <div className="flex items-center gap-0.5 h-3 ml-1" title="Audio connected">
+                <span className="w-1 rounded bg-emerald-400 animate-wave-1" />
+                <span className="w-1 rounded bg-emerald-400 animate-wave-2" />
+                <span className="w-1 rounded bg-emerald-400 animate-wave-3" />
+                <span className="w-1 rounded bg-emerald-400 animate-wave-4" />
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+              {!isAttended ? 'Calling...' : formatTimer(duration)}
+            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setCallMinimized(false);
+              }}
+              className="p-1 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 text-slate-300 hover:text-white transition"
+              title="Expand call to fullscreen"
+              aria-label="Expand call"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Middle Row: Caller Identity (Name & Number/Calling) & Quick Controls */}
+        <div className="mt-2.5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className={`grid h-10 w-10 place-items-center rounded-full bg-slate-800 border text-sm font-black text-white shrink-0 shadow ${!isAttended ? 'border-emerald-500/60 ring-2 ring-emerald-500/30 animate-pulse' : 'border-white/15'}`}>
+              {initials}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <h4 className="text-sm font-extrabold text-white truncate">
+                  {callerDisplayName}
+                </h4>
+                {session.isVerifiedBusiness && (
+                  <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-0.5">
+                {!isAttended ? (
+                  <span className="text-xs font-bold text-emerald-400 animate-pulse flex items-center gap-1">
+                    <PhoneCall className="w-3 h-3 animate-bounce" />
+                    Calling...
+                  </span>
+                ) : (
+                  <span className="font-mono text-xs font-bold text-cyan-300 truncate bg-cyan-950/60 border border-cyan-500/30 px-1.5 py-0.2 rounded">
+                    {formattedNumber}
+                  </span>
+                )}
+                <span className="text-[10px] text-slate-400 font-medium">{session.sim || 'SIM 1'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick action buttons */}
+          <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={handleToggleMute}
+              className={`p-2 rounded-xl border transition active:scale-90 ${
+                isMuted
+                  ? 'border-amber-500/50 bg-amber-500/20 text-amber-300'
+                  : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+              }`}
+              title={isMuted ? 'Unmute microphone' : 'Mute microphone'}
+              aria-label={isMuted ? 'Unmute microphone' : 'Mute microphone'}
+            >
+              {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            </button>
+            <button
+              type="button"
+              onClick={handleToggleSpeaker}
+              className={`p-2 rounded-xl border transition active:scale-90 ${
+                isSpeaker
+                  ? 'border-blue-500/50 bg-blue-500/20 text-blue-300'
+                  : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+              }`}
+              title={isSpeaker ? 'Switch to earpiece' : 'Switch to speaker'}
+              aria-label={isSpeaker ? 'Switch to earpiece' : 'Switch to speaker'}
+            >
+              {isSpeaker ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </button>
+            <button
+              type="button"
+              onClick={handleEndCallAction}
+              className="flex items-center gap-1 rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white shadow-lg shadow-rose-950/50 hover:bg-rose-500 active:scale-90 transition-transform"
+              title="End call"
+              aria-label="End call"
+            >
+              <PhoneOff className="w-4 h-4" />
+              <span className="hidden sm:inline">End</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // 2. FULLSCREEN ACTIVE CALL VIEW
+  // =========================================================================
   return (
     <div className="fixed inset-0 z-[120] bg-black/90 backdrop-blur-xl flex flex-col justify-end sm:items-center sm:justify-center p-0 sm:p-4 animate-in fade-in duration-200">
       {/* Phone Handset Container with System-Level High Contrast Styling */}
@@ -309,7 +501,7 @@ export default function ActiveCallModal({
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
             </span>
             <span className="font-bold uppercase tracking-wider text-emerald-400 text-[11px]">
-              {isOnHold ? t('on_hold') : t('call_connected')}
+              {isOnHold ? t('on_hold') : !isAttended ? 'Calling...' : t('call_connected')}
             </span>
           </div>
 
@@ -319,18 +511,31 @@ export default function ActiveCallModal({
             </span>
             <span className="flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 font-bold text-[10px]">
               <Radio className="w-3 h-3 text-emerald-400" />
-              <span>HD 48kHz</span>
+              <span>{isAttended ? 'HD 48kHz' : 'Cellular'}</span>
             </span>
+            <button
+              type="button"
+              onClick={() => setCallMinimized(true)}
+              className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 text-slate-300 hover:text-white transition flex items-center gap-1 text-[11px] font-semibold"
+              title="Minimize call to notification bar"
+              aria-label="Minimize call"
+            >
+              <Minimize2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Minimize</span>
+            </button>
           </div>
         </div>
 
-        {/* Middle Stage: Caller Identity & Large High-Contrast Timer */}
+        {/* Middle Stage: Caller Identity & Calling / Number Display */}
         <div className="py-4 text-center space-y-3">
           {/* Avatar / Identity Glyph */}
           <div className="relative inline-block mx-auto">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-b from-slate-800 to-slate-900 border-2 border-white/20 flex items-center justify-center text-3xl font-extrabold text-white shadow-xl ring-8 ring-white/5">
+            <div className={`w-20 h-20 rounded-full bg-gradient-to-b from-slate-800 to-slate-900 border-2 flex items-center justify-center text-3xl font-extrabold text-white shadow-xl ring-8 ${!isAttended ? 'border-emerald-500/50 ring-emerald-500/20 animate-pulse' : 'border-white/20 ring-white/5'}`}>
               {initials}
             </div>
+            {!isAttended && (
+              <div className="absolute -inset-2 rounded-full border border-emerald-400/30 animate-ping pointer-events-none" />
+            )}
             {session.isVerifiedBusiness && (
               <div
                 className="absolute -bottom-1 -right-1 bg-blue-600 rounded-full p-1.5 border-2 border-[#070a10] shadow-md"
@@ -341,27 +546,65 @@ export default function ActiveCallModal({
             )}
           </div>
 
-          {/* Caller Name & Formatted Phone Number */}
-          <div className="space-y-1">
+          {/* Caller Name & Formatted Phone Number / Calling Indicator */}
+          <div className="space-y-1.5">
             <h1 className="text-2xl font-black text-white tracking-tight leading-snug px-3 truncate max-w-sm mx-auto">
-              {session.name || t('unknown_caller')}
+              {callerDisplayName}
             </h1>
-            <p className="text-sm font-mono text-slate-300 tracking-wide">
-              {formatPhoneNumber(session.number)}
-            </p>
-            {callerProfile?.location && (
-              <p className="text-xs text-slate-400 font-medium">
-                {callerProfile.location}
-              </p>
+            
+            {/* TILL THEY ATTEND DISPLAY AS CALLING - IF THEY ATTEND THEN DISPLAY NUMBER */}
+            {!isAttended ? (
+              <div className="flex items-center justify-center gap-2 py-0.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+                <span className="text-sm font-extrabold text-emerald-400 tracking-wider uppercase animate-pulse">
+                  Calling...
+                </span>
+              </div>
+            ) : (
+              <div className="space-y-0.5 animate-in fade-in zoom-in-95 duration-300">
+                <p className="text-base font-mono font-bold text-slate-200 tracking-wider">
+                  {formattedNumber}
+                </p>
+                {callerProfile?.location && (
+                  <p className="text-xs text-slate-400 font-medium">
+                    {callerProfile.location}
+                  </p>
+                )}
+              </div>
             )}
           </div>
 
-          {/* High-Legibility Tabular Call Timer */}
-          <div className="inline-flex items-center justify-center px-4 py-1.5 rounded-full bg-white/5 border border-white/10">
-            <span className="text-2xl font-mono font-extrabold text-white tracking-widest tabular-nums">
-              {formatTimer(duration)}
-            </span>
-          </div>
+          {/* High-Legibility Tabular Call Timer or Calling Status Pill */}
+          {!isAttended ? (
+            <div className="inline-flex items-center justify-center gap-2.5 px-5 py-2 rounded-full bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 shadow-inner">
+              <PhoneCall className="w-4 h-4 text-emerald-400 animate-bounce" />
+              <span className="text-sm font-bold tracking-wide text-emerald-300">
+                Calling...
+              </span>
+              <span className="flex items-center gap-1 ml-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse delay-150" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse delay-300" />
+              </span>
+            </div>
+          ) : (
+            <div className="inline-flex items-center justify-center gap-3 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 shadow-inner animate-in fade-in duration-300">
+              {!isOnHold && (
+                <div className="flex items-center gap-1 h-3.5" title="HD Audio connected">
+                  <span className="w-1 rounded bg-emerald-400 animate-wave-1" />
+                  <span className="w-1 rounded bg-emerald-400 animate-wave-2" />
+                  <span className="w-1 rounded bg-emerald-400 animate-wave-3" />
+                  <span className="w-1 rounded bg-emerald-400 animate-wave-4" />
+                </div>
+              )}
+              <span className="text-2xl font-mono font-extrabold text-white tracking-widest tabular-nums">
+                {formatTimer(duration)}
+              </span>
+            </div>
+          )}
 
           {/* Hold Alert Pill */}
           {isOnHold && (

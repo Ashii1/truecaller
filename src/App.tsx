@@ -21,6 +21,7 @@ import { BlockRule, WhitelistEntry, ShieldSettings, CallLogItem, IncomingCallSta
 import { INITIAL_SETTINGS } from './data/defaultData';
 import { lookupCallShieldDirectory } from './utils/spamEngine';
 import { detectNeighborSpoof, detectPingBackScam, formatPrivateCallNumber } from './utils/spoofEngine';
+import { triggerCallConnectedHaptic } from './utils/audioAlerts';
 import { telecomBridge } from './services/telephony/telecomBridge';
 import { externalDirectoryService } from './services/externalDirectoryService';
 import { generateScreeningSummary } from './services/aiScreenerService';
@@ -44,7 +45,7 @@ export default function App(){
  const [calls,setCalls]=useState<CallLogItem[]>(()=>safeParse('callshield_calls',[]));
  const [timelineEvents,setTimelineEvents]=useState<SecurityTimelineEvent[]>(()=>safeParse('callshield_timeline',INITIAL_TIMELINE_EVENTS));
  const [autoCancelEnabled,setAutoCancelEnabled]=useState<boolean>(()=>safeParse('callshield_autocancel',true));
- const [activeIncomingCall,setActiveIncomingCall]=useState<IncomingCallState|null>(null); const [activeCallSession,setActiveCallSession]=useState<ActiveCallSession|null>(null); const [postCallState,setPostCallState]=useState<PostCallState|null>(null);
+ const [activeIncomingCall,setActiveIncomingCall]=useState<IncomingCallState|null>(null); const [activeCallSession,setActiveCallSession]=useState<ActiveCallSession|null>(null); const [isOngoingCallMinimized, setIsOngoingCallMinimized] = useState(false); const [postCallState,setPostCallState]=useState<PostCallState|null>(null);
  const [selectedProfile,setSelectedProfile]=useState<CallShieldDirectoryProfile|null>(null); const [selectedCall,setSelectedCall]=useState<CallLogItem|null>(null); const [isCallerModalOpen,setIsCallerModalOpen]=useState(false);
  const [isInstallModalOpen,setIsInstallModalOpen]=useState(false); const [isFastReportOpen,setIsFastReportOpen]=useState(false); const [fastReportNumber,setFastReportNumber]=useState(''); const [isDisputeOpen,setIsDisputeOpen]=useState(false); const [disputeNumber,setDisputeNumber]=useState(''); const [disputeName,setDisputeName]=useState('');
  const [isSyncing,setIsSyncing]=useState(false); const [isDataSourcesModalOpen,setIsDataSourcesModalOpen]=useState(false); const [isDiagnosticsModalOpen,setIsDiagnosticsModalOpen]=useState(false); const [isPermissionCenterOpen,setIsPermissionCenterOpen]=useState(false); const [dialerInitialNumber,setDialerInitialNumber]=useState(''); const [deferredPrompt,setDeferredPrompt]=useState<any>(null); const [isDefaultDialer,setIsDefaultDialer]=useState(()=>telecomBridge.isDefaultDialer());
@@ -375,6 +376,10 @@ export default function App(){
           });
         } else if (state === 'ACTIVE' || state === 'DIALING' || state === 'HOLDING') {
           setActiveIncomingCall(null);
+          if (state === 'ACTIVE') {
+            triggerCallConnectedHaptic();
+            telecomBridge.vibratePhone([180, 90, 220]);
+          }
           setActiveCallSession({
             id: callId,
             number,
@@ -384,7 +389,7 @@ export default function App(){
             riskScore: p.spamScore,
             riskLevel: p.riskLevel || 'UNKNOWN',
             durationSeconds: details?.durationSeconds || 0,
-            status: state === 'HOLDING' ? 'HELD' : 'CONNECTED',
+            status: state === 'HOLDING' ? 'HELD' : state === 'DIALING' ? 'DIALING' : 'CONNECTED',
             isMuted: false,
             isSpeaker: false,
             isHeld: Boolean(details?.isHolding),
@@ -525,8 +530,9 @@ export default function App(){
     // session with the real call id as soon as the call is registered.
     setActiveTab('dialer');
     if (isPrivate) { showToast(`Calling with caller ID masked (${settings.privateCallPrefix || '*67'})`, 'info'); }
+    const newCallId = result.callId || `call-${Date.now()}`;
     setActiveCallSession({
-      id: result.callId || `call-${Date.now()}`,
+      id: newCallId,
       number: clean,
       name: isPrivate ? `${resolved} (Private)` : resolved,
       isSpam: p.isSpam,
@@ -543,6 +549,17 @@ export default function App(){
       sim: target,
       isVerifiedBusiness: p.isVerified
     });
+    // In web preview: simulate remote party attending the call after 3.2s
+    if (!telecomBridge.isAndroidEnvironment()) {
+      setTimeout(() => {
+        setActiveCallSession(prev => {
+          if (!prev || prev.id !== newCallId || prev.status !== 'DIALING') return prev;
+          triggerCallConnectedHaptic();
+          telecomBridge.vibratePhone([180, 90, 220]);
+          return { ...prev, status: 'CONNECTED' };
+        });
+      }, 3200);
+    }
     setCalls(prev => [{
       id: `call-${Date.now()}`,
       number: clean,
@@ -759,8 +776,23 @@ export default function App(){
   const handleRemoveWhitelist = useCallback((id: string) => setWhitelist(p => p.filter(w => w.id !== id)), []);
   const handleOpenCallerDetail = useCallback((item: any) => {
     const n = 'number' in item ? item.number : '';
-    setSelectedProfile(lookupCallShieldDirectory(n, rules, whitelist));
-    setSelectedCall(calls.find(c => c.number === n) || null);
+    const prof = lookupCallShieldDirectory(n, rules, whitelist);
+    if ('name' in item && item.name && (prof.name === n || !prof.name)) {
+      prof.name = item.name;
+    }
+    setSelectedProfile(prof);
+    const existingCall = calls.find(c => c.number.replace(/\D/g, '') === n.replace(/\D/g, ''));
+    setSelectedCall(existingCall || ({
+      id: `contact-view-${Date.now()}`,
+      number: n,
+      callerName: ('name' in item ? item.name : prof.name) || n,
+      type: 'INCOMING',
+      timestamp: Date.now(),
+      isSpam: prof.isSpam,
+      riskScore: prof.spamScore,
+      classification: prof.isSpam ? 'SPAM' : prof.isVerified ? 'VERIFIED' : 'SAFE',
+      isContact: true,
+    } as CallLogItem));
     setIsCallerModalOpen(true);
   }, [rules, whitelist, calls]);
 
@@ -852,6 +884,15 @@ export default function App(){
   }, [activeIncomingCall, handleBlockNumber, selectedSim]);
 
   const handleAnswerIncomingCall = useCallback((screeningData?: { transcript: ScreeningTranscriptEntry[]; intent: string | null }) => {
+    telecomBridge.silenceRinger();
+    telecomBridge.clearStaleCallNotifications();
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
+    triggerCallConnectedHaptic();
+    telecomBridge.vibratePhone([180, 90, 220]);
     if (activeIncomingCall?.callId) {
       telecomBridge.answerCall(activeIncomingCall.callId);
     }
@@ -879,12 +920,13 @@ export default function App(){
       });
     }
     setActiveIncomingCall(null);
+    setIsOngoingCallMinimized(false);
   }, [activeIncomingCall, selectedSim]);
 
   return <div className="min-h-screen bg-[#070b10] text-white">
-   {!phoneOnly && <Header closeSettingsSignal={navigationSignal} settings={settings} onUpdateSettings={setSettings} isDefaultDialer={isDefaultDialer} onRequestDefaultDialer={handleRequestDefaultDialer} onOpenPermissionCenter={()=>setIsPermissionCenterOpen(true)} onSyncDatabase={handleSyncDeviceData} isSyncing={isSyncing} autoCancelEnabled={autoCancelEnabled} onToggleAutoCancel={()=>setAutoCancelEnabled(v=>!v)} onOpenInstallModal={()=>setIsInstallModalOpen(true)} onOpenDataSources={()=>setIsDataSourcesModalOpen(true)} onOpenDiagnostics={()=>setIsDiagnosticsModalOpen(true)} recentSpamCalls={recentSpamCalls} onSelectCall={openCaller} onOpenRecents={()=>setActiveTab('recents')} onOpenProtection={()=>setActiveTab('protection')} density={density} onDensityChange={handleDensityChange} activeIncomingCall={activeIncomingCall} onAnswerIncomingCall={handleAnswerIncomingCall} onDeclineIncomingCall={() => handleCancelIncomingCall('Declined by user', false)} onExpandIncomingCall={() => { if (activeIncomingCall) setActiveIncomingCall(prev => prev ? { ...prev, viewMode: 'fullscreen' } : null); }} isDeviceLocked={isDeviceLocked} onToggleLockDevice={() => setIsDeviceLocked(v => !v)} onTriggerIncomingCall={() => handleTriggerScreeningDemo()}/>} 
+   {!phoneOnly && <Header closeSettingsSignal={navigationSignal} settings={settings} onUpdateSettings={setSettings} isDefaultDialer={isDefaultDialer} onRequestDefaultDialer={handleRequestDefaultDialer} onOpenPermissionCenter={()=>setIsPermissionCenterOpen(true)} onSyncDatabase={handleSyncDeviceData} isSyncing={isSyncing} autoCancelEnabled={autoCancelEnabled} onToggleAutoCancel={()=>setAutoCancelEnabled(v=>!v)} onOpenInstallModal={()=>setIsInstallModalOpen(true)} onOpenDataSources={()=>setIsDataSourcesModalOpen(true)} onOpenDiagnostics={()=>setIsDiagnosticsModalOpen(true)} recentSpamCalls={recentSpamCalls} onSelectCall={openCaller} onOpenRecents={()=>setActiveTab('recents')} onOpenProtection={()=>setActiveTab('protection')} density={density} onDensityChange={handleDensityChange} activeIncomingCall={activeIncomingCall} onAnswerIncomingCall={handleAnswerIncomingCall} onDeclineIncomingCall={() => handleCancelIncomingCall('Declined by user', false)} onExpandIncomingCall={() => { if (activeIncomingCall) setActiveIncomingCall(prev => prev ? { ...prev, viewMode: 'fullscreen' } : null); }} isDeviceLocked={isDeviceLocked} onToggleLockDevice={() => setIsDeviceLocked(v => !v)} onTriggerIncomingCall={() => handleTriggerScreeningDemo()} activeCallSession={activeCallSession} onMaximizeOngoingCall={() => setIsOngoingCallMinimized(false)} onEndOngoingCall={handleEndCall}/>} 
    <Navigation activeTab={activeTab} onChangeTab={(tab) => { setNavigationSignal(v => v + 1); setActiveTab(tab); }} spamCallsCount={spamCallsCount} activeRulesCount={activeRulesCount} assistantAlertsCount={3} phoneOnly={phoneOnly}/> 
-   <main className={phoneOnly ? "min-h-screen w-full" : "mx-auto w-full max-w-4xl px-3 py-3 pb-28 sm:pb-32"}>
+   <main className={phoneOnly ? "min-h-screen w-full animate-in fade-in duration-200" : "mx-auto w-full max-w-4xl px-3 py-3 pb-28 sm:pb-32 animate-in fade-in duration-200"}>
     {activeTab==='dialer'&&<DialerTab contacts={contacts} recentCalls={calls} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onOpenCallerDetail={handleOpenCallerDetail} onSaveContact={(n,nm)=>handleUpdateCallerName(n,nm)} selectedSim={selectedSim} onChangeSim={setSelectedSim} initialNumber={dialerInitialNumber} density={density}/>} 
     {activeTab==='recents'&&<RecentsTab calls={calls} rules={rules} whitelist={whitelist} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onSelectCall={openCaller} onBlockNumber={handleBlockNumber} onWhitelistNumber={handleWhitelistNumber} onDeleteCall={handleDeleteCall} onDeleteCalls={handleDeleteCalls} onClearAllCalls={handleClearAllCalls} onSyncDeviceCalls={handleSyncDeviceData} density={density}/>} 
     {activeTab==='contacts'&&<ContactsTab contacts={contacts} onInitiateCall={handleInitiateCall} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} onDeleteContact={handleDeleteContact} onToggleFavorite={handleToggleFavorite} recentCalls={calls} density={density} onOpenCallerDetail={handleOpenCallerDetail} privateCallPrefix={settings.privateCallPrefix}/>} 
@@ -914,7 +956,7 @@ export default function App(){
       }}
     />
   )}
-  <ActiveCallModal session={activeCallSession} onEndCall={handleEndCall} lookupProfile={handleLookupProfile} onAddCall={n=>handleInitiateCall(n)} powerButtonEndsCall={Boolean(settings.powerButtonEndsCall)}/>
+  <ActiveCallModal session={activeCallSession} onEndCall={handleEndCall} lookupProfile={handleLookupProfile} onAddCall={n=>handleInitiateCall(n)} powerButtonEndsCall={Boolean(settings.powerButtonEndsCall)} isMinimized={isOngoingCallMinimized} onToggleMinimize={setIsOngoingCallMinimized}/>
   <PostCallModal postCall={postCallState} onDismiss={()=>setPostCallState(null)} onAddContact={handleAddContact} onBlockNumber={handleBlockNumber} onReportSpam={handleReportSpam} onSaveNote={(number,note)=>{const c=calls.find(x=>x.number.replace(/\D/g,'')===number.replace(/\D/g,''));if(c)handleSaveNote(c.id,note)}}/>
   <FastReportModal isOpen={isFastReportOpen} initialNumber={fastReportNumber} onClose={()=>setIsFastReportOpen(false)} onSubmitReport={handleReportSpam}/>
   <DisputeModal isOpen={isDisputeOpen} initialNumber={disputeNumber} initialName={disputeName} onClose={()=>setIsDisputeOpen(false)} onSubmitDispute={()=>{setIsDisputeOpen(false);showToast('Dispute request saved for review','success')}}/>

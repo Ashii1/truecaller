@@ -223,7 +223,13 @@ function ContactsTab({
             >
               <button
                 type="button"
-                onClick={() => setSelected(c)}
+                onClick={() => {
+                  if (onOpenCallerDetail) {
+                    onOpenCallerDetail({ number: c.number, name: c.name, contact: c });
+                  } else {
+                    setSelected(c);
+                  }
+                }}
                 className={`grid shrink-0 place-items-center rounded-full bg-gradient-to-br from-slate-700 to-slate-800 font-bold text-white transition-all ${isCompact ? 'h-7.5 w-7.5 text-[10px]' : 'h-9 w-9 text-xs'}`}
               >
                 {c.isVerifiedBusiness ? (
@@ -234,7 +240,13 @@ function ContactsTab({
               </button>
               <button
                 type="button"
-                onClick={() => setSelected(c)}
+                onClick={() => {
+                  if (onOpenCallerDetail) {
+                    onOpenCallerDetail({ number: c.number, name: c.name, contact: c });
+                  } else {
+                    setSelected(c);
+                  }
+                }}
                 className="min-w-0 flex-1 text-left"
               >
                 <div className="flex items-center gap-1.5">

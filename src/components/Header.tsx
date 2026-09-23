@@ -30,7 +30,7 @@ import {
   VolumeX,
   X,
 } from 'lucide-react';
-import { CallLogItem, DisplayDensity, IncomingCallState, ShieldSettings } from '../types';
+import { CallLogItem, DisplayDensity, IncomingCallState, ShieldSettings, ActiveCallSession } from '../types';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 import ThemeCustomizerModal from './ThemeCustomizerModal';
 import LanguageSwitcher from './LanguageSwitcher';
@@ -65,6 +65,9 @@ interface HeaderProps {
   onExpandIncomingCall?: () => void;
   isDeviceLocked?: boolean;
   onToggleLockDevice?: () => void;
+  activeCallSession?: ActiveCallSession | null;
+  onMaximizeOngoingCall?: () => void;
+  onEndOngoingCall?: () => void;
 }
 
 type PrivacySettings = {
@@ -125,6 +128,9 @@ function Header({
   isDeviceLocked = false,
   onToggleLockDevice,
   onTriggerIncomingCall,
+  activeCallSession,
+  onMaximizeOngoingCall,
+  onEndOngoingCall,
 }: HeaderProps) {
   const { t } = useI18n();
   const [showSettings, setShowSettings] = useState(false);
@@ -297,6 +303,12 @@ function Header({
               title={t('notification_panel_title')}
             >
               <Bell className="h-3.5 w-3.5" />
+              {activeCallSession && (
+                <span className="absolute -top-1 -left-1 flex h-2.5 w-2.5" title="Active Call Ongoing">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                </span>
+              )}
               {activeNotifications.length > 0 && (
                 <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[8px] font-black text-white shadow-sm ring-2 ring-[#0b0f14]">
                   {activeNotifications.length > 9 ? '9+' : activeNotifications.length}
@@ -490,7 +502,78 @@ function Header({
                 </div>
               )}
 
-              {activeNotifications.length === 0 && (!activeIncomingCall || activeIncomingCall.status !== 'RINGING') ? (
+              {/* Ongoing Active Call in Notification Panel */}
+              {activeCallSession && (
+                <div
+                  id="notification-active-ongoing-call-card"
+                  onClick={() => {
+                    setShowNotifications(false);
+                    onMaximizeOngoingCall?.();
+                  }}
+                  className="m-1.5 rounded-2xl border border-emerald-500/40 bg-emerald-950/40 p-3.5 shadow-lg shadow-black/40 backdrop-blur transition hover:bg-emerald-950/55 cursor-pointer select-none"
+                  title="Tap to return to ongoing call"
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="flex items-center justify-between gap-2 border-b border-emerald-500/20 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                      </span>
+                      <span className="text-[11px] font-black uppercase tracking-wider text-emerald-400">
+                        Ongoing Active Call
+                      </span>
+                      {/* Audio visualizer */}
+                      <div className="flex items-center gap-0.5 h-3 ml-1">
+                        <span className="w-1 rounded bg-emerald-400 animate-wave-1" />
+                        <span className="w-1 rounded bg-emerald-400 animate-wave-2" />
+                        <span className="w-1 rounded bg-emerald-400 animate-wave-3" />
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-full">
+                      Tap to Expand
+                    </span>
+                  </div>
+
+                  <div className="mt-2.5 flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-extrabold text-white truncate">
+                        {activeCallSession.name || activeCallSession.number}
+                      </div>
+                      <div className="mt-0.5 font-mono text-xs font-semibold text-cyan-300">
+                        {formatPhoneNumber(activeCallSession.number)}
+                      </div>
+                      <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-300">
+                        <span className="font-mono text-emerald-400 font-bold">
+                          Duration: {Math.floor((activeCallSession.durationSeconds || 0) / 60).toString().padStart(2, '0')}:
+                          {((activeCallSession.durationSeconds || 0) % 60).toString().padStart(2, '0')}
+                        </span>
+                        <span>•</span>
+                        <span>{activeCallSession.sim || 'SIM 1'}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowNotifications(false);
+                          onEndOngoingCall?.();
+                        }}
+                        className="flex items-center gap-1 rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-rose-500 active:scale-95 transition"
+                        title="End Call"
+                        aria-label="End Call"
+                      >
+                        <PhoneOff className="h-3.5 w-3.5" />
+                        <span>End</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeNotifications.length === 0 && (!activeIncomingCall || activeIncomingCall.status !== 'RINGING') && !activeCallSession ? (
                 <div className="p-8 text-center">
                   <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-white/5 text-slate-500">
                     <CheckCheck className="h-5 w-5 text-emerald-400" />

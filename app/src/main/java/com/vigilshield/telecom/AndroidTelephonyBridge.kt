@@ -252,6 +252,16 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
     @JavascriptInterface fun swapCalls(): Boolean = VigilShieldInCallService.swapCalls()
     @JavascriptInterface fun mergeCalls(): Boolean = VigilShieldInCallService.mergeCalls()
     @JavascriptInterface fun clearStaleCallNotifications(): Boolean { CallNotificationHelper.clearAllCallNotifications(activity.applicationContext); VigilShieldInCallService.stopRinging(); return true }
+    @JavascriptInterface fun vibrate(durationMs: Long): Boolean = runCatching {
+        val vibrator = activity.getSystemService(Vibrator::class.java)
+        if (Build.VERSION.SDK_INT >= 26) {
+            vibrator?.vibrate(VibrationEffect.createOneShot(durationMs.coerceIn(10, 2000), VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator?.vibrate(durationMs.coerceIn(10, 2000))
+        }
+        true
+    }.getOrDefault(false)
     fun isDefaultDialer(): Boolean = if (Build.VERSION.SDK_INT >= 29) activity.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_DIALER) else telecom.defaultDialerPackage == activity.packageName
     fun hasPermission(permission: String): Boolean = ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED
     fun hasCallLogPermission(): Boolean = hasPermission(Manifest.permission.READ_CALL_LOG)
@@ -388,6 +398,19 @@ class VigilShieldInCallService : InCallService() {
                     if (!MainActivity.isAppVisible) launchIncomingCallActivity(applicationContext, id, name, number)
                 } else if (state == Call.STATE_DIALING || state == Call.STATE_CONNECTING || state == Call.STATE_ACTIVE) {
                     stopRinging()
+                    if (state == Call.STATE_ACTIVE) {
+                        // Call attended / answered: vibrate phone so user can feel connection
+                        runCatching {
+                            val vibrator = appContext?.getSystemService(Vibrator::class.java)
+                            val pattern = longArrayOf(0, 180, 90, 220)
+                            if (Build.VERSION.SDK_INT >= 26) {
+                                vibrator?.vibrate(VibrationEffect.createWaveform(pattern, -1))
+                            } else {
+                                @Suppress("DEPRECATION")
+                                vibrator?.vibrate(pattern, -1)
+                            }
+                        }
+                    }
                     val number = c.details.handle?.schemeSpecificPart.orEmpty()
                     val name = bridge?.lookupName(number).orEmpty().ifBlank { c.details.callerDisplayName.orEmpty() }.ifBlank { number.ifBlank { "Unknown caller" } }
                     launchActiveCallActivity(applicationContext, id, name, number, state)

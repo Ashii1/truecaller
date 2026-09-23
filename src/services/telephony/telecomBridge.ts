@@ -23,6 +23,7 @@ declare global {
       setSecuritySetting?:(key:string,value:boolean)=>boolean; syncBlockRules?:(json:string)=>boolean; createContact?:(number:string,name?:string)=>boolean;
       silenceRinger?:()=>boolean; isDeviceLocked?:()=>boolean; requestDeviceUnlock?:()=>boolean; onUiReady?:()=>void; syncActiveCalls?:()=>void;
       getRingerMode?:()=>string; setHardwareKeyConfig?:(configJson:string)=>boolean;
+      vibrate?:(durationMs:number)=>boolean;
       pinWidget?:(type:string)=>string; updateWidgetData?:(speedDialJson:string)=>boolean;
     };
     __onAndroidTelecomEvent?:(eventType:string,payload:any)=>void;
@@ -109,10 +110,24 @@ class TelecomBridgeService {
       return{success:false,message:e?.message||'Android Telecom could not place the call.',dialableNumber:n};
     }
   }
-  public answerCall(id:string){if(!this.native())return false;return window.AndroidTelecomBridge!.answerCall(id);}
+  public answerCall(id:string){if(!this.native())return false;const res=window.AndroidTelecomBridge!.answerCall(id);this.clearStaleCallNotifications();return res;}
   public rejectCall(id:string,reason?:string){if(!this.native())return false;const res=window.AndroidTelecomBridge!.rejectCall(id,reason);this.clearStaleCallNotifications();return res;}
   public disconnectCall(id:string,number?:string){if(!this.native())return false;const res=window.AndroidTelecomBridge!.disconnectCall(id,number);this.clearStaleCallNotifications();return res;}
   public silenceRinger(){if(!this.native()||!window.AndroidTelecomBridge?.silenceRinger)return false;try{return window.AndroidTelecomBridge.silenceRinger();}catch{return false;}}
+  public vibratePhone(pattern: number | number[] = 250): boolean {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator && navigator.vibrate) {
+      try { navigator.vibrate(pattern); } catch {}
+    }
+    if (this.native() && window.AndroidTelecomBridge?.vibrate) {
+      try {
+        const ms = Array.isArray(pattern) ? (pattern[pattern.length - 1] || 250) : pattern;
+        return window.AndroidTelecomBridge.vibrate(ms);
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
   public getRingerMode():'NORMAL'|'VIBRATE'|'SILENT'{if(!this.native()||!window.AndroidTelecomBridge?.getRingerMode)return'NORMAL';try{const m=window.AndroidTelecomBridge.getRingerMode();return (m==='SILENT'||m==='VIBRATE')?m:'NORMAL';}catch{return'NORMAL';}}
   public syncHardwareConfig(config:{powerButtonEndsCall?:boolean;volumeButtonSilencesRinger?:boolean;volumeButtonAction?:'MUTE_RINGER'|'REJECT_CALL'}):boolean{if(!this.native()||!window.AndroidTelecomBridge?.setHardwareKeyConfig)return false;try{return Boolean(window.AndroidTelecomBridge.setHardwareKeyConfig(JSON.stringify(config)));}catch{return false;}}
   public isDeviceLocked():boolean{if(!this.native()||!window.AndroidTelecomBridge?.isDeviceLocked)return false;try{return Boolean(window.AndroidTelecomBridge.isDeviceLocked());}catch{return false;}}
