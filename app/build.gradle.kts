@@ -55,14 +55,14 @@ android {
             // Sign debug with the exact same persistent keystore so test and debug APKs
             // update in-place over the installed 402 build without signature mismatch
             val ciConfig = signingConfigs.findByName("ciRelease")
-            if (ciConfig?.storeFile != null && ciConfig.storeFile.exists()) {
+            if (ciConfig?.storeFile?.exists() == true) {
                 signingConfig = ciConfig
             }
         }
         release {
             isMinifyEnabled = false
             val ciConfig = signingConfigs.findByName("ciRelease")
-            if (ciConfig?.storeFile != null && ciConfig.storeFile.exists()) {
+            if (ciConfig?.storeFile?.exists() == true) {
                 signingConfig = ciConfig
             }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
