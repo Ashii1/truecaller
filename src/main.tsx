@@ -60,6 +60,20 @@ class AppErrorBoundary extends Component<{children: ReactNode}, {error: Error | 
   }
 }
 
+// Suppress benign preview environment HMR/vite warnings
+const origConsoleError = console.error;
+console.error = (...args: any[]) => {
+  const text = args.map(a => String(a?.message || a || '')).join(' ');
+  if (text.includes('[vite]') || text.includes('websocket') || text.includes('WebSocket')) return;
+  origConsoleError.apply(console, args);
+};
+const origConsoleWarn = console.warn;
+console.warn = (...args: any[]) => {
+  const text = args.map(a => String(a?.message || a || '')).join(' ');
+  if (text.includes('[vite]') || text.includes('websocket') || text.includes('WebSocket')) return;
+  origConsoleWarn.apply(console, args);
+};
+
 window.addEventListener('error', (event) => {
   const msg = String(event.error?.message || event.message || '');
   if (msg.includes('vite') || msg.includes('websocket') || msg.includes('ResizeObserver')) {

@@ -11,7 +11,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
-import { IncomingCallState, ScreeningTranscriptEntry, ShieldSettings } from '../types';
+import { IncomingCallState, ScreeningTranscriptEntry, ShieldSettings, ContactItem } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import { useI18n } from '../i18n/LanguageContext';
 import { telecomBridge } from '../services/telephony/telecomBridge';
@@ -21,6 +21,7 @@ import CallScreeningOverlay from './CallScreeningOverlay';
 interface IncomingCallOverlayProps {
   call: IncomingCallState | null;
   isDeviceLocked?: boolean;
+  contacts?: ContactItem[];
   autoCancelEnabled: boolean;
   settings?: ShieldSettings;
   onCancelCall: (reason: string, block: boolean, screeningData?: { transcript: ScreeningTranscriptEntry[]; intent: string | null }) => void;
@@ -35,6 +36,7 @@ interface IncomingCallOverlayProps {
 export default function IncomingCallOverlay({
   call,
   isDeviceLocked = false,
+  contacts,
   autoCancelEnabled,
   settings,
   onCancelCall,
@@ -47,11 +49,12 @@ export default function IncomingCallOverlay({
 }: IncomingCallOverlayProps) {
   const { t } = useI18n();
 
-  // On lockscreen, strictly enforce fullscreen mode.
-  // In app (unlocked), default to the redesigned in-app popup banner.
+  // On lockscreen or when call forces fullscreen, strictly enforce fullscreen mode.
+  const isFullscreenEnforced = Boolean(isDeviceLocked || call?.viewMode === 'fullscreen');
+
   const [displayMode, setDisplayMode] = useState<'popup' | 'fullscreen'>(() => {
-    if (isDeviceLocked) return 'fullscreen';
-    return call?.viewMode || initialMode || 'popup';
+    if (isDeviceLocked || call?.viewMode === 'fullscreen') return 'fullscreen';
+    return initialMode || call?.viewMode || 'popup';
   });
 
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -63,7 +66,7 @@ export default function IncomingCallOverlay({
 
   // Sync mode if lockscreen state changes or if call forces a viewMode
   useEffect(() => {
-    if (isDeviceLocked) {
+    if (isDeviceLocked || call?.viewMode === 'fullscreen') {
       setDisplayMode('fullscreen');
     } else if (call?.viewMode) {
       setDisplayMode(call.viewMode);
@@ -303,15 +306,38 @@ export default function IncomingCallOverlay({
 
   const rawNumStr = typeof call.number === 'string' ? call.number.trim() : call.number != null ? String(call.number).trim() : '';
   const formattedNumber = formatPhoneNumber(rawNumStr);
+  const rawDigits = rawNumStr.replace(/\D/g, '');
+
+  // Look up in contacts address book if callerName is blank or echoes the phone number
+  const matchedContact = useMemo(() => {
+    if (!contacts || !rawDigits) return null;
+    return (
+      contacts.find((c) => {
+        const cDigits = (c.number || '').replace(/\D/g, '');
+        if (!cDigits) return false;
+        return (
+          cDigits === rawDigits ||
+          (cDigits.length >= 7 && rawDigits.length >= 7 && (cDigits.endsWith(rawDigits) || rawDigits.endsWith(cDigits)))
+        );
+      }) || null
+    );
+  }, [contacts, rawDigits]);
+
   const callerNameStr = typeof call.callerName === 'string' ? call.callerName.trim() : call.callerName != null ? String(call.callerName).trim() : '';
-  const hasSpecificName = Boolean(callerNameStr && callerNameStr.replace(/\D/g, '') !== rawNumStr.replace(/\D/g, ''));
-  const callerDisplayName = hasSpecificName ? callerNameStr : formattedNumber;
+  const isNameDigitsOnly = Boolean(callerNameStr && callerNameStr.replace(/\D/g, '') === rawDigits);
+  const isGeneric = !callerNameStr || isNameDigitsOnly || callerNameStr.toLowerCase() === 'unknown caller' || callerNameStr.toLowerCase() === 'unknown';
+
+  const effectiveCallerName = (!isGeneric ? callerNameStr : matchedContact?.name) || matchedContact?.name || callerNameStr || '';
+  const hasSpecificName = Boolean(effectiveCallerName && effectiveCallerName.replace(/\D/g, '') !== rawDigits);
+  const callerDisplayName = hasSpecificName ? effectiveCallerName : formattedNumber;
+  const isSavedContact = Boolean(matchedContact || hasSpecificName);
   const avatarInitial = (callerDisplayName?.trim()?.[0] || '📞').toUpperCase();
 
   // =========================================================================
-  // 1. IN-APP POPUP BANNER (Rendered ONLY when NOT on lockscreen & mode === 'popup')
+  // 1. IN-APP POPUP BANNER (Rendered ONLY when device is UNLOCKED & mode === 'popup')
+  // On lockscreen, or when fullscreen is enforced, strictly suppress the popup!
   // =========================================================================
-  if (!isDeviceLocked && displayMode === 'popup') {
+  if (!isFullscreenEnforced && displayMode === 'popup') {
     if (isCollapsed) {
       // Sleek collapsed compact pill at the top of the viewport with BOTH name and number
       return (
@@ -339,16 +365,20 @@ export default function IncomingCallOverlay({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 truncate">
                 <span className="text-xs font-extrabold text-white truncate">{callerDisplayName}</span>
-                {hasSpecificName && (
-                  <span className="font-mono text-[11px] font-bold text-cyan-300 truncate bg-cyan-950/60 border border-cyan-500/30 px-1.5 py-0.2 rounded">
-                    {formattedNumber}
+                <span className="font-mono text-[11px] font-bold text-cyan-300 truncate bg-cyan-950/60 border border-cyan-500/30 px-1.5 py-0.5 rounded">
+                  {formattedNumber}
+                </span>
+                {isSavedContact ? (
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 bg-emerald-500/25 text-emerald-300 border border-emerald-500/30">
+                    Saved
+                  </span>
+                ) : (
+                  <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-full shrink-0 ${
+                    critical ? 'bg-rose-500/25 text-rose-300' : suspicious ? 'bg-amber-500/25 text-amber-300' : 'bg-emerald-500/25 text-emerald-300'
+                  }`}>
+                    {critical ? 'SPAM' : suspicious ? 'CHECK' : 'CALL'}
                   </span>
                 )}
-                <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-full shrink-0 ${
-                  critical ? 'bg-rose-500/25 text-rose-300' : suspicious ? 'bg-amber-500/25 text-amber-300' : 'bg-emerald-500/25 text-emerald-300'
-                }`}>
-                  {critical ? 'SPAM' : suspicious ? 'CHECK' : 'CALL'}
-                </span>
               </div>
             </div>
           </div>
@@ -479,10 +509,16 @@ export default function IncomingCallOverlay({
 
           {/* Caller Details Info: BOTH Name and Number prominently displayed */}
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-base sm:text-lg font-black text-white truncate tracking-tight">
                 {callerDisplayName}
               </h3>
+              {isSavedContact && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  Saved Contact
+                </span>
+              )}
               {call.isVerifiedBusiness && (
                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 text-[10px] font-bold rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0">
                   <ShieldCheck className="w-3 h-3 text-blue-400" />
@@ -584,8 +620,8 @@ export default function IncomingCallOverlay({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Allow minimizing back to in-app popup ONLY when NOT on lockscreen */}
-          {!isDeviceLocked && (
+          {/* Allow minimizing back to in-app popup ONLY when NOT on lockscreen and NOT enforced */}
+          {!isFullscreenEnforced && (
             <button
               type="button"
               onClick={() => {
@@ -626,7 +662,13 @@ export default function IncomingCallOverlay({
         <h2 className="truncate max-w-full text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
           {callerDisplayName}
         </h2>
-        <p className="mt-2 font-mono text-lg text-slate-300 tracking-wider">
+        {isSavedContact && (
+          <div className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            Saved Contact
+          </div>
+        )}
+        <p className="mt-2 font-mono text-lg font-bold text-cyan-300 tracking-wider">
           {formattedNumber}
         </p>
 

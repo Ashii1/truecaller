@@ -3,10 +3,11 @@ import org.gradle.api.tasks.Exec
 
 // Versioning: Set strictly above previous builds so Android package manager performs
 // a clean in-place update over the existing installed app without requiring uninstallation.
-val baseVersionCode = 650
+val baseVersionCode = 2000
 val ciRunNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
-val finalVersionCode = maxOf(baseVersionCode, 650 + ciRunNumber)
-val finalVersionName = "1.5.5"
+val finalVersionCode = baseVersionCode + ciRunNumber
+val finalVersionName = "1.5.6"
+println(">> VigilShield build config: versionCode=$finalVersionCode, versionName=$finalVersionName")
 
 val envKeystorePath = System.getenv("VIGILSHIELD_KEYSTORE_FILE")
 val envKeystorePassword = System.getenv("VIGILSHIELD_KEYSTORE_PASSWORD")

@@ -8,11 +8,11 @@ import { VitePWA } from 'vite-plugin-pwa';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export default defineConfig(() => {
+export default defineConfig(({ command }) => {
   return {
-    // Android WebView loads the production bundle from file:///android_asset/.
-    // Relative asset URLs are required; absolute /assets URLs resolve incorrectly.
-    base: './',
+    // In dev server, standard root base '/' prevents relative base errors.
+    // In production build for Android WebView, './' ensures assets resolve from file:///android_asset/.
+    base: command === 'serve' ? '/' : './',
     plugins: [
       react(),
       tailwindcss(),
@@ -63,8 +63,8 @@ export default defineConfig(() => {
       },
     },
     server: {
-      hmr: process.env.DISABLE_HMR !== 'true',
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      hmr: false,
+      watch: null,
     },
   };
 });

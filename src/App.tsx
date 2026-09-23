@@ -75,8 +75,8 @@ export default function App(){
 
  const lastBackPressTimeRef = useRef<number>(0);
  const initiateCallRef = useRef<(number: string, name?: string, sim?: Sim, isPrivate?: boolean) => void>(() => {});
- const dataRef = useRef({ rules, whitelist, contacts, settings, autoCancelEnabled, calls, selectedSim, phoneOnly });
- dataRef.current = { rules, whitelist, contacts, settings, autoCancelEnabled, calls, selectedSim, phoneOnly };
+ const dataRef = useRef({ rules, whitelist, contacts, settings, autoCancelEnabled, calls, selectedSim, phoneOnly, isDeviceLocked, activeIncomingCall });
+ dataRef.current = { rules, whitelist, contacts, settings, autoCancelEnabled, calls, selectedSim, phoneOnly, isDeviceLocked, activeIncomingCall };
  const stateRef = useRef({
    activeTab,
    isCallerModalOpen,
@@ -256,12 +256,22 @@ export default function App(){
         if (payload?.phoneSurface) setPhoneOnly(true);
 
         if (isIncoming && number) {
+          const inDigits = number.replace(/\D/g, '');
+          const savedContact = dataRef.current.contacts.find((c) => {
+            const cDigits = (c.number || '').replace(/\D/g, '');
+            if (!cDigits || !inDigits) return false;
+            return (
+              cDigits === inDigits ||
+              (cDigits.length >= 7 && inDigits.length >= 7 && (cDigits.endsWith(inDigits) || inDigits.endsWith(cDigits)))
+            );
+          });
           const p = lookupCallShieldDirectory(number, dataRef.current.rules, dataRef.current.whitelist);
+          const resolvedCallerName = savedContact?.name || payload?.name || p.name || number;
           setActiveIncomingCall({
             active: true,
             callId: callId || `call-${Date.now()}`,
             number,
-            callerName: payload?.name || p.name || number,
+            callerName: resolvedCallerName,
             carrier: p.carrier || 'Cellular',
             location: p.location || 'Incoming Cellular Call',
             riskScore: p.spamScore || 0,
@@ -336,6 +346,38 @@ export default function App(){
         const p = lookupCallShieldDirectory(number, dataRef.current.rules, dataRef.current.whitelist);
         if (incoming && (state === 'RINGING' || state === 'CONNECTING')) {
           const contactNums = dataRef.current.contacts.map((c) => c.number);
+          const cleanNumber = (num?: string | null) => (num || '').replace(/\D/g, '');
+          const inDigits = cleanNumber(number);
+
+          // Priority lookup: saved contacts
+          const savedContact = dataRef.current.contacts.find((c) => {
+            const cDigits = cleanNumber(c.number);
+            if (!cDigits || !inDigits) return false;
+            return (
+              cDigits === inDigits ||
+              (cDigits.length >= 7 && inDigits.length >= 7 && (cDigits.endsWith(inDigits) || inDigits.endsWith(cDigits)))
+            );
+          });
+
+          const whitelistEntry = dataRef.current.whitelist.find((w) => {
+            const wDigits = cleanNumber(w.value);
+            return (wDigits && inDigits && wDigits === inDigits) || w.value === number;
+          });
+
+          const isGeneric = (val?: string | null) => {
+            if (!val || !val.trim()) return true;
+            const cleaned = cleanNumber(val);
+            return cleaned === inDigits || val.trim().toLowerCase() === 'unknown' || val.trim().toLowerCase() === 'unknown caller';
+          };
+
+          const candidateName =
+            savedContact?.name ||
+            whitelistEntry?.name ||
+            (!isGeneric(details?.callerDisplayName) ? details?.callerDisplayName : null) ||
+            (!isGeneric(p.name) ? p.name : null) ||
+            savedContact?.name ||
+            number;
+
           const spoofCheck =
             dataRef.current.settings.neighborSpoofEnabled !== false
               ? detectNeighborSpoof(number, dataRef.current.settings.userPhoneNumber, contactNums)
@@ -347,11 +389,15 @@ export default function App(){
           if (pingBackCheck.isPingBackScam) {
             telecomBridge.silenceRinger();
           }
+
+          const isLocked = Boolean(isDeviceLocked || telecomBridge.isDeviceLocked() || dataRef.current.isDeviceLocked);
+          const enforceFullscreen = Boolean(isLocked || phoneOnly || dataRef.current.phoneOnly || dataRef.current.activeIncomingCall?.viewMode === 'fullscreen');
+
           setActiveIncomingCall({
             active: true,
             callId,
             number,
-            callerName: details?.callerDisplayName || p.name || number,
+            callerName: candidateName,
             carrier: p.carrier || 'Cellular',
             location: p.location || 'Incoming Cellular Call',
             riskScore: Math.max(p.spamScore, spoofCheck.isNeighborSpoof ? 80 : 0, pingBackCheck.isPingBackScam ? 95 : 0),
@@ -372,7 +418,7 @@ export default function App(){
             isPingBackMuted: pingBackCheck.isPingBackScam,
             status: 'RINGING',
             countdown: (p.isSpam || pingBackCheck.isPingBackScam) && dataRef.current.autoCancelEnabled ? 3 : 0,
-            viewMode: 'popup',
+            viewMode: enforceFullscreen ? 'fullscreen' : 'popup',
           });
         } else if (state === 'ACTIVE' || state === 'DIALING' || state === 'HOLDING') {
           setActiveIncomingCall(null);
@@ -940,7 +986,9 @@ export default function App(){
       <div className="fixed inset-0 z-[99999] bg-[#030712] select-none">
         <IncomingCallOverlay
           call={activeIncomingCall}
-          isDeviceLocked={isDeviceLocked}
+          isDeviceLocked={true}
+          contacts={contacts}
+          initialMode="fullscreen"
           autoCancelEnabled={autoCancelEnabled}
           settings={settings}
           onCancelCall={handleCancelIncomingCall}
@@ -980,6 +1028,7 @@ export default function App(){
     <IncomingCallOverlay
       call={activeIncomingCall}
       isDeviceLocked={isDeviceLocked}
+      contacts={contacts}
       autoCancelEnabled={autoCancelEnabled}
       settings={settings}
       onCancelCall={handleCancelIncomingCall}
