@@ -376,16 +376,21 @@ class VigilShieldInCallService : InCallService() {
         }
 
         fun resolveCallerName(context: Context, number: String, defaultName: String?): String {
-            if (number.isBlank() || number.equals("Private Number", true)) return "Private / Withheld Number"
             val contactName = lookupContactName(context, number)
             if (!contactName.isNullOrBlank()) return contactName
             val bridgeName = bridge?.lookupName(number)
             if (!bridgeName.isNullOrBlank()) return bridgeName
             val candidate = defaultName?.trim().orEmpty()
-            if (candidate.isNotBlank() && candidate.replace(Regex("\\D"), "") != number.replace(Regex("\\D"), "") && !candidate.equals("Unknown", true) && !candidate.equals("Unknown caller", true)) {
+            val isPrivateOrGeneric = candidate.isBlank() ||
+                candidate.equals("Private Number", true) ||
+                candidate.equals("Private / Withheld Number", true) ||
+                candidate.equals("Private Caller", true) ||
+                candidate.equals("Unknown", true) ||
+                candidate.equals("Unknown caller", true)
+            if (!isPrivateOrGeneric && candidate.replace(Regex("\\D"), "") != number.replace(Regex("\\D"), "")) {
                 return candidate
             }
-            return number.ifBlank { "Unknown caller" }
+            return if (number.isNotBlank()) number else "Incoming Call"
         }
 
         fun stopRinging() {
@@ -578,8 +583,9 @@ class VigilShieldInCallService : InCallService() {
         val incoming = call.details.callDirection == Call.Details.DIRECTION_INCOMING
         val rawNum = call.details.handle?.schemeSpecificPart.orEmpty()
         val isRestricted = call.details.handlePresentation == TelecomManager.PRESENTATION_RESTRICTED || rawNum.isBlank() || rawNum.equals("private", ignoreCase = true) || rawNum.equals("unknown", ignoreCase = true) || rawNum == "0"
-        val number = if (isRestricted) "Private Number" else rawNum
-        val name = if (isRestricted) "Private / Withheld Number" else resolveCallerName(applicationContext, number, call.details.callerDisplayName)
+        val resolvedContactName = if (rawNum.isNotBlank()) lookupContactName(applicationContext, rawNum) else null
+        val number = if (rawNum.isNotBlank() && !rawNum.equals("private", ignoreCase = true) && !rawNum.equals("unknown", ignoreCase = true) && rawNum != "0") rawNum else (resolvedContactName ?: "Private Number")
+        val name = resolvedContactName ?: resolveCallerName(applicationContext, number, call.details.callerDisplayName)
         if (incoming && call.state == Call.STATE_RINGING) {
             startRinging()
             wakeScreenUp(applicationContext)
@@ -609,7 +615,30 @@ class VigilShieldInCallService : InCallService() {
         }
         emit(call, call.state)
     }
-    private fun emit(call: Call, state: Int) { val id = ids[call] ?: return; val rawNum = call.details.handle?.schemeSpecificPart.orEmpty(); val isRestricted = call.details.handlePresentation == TelecomManager.PRESENTATION_RESTRICTED || rawNum.isBlank() || rawNum.equals("private", ignoreCase = true) || rawNum.equals("unknown", ignoreCase = true) || rawNum == "0"; val number = if (isRestricted) "Private Number" else rawNum; val incoming = call.details.callDirection == Call.Details.DIRECTION_INCOMING; val name = if (isRestricted) "Private / Withheld Number" else resolveCallerName(applicationContext, number, call.details.callerDisplayName); val stateName = when (state) { Call.STATE_NEW -> "NEW"; Call.STATE_RINGING -> "RINGING"; Call.STATE_DIALING -> "DIALING"; Call.STATE_CONNECTING -> "CONNECTING"; Call.STATE_ACTIVE -> "ACTIVE"; Call.STATE_HOLDING -> "HOLDING"; Call.STATE_DISCONNECTED -> "DISCONNECTED"; else -> "UNKNOWN" }; val details = JSONObject().put("number", number).put("callerDisplayName", name).put("state", stateName).put("isIncoming", incoming).put("durationSeconds", if (call.details.connectTimeMillis > 0) ((System.currentTimeMillis() - call.details.connectTimeMillis) / 1000).coerceAtLeast(0) else 0).put("isHolding", state == Call.STATE_HOLDING).put("phoneAccountId", call.details.accountHandle?.id); if (state == Call.STATE_ACTIVE || state == Call.STATE_HOLDING || state == Call.STATE_DIALING || state == Call.STATE_CONNECTING) { CallNotificationHelper.showOngoingCall(applicationContext, id, name.ifBlank { number.ifBlank { "Unknown caller" } }, number, stateName, call.details.connectTimeMillis, null) }; bridge?.dispatchCallEvent(if (state == Call.STATE_DISCONNECTED) "CALL_DISCONNECTED" else if (state == Call.STATE_RINGING && incoming) "CALL_ADDED" else "CALL_STATE_CHANGED", JSONObject().put("callId", id).put("details", details)) }
+    private fun emit(call: Call, state: Int) {
+        val id = ids[call] ?: return
+        val rawNum = call.details.handle?.schemeSpecificPart.orEmpty()
+        val isRestricted = call.details.handlePresentation == TelecomManager.PRESENTATION_RESTRICTED || rawNum.isBlank() || rawNum.equals("private", ignoreCase = true) || rawNum.equals("unknown", ignoreCase = true) || rawNum == "0"
+        val resolvedContactName = if (rawNum.isNotBlank()) lookupContactName(applicationContext, rawNum) else null
+        val number = if (rawNum.isNotBlank() && !rawNum.equals("private", ignoreCase = true) && !rawNum.equals("unknown", ignoreCase = true) && rawNum != "0") rawNum else (resolvedContactName ?: "Private Number")
+        val incoming = call.details.callDirection == Call.Details.DIRECTION_INCOMING
+        val name = resolvedContactName ?: resolveCallerName(applicationContext, number, call.details.callerDisplayName)
+        val stateName = when (state) {
+            Call.STATE_NEW -> "NEW"
+            Call.STATE_RINGING -> "RINGING"
+            Call.STATE_DIALING -> "DIALING"
+            Call.STATE_CONNECTING -> "CONNECTING"
+            Call.STATE_ACTIVE -> "ACTIVE"
+            Call.STATE_HOLDING -> "HOLDING"
+            Call.STATE_DISCONNECTED -> "DISCONNECTED"
+            else -> "UNKNOWN"
+        }
+        val details = JSONObject().put("number", number).put("callerDisplayName", name).put("state", stateName).put("isIncoming", incoming).put("durationSeconds", if (call.details.connectTimeMillis > 0) ((System.currentTimeMillis() - call.details.connectTimeMillis) / 1000).coerceAtLeast(0) else 0).put("isHolding", state == Call.STATE_HOLDING).put("phoneAccountId", call.details.accountHandle?.id)
+        if (state == Call.STATE_ACTIVE || state == Call.STATE_HOLDING || state == Call.STATE_DIALING || state == Call.STATE_CONNECTING) {
+            CallNotificationHelper.showOngoingCall(applicationContext, id, name.ifBlank { number.ifBlank { "Unknown caller" } }, number, stateName, call.details.connectTimeMillis, null)
+        }
+        bridge?.dispatchCallEvent(if (state == Call.STATE_DISCONNECTED) "CALL_DISCONNECTED" else if (state == Call.STATE_RINGING && incoming) "CALL_ADDED" else "CALL_STATE_CHANGED", JSONObject().put("callId", id).put("details", details))
+    }
     override fun onCallRemoved(call: Call) {
         val id = ids[call] ?: activeCalls.entries.firstOrNull { it.value == call }?.key
         if (id == null) {
