@@ -54,6 +54,7 @@ interface CallerDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onBlockNumber: (number: string, label: string) => void;
+  onUnblockNumber?: (number: string) => void;
   onMarkSafe: (number: string, name: string) => void;
   onOpenReportModal?: (number: string) => void;
   onOpenDisputeModal?: (number: string, name: string) => void;
@@ -123,6 +124,7 @@ export default function CallerDetailModal({
   isOpen,
   onClose,
   onBlockNumber,
+  onUnblockNumber,
   onMarkSafe,
   onOpenReportModal,
   onOpenDisputeModal,

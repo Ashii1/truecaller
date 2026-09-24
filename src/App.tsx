@@ -668,6 +668,30 @@ export default function App(){
     showToast('Number blocked', 'success');
   }, []);
 
+  const handleUnblockNumber = useCallback((number: string) => {
+    const cleanNum = number.replace(/\D/g, '');
+    setRules(p => p.filter(r => {
+      const ruleVal = (r.value || '').replace(/\D/g, '');
+      return ruleVal !== cleanNum && r.value !== number;
+    }));
+    setCalls(p => p.map(c => {
+      const cNum = (c.number || '').replace(/\D/g, '');
+      if (cNum === cleanNum || c.number === number) {
+        return {
+          ...c,
+          isSpam: false,
+          classification: 'SAFE' as const,
+          riskLevel: 'SAFE' as const,
+          riskScore: 0,
+          spamReason: undefined,
+          userAction: undefined
+        };
+      }
+      return c;
+    }));
+    showToast('Number unblocked', 'success');
+  }, []);
+
   const handleWhitelistNumber = useCallback((number: string, name: string) => {
     setWhitelist(p => [{ id: `wl-${Date.now()}`, value: number, name: name || 'Trusted Caller', notes: 'Manually verified as safe', createdAt: Date.now() }, ...p]);
     setCalls(p => p.map(c => c.number === number ? { ...c, isSpam: false, classification: 'SAFE' as const, riskLevel: 'SAFE' as const, riskScore: 0, userAction: 'MARKED_SAFE' as const } : c));
@@ -1023,7 +1047,7 @@ export default function App(){
     {activeTab==='assistant'&&<AssistantTab calls={calls} contacts={contacts} rules={rules} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onAddRule={handleAddRule}/>} 
    </main>
 
-  <CallerDetailModal call={selectedCall} calls={calls} contacts={contacts} profile={selectedProfile} isOpen={isCallerModalOpen} onClose={()=>setIsCallerModalOpen(false)} onBlockNumber={handleBlockNumber} onMarkSafe={handleWhitelistNumber} onInitiateCall={(number, name, sim, isPrivate) => { setIsCallerModalOpen(false); handleInitiateCall(number, name, sim, isPrivate); }} onOpenReportModal={n=>{setFastReportNumber(n);setIsFastReportOpen(true)}} onOpenDisputeModal={(n,nm)=>{setDisputeNumber(n);setDisputeName(nm);setIsDisputeOpen(true)}} onUpdateCallerName={handleUpdateCallerName} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} onDeleteContact={handleDeleteContact} onSaveNote={handleSaveNote}/>
+  <CallerDetailModal call={selectedCall} calls={calls} contacts={contacts} profile={selectedProfile} isOpen={isCallerModalOpen} onClose={()=>setIsCallerModalOpen(false)} onBlockNumber={handleBlockNumber} onUnblockNumber={handleUnblockNumber} onMarkSafe={handleWhitelistNumber} onInitiateCall={(number, name, sim, isPrivate) => { setIsCallerModalOpen(false); handleInitiateCall(number, name, sim, isPrivate); }} onOpenReportModal={n=>{setFastReportNumber(n);setIsFastReportOpen(true)}} onOpenDisputeModal={(n,nm)=>{setDisputeNumber(n);setDisputeName(nm);setIsDisputeOpen(true)}} onUpdateCallerName={handleUpdateCallerName} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} onDeleteContact={handleDeleteContact} onSaveNote={handleSaveNote}/>
   {activeIncomingCall && (
     <IncomingCallOverlay
       call={activeIncomingCall}
