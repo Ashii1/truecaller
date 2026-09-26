@@ -42,7 +42,12 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const t = useMemo(() => {
     return (key: TranslationKey, params?: Record<string, string | number>): string => {
       const dict = TRANSLATIONS[language] || TRANSLATIONS.en;
-      let text: string = dict[key] || TRANSLATIONS.en[key] || key;
+      let text: string = dict[key] || TRANSLATIONS.en[key];
+      if (!text) {
+        // Fallback: convert snake_case_key to human-readable capitalized text
+        const words = String(key).split('_').map((w, idx) => idx === 0 ? (w.charAt(0).toUpperCase() + w.slice(1)) : w);
+        text = words.join(' ');
+      }
 
       if (params) {
         Object.entries(params).forEach(([pKey, pVal]) => {

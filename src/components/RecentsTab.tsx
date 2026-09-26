@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import {
+  ChevronDown,
   Disc,
   Layers,
   ListFilter,
@@ -11,6 +12,7 @@ import {
   PhoneOutgoing,
   RefreshCw,
   Search,
+  Smartphone,
   Trash2,
   X,
 } from 'lucide-react';
@@ -69,6 +71,7 @@ function RecentsTab({
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('ALL');
   const [simFilter, setSimFilter] = useState<'ALL' | 'SIM 1' | 'SIM 2'>('ALL');
+  const [showSimMenu, setShowSimMenu] = useState(false);
 
   const handleDeleteCalls = (ids: string[]) => {
     if (onDeleteCalls) {
@@ -172,16 +175,78 @@ function RecentsTab({
   return (
     <div className={`mx-auto w-full max-w-2xl select-none transition-all ${isCompact ? 'px-2 pb-6 pt-1 sm:px-3' : 'px-3 pb-8 pt-2 sm:px-4'}`}>
       {/* Header */}
-      <header className={`flex items-end justify-between gap-2 transition-all ${isCompact ? 'mb-2' : 'mb-3'}`}>
+      <header className={`flex items-center justify-between gap-2 transition-all ${isCompact ? 'mb-2' : 'mb-3'}`}>
         <div>
           <h1 className={`font-bold tracking-tight text-white transition-all ${isCompact ? 'text-lg' : 'text-xl'}`}>{t('recents_title')}</h1>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
+          {/* Subtle SIM Filter Dropdown (Tucked away, uncluttered) */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowSimMenu((prev) => !prev)}
+              className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition active:scale-95 ${
+                simFilter !== 'ALL'
+                  ? 'bg-sky-500/20 text-sky-200 border-sky-500/40 ring-1 ring-sky-500/30'
+                  : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+              }`}
+              title="Filter calls by SIM Line"
+            >
+              <Smartphone className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+              <span>{simFilter === 'ALL' ? 'SIM' : simFilter}</span>
+              <span className="rounded-full bg-white/10 px-1.5 py-0.2 text-[10px] font-bold text-slate-300">
+                {simFilter === 'ALL' ? simCounts.ALL : simFilter === 'SIM 1' ? simCounts.SIM1 : simCounts.SIM2}
+              </span>
+              <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform ${showSimMenu ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* SIM Selector Menu Popover */}
+            {showSimMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowSimMenu(false)} />
+                <div className="absolute right-0 top-full mt-1.5 z-50 w-48 rounded-2xl border border-white/15 bg-[#0e141c] p-1.5 shadow-2xl shadow-black/80 backdrop-blur-xl">
+                  <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Filter by Cellular SIM
+                  </div>
+                  {[
+                    { id: 'ALL' as const, label: 'All Lines', count: simCounts.ALL },
+                    { id: 'SIM 1' as const, label: 'SIM 1 (Primary)', count: simCounts.SIM1 },
+                    { id: 'SIM 2' as const, label: 'SIM 2 (Secondary)', count: simCounts.SIM2 },
+                  ].map((s) => {
+                    const isSelected = simFilter === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                          setSimFilter(s.id);
+                          setShowSimMenu(false);
+                        }}
+                        className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-xs font-semibold transition ${
+                          isSelected
+                            ? 'bg-sky-500/20 text-sky-200 border border-sky-500/30 font-bold'
+                            : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'
+                        }`}
+                      >
+                        <span>{s.label}</span>
+                        <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                          isSelected ? 'bg-sky-500/30 text-sky-200' : 'bg-slate-800 text-slate-400'
+                        }`}>
+                          {s.count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+
           {onSyncDeviceCalls && (
             <button
               type="button"
               onClick={onSyncDeviceCalls}
-              className={`rounded-full border border-white/10 bg-white/5 text-slate-400 hover:bg-blue-500/15 hover:text-blue-300 active:scale-95 transition ${isCompact ? 'p-1.5' : 'p-2'}`}
+              className={`rounded-xl border border-white/10 bg-white/5 text-slate-400 hover:bg-blue-500/15 hover:text-blue-300 active:scale-95 transition ${isCompact ? 'p-1.5' : 'p-2'}`}
               title={t('sync_device_calls')}
               aria-label={t('sync_device_calls')}
             >
@@ -192,7 +257,7 @@ function RecentsTab({
             <button
               type="button"
               onClick={onClearAllCalls}
-              className={`rounded-full border border-white/10 bg-white/5 text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 active:scale-95 transition ${isCompact ? 'p-1.5' : 'p-2'}`}
+              className={`rounded-xl border border-white/10 bg-white/5 text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 active:scale-95 transition ${isCompact ? 'p-1.5' : 'p-2'}`}
               title={t('clear_all')}
             >
               <Trash2 className={isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
@@ -200,89 +265,6 @@ function RecentsTab({
           )}
         </div>
       </header>
-
-      {/* Modern Hardware Line & SIM Switcher Dock */}
-      <div className={`flex items-center gap-1.5 p-1 rounded-2xl bg-[#0c121b]/80 border border-white/[0.07] backdrop-blur-md overflow-x-auto no-scrollbar transition-all ${isCompact ? 'mb-2' : 'mb-2.5'}`}>
-        <button
-          type="button"
-          onClick={() => setSimFilter('ALL')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200 active:scale-95 ${
-            simFilter === 'ALL'
-              ? 'bg-slate-700/80 text-white shadow-sm ring-1 ring-white/10'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
-          }`}
-        >
-          <Layers className="h-3.5 w-3.5 opacity-80" />
-          <span>All Lines</span>
-          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
-            simFilter === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-800/80 text-slate-400'
-          }`}>
-            {simCounts.ALL}
-          </span>
-        </button>
-
-        <div className="h-4 w-[1px] bg-white/[0.08] shrink-0" />
-
-        <button
-          type="button"
-          onClick={() => setSimFilter('SIM 1')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200 active:scale-95 ${
-            simFilter === 'SIM 1'
-              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/10 ring-1 ring-emerald-500/30'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent'
-          }`}
-        >
-          {/* Micro Hardware SIM 1 Icon */}
-          <div className="relative flex items-center justify-center w-4 h-4.5 rounded-[3px] border border-emerald-400/50 bg-emerald-500/20 text-[9px] font-black text-emerald-400 shadow-xs">
-            <span className="absolute -top-[1px] -right-[1px] w-1 h-1 bg-[#0c121b] rotate-45" />
-            1
-          </div>
-          <span>SIM 1</span>
-          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
-            simFilter === 'SIM 1' ? 'bg-emerald-500/25 text-emerald-200' : 'bg-slate-800/80 text-slate-400'
-          }`}>
-            {simCounts.SIM1}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setSimFilter('SIM 2')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200 active:scale-95 ${
-            simFilter === 'SIM 2'
-              ? 'bg-sky-500/15 text-sky-300 border border-sky-500/40 shadow-sm shadow-sky-500/10 ring-1 ring-sky-500/30'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent'
-          }`}
-        >
-          {/* Micro Hardware SIM 2 Icon */}
-          <div className="relative flex items-center justify-center w-4 h-4.5 rounded-[3px] border border-sky-400/50 bg-sky-500/20 text-[9px] font-black text-sky-400 shadow-xs">
-            <span className="absolute -top-[1px] -right-[1px] w-1 h-1 bg-[#0c121b] rotate-45" />
-            2
-          </div>
-          <span>SIM 2</span>
-          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
-            simFilter === 'SIM 2' ? 'bg-sky-500/25 text-sky-200' : 'bg-slate-800/80 text-slate-400'
-          }`}>
-            {simCounts.SIM2}
-          </span>
-        </button>
-      </div>
-
-      {/* Search Input */}
-      <div className={`flex items-center rounded-xl border border-white/10 bg-[#0e141c] shadow-inner shadow-black/20 focus-within:border-emerald-500/40 focus-within:ring-1 focus-within:ring-emerald-500/20 transition-all ${isCompact ? 'mb-2 h-8.5 px-2.5' : 'mb-2.5 h-10 px-3'}`}>
-        <Search className={`mr-2 text-slate-500 shrink-0 ${isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'}`} />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t('search_calls')}
-          className={`min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-slate-600 ${isCompact ? 'text-[11.5px]' : 'text-xs'}`}
-        />
-        {query && (
-          <button type="button" onClick={() => setQuery('')} className="p-1 text-slate-500 hover:text-white">
-            <X className={isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
-          </button>
-        )}
-      </div>
 
       {/* Modern Filter Navigation Bar with full text, scroll chevrons & popover */}
       <ModernFilterBar<Filter>

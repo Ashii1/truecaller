@@ -10,6 +10,7 @@ import {
   Download,
   FolderOpen,
   Globe,
+  Info,
   Lock,
   Maximize2,
   Mic,
@@ -34,10 +35,13 @@ import {
   VolumeX,
   X,
   Radio,
+  FileText,
 } from 'lucide-react';
 import { CallLogItem, DisplayDensity, IncomingCallState, ShieldSettings, ActiveCallSession } from '../types';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 import ThemeCustomizerModal from './ThemeCustomizerModal';
+import AboutAppModal from './AboutAppModal';
+import PrivacyTermsModal from './PrivacyTermsModal';
 import { useI18n } from '../i18n/LanguageContext';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import { formatTimeAmPm } from '../utils/timeFormat';
@@ -182,6 +186,9 @@ function Header({
 
   const [privacy, setPrivacy] = useState<PrivacySettings>(readPrivacySettings);
   const [liveCallDuration, setLiveCallDuration] = useState(0);
+  const [showAbout, setShowAbout] = useState(false);
+  const [showPrivacyTerms, setShowPrivacyTerms] = useState(false);
+  const [privacyTermsTab, setPrivacyTermsTab] = useState<'privacy' | 'terms'>('privacy');
 
   useEffect(() => {
     if (!activeCallSession) {
@@ -305,49 +312,6 @@ function Header({
 
           {/* Header Action Tools */}
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            {/* Display Density Switcher */}
-            {onDensityChange && (
-              <div
-                id="header-density-toggle-group"
-                className="flex items-center rounded-lg border border-slate-700/80 bg-slate-900 p-0.5"
-                role="group"
-                aria-label={t('display_density')}
-              >
-                <button
-                  id="header-density-compact-btn"
-                  type="button"
-                  onClick={() => onDensityChange('compact')}
-                  className={`flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium transition-all ${
-                    density === 'compact'
-                      ? 'bg-emerald-500/25 text-emerald-300 font-bold shadow-xs'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                  title={t('compact_mode_desc')}
-                  aria-label={t('compact_mode')}
-                  aria-pressed={density === 'compact'}
-                >
-                  <Minimize2 className="h-3 w-3" />
-                  <span className="hidden md:inline">{t('compact_mode')}</span>
-                </button>
-                <button
-                  id="header-density-comfortable-btn"
-                  type="button"
-                  onClick={() => onDensityChange('comfortable')}
-                  className={`flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium transition-all ${
-                    density === 'comfortable'
-                      ? 'bg-emerald-500/25 text-emerald-300 font-bold shadow-xs'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                  title={t('comfortable_mode_desc')}
-                  aria-label={t('comfortable_mode')}
-                  aria-pressed={density === 'comfortable'}
-                >
-                  <Maximize2 className="h-3 w-3" />
-                  <span className="hidden md:inline">{t('comfortable_mode')}</span>
-                </button>
-              </div>
-            )}
-
             {/* Notification Panel Button */}
             <button
               id="header-notification-panel-btn"
