@@ -70,14 +70,16 @@ export default function ActiveCallModal({
   const isAttended = session?.status === 'CONNECTED' || session?.status === 'MUTED' || session?.status === 'HELD' || duration > 0;
   const prevAttendedRef = useRef(isAttended);
 
-  // When call status becomes attended / answered, vibrate the phone so the user feels they answered
+  // When call status becomes attended / answered, vibrate the phone and bring call screen to front
   useEffect(() => {
     if (!prevAttendedRef.current && isAttended) {
       triggerCallConnectedHaptic();
       telecomBridge.vibratePhone([180, 90, 220]);
+      setInternalMinimized(false);
+      onToggleMinimize?.(false);
     }
     prevAttendedRef.current = isAttended;
-  }, [isAttended]);
+  }, [isAttended, onToggleMinimize]);
 
   // Sync duration if session provides connected duration
   useEffect(() => {
@@ -106,8 +108,9 @@ export default function ActiveCallModal({
   useEffect(() => {
     if (session?.id) {
       setInternalMinimized(false);
+      onToggleMinimize?.(false);
     }
-  }, [session?.id]);
+  }, [session?.id, onToggleMinimize]);
 
   // System notification when ongoing call is minimized so user can easily return
   useEffect(() => {
@@ -365,7 +368,7 @@ export default function ActiveCallModal({
       <div
         id="ongoing-call-minimized-notification"
         onClick={() => setCallMinimized(false)}
-        className="fixed top-3 left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-lg z-[99999] rounded-2xl border border-emerald-500/40 bg-[#070b13]/98 p-3.5 text-white shadow-2xl shadow-black/95 backdrop-blur-2xl cursor-pointer select-none transition-all duration-200 animate-spring-down animate-ongoing-glow hover:border-emerald-400/60 active:scale-[0.99]"
+        className="fixed top-3 left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-lg z-[60] rounded-2xl border border-emerald-500/40 bg-[#070b13]/98 p-3.5 text-white shadow-2xl shadow-black/95 backdrop-blur-2xl cursor-pointer select-none transition-all duration-200 animate-spring-down animate-ongoing-glow hover:border-emerald-400/60 active:scale-[0.99]"
         title="Tap to expand fullscreen call"
         role="button"
         tabIndex={0}
@@ -501,7 +504,7 @@ export default function ActiveCallModal({
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
             </span>
             <span className="font-bold uppercase tracking-wider text-emerald-400 text-[11px]">
-              {isOnHold ? t('on_hold') : !isAttended ? 'Calling...' : t('call_connected')}
+              {isOnHold ? t('call_held') : !isAttended ? t('call_dialing') : t('call_connected')}
             </span>
           </div>
 
@@ -560,7 +563,7 @@ export default function ActiveCallModal({
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                 </span>
                 <span className="text-sm font-extrabold text-emerald-400 tracking-wider uppercase animate-pulse">
-                  Calling...
+                  {t('call_dialing')}
                 </span>
               </div>
             ) : (
@@ -582,7 +585,7 @@ export default function ActiveCallModal({
             <div className="inline-flex items-center justify-center gap-2.5 px-5 py-2 rounded-full bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 shadow-inner">
               <PhoneCall className="w-4 h-4 text-emerald-400 animate-bounce" />
               <span className="text-sm font-bold tracking-wide text-emerald-300">
-                Calling...
+                {t('call_dialing')}
               </span>
               <span className="flex items-center gap-1 ml-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -840,21 +843,21 @@ export default function ActiveCallModal({
               className="flex-1 py-2 px-3 rounded-full bg-white/10 hover:bg-white/15 border border-white/10 text-[11px] font-bold text-slate-200 active:scale-95 transition flex items-center justify-center space-x-1.5"
             >
               <UserPlus className="w-3.5 h-3.5 text-slate-300" />
-              <span>+ Add Call</span>
+              <span>+ {t('add_call')}</span>
             </button>
             <button
               type="button"
               onClick={handleSwapCalls}
               className="flex-1 py-2 px-3 rounded-full bg-white/10 hover:bg-white/15 border border-white/10 text-[11px] font-bold text-slate-200 active:scale-95 transition text-center"
             >
-              Swap Calls
+              {t('swap_calls')}
             </button>
             <button
               type="button"
               onClick={handleMergeCalls}
               className="flex-1 py-2 px-3 rounded-full bg-white/10 hover:bg-white/15 border border-white/10 text-[11px] font-bold text-slate-200 active:scale-95 transition text-center"
             >
-              Merge Calls
+              {t('merge_calls')}
             </button>
           </div>
 

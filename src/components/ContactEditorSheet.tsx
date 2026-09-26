@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Phone, Plus, Trash2, Check, BookUser, ExternalLink } from 'lucide-react';
+import { ArrowLeft, User, Phone, Plus, Trash2, Check, BookUser, ExternalLink } from 'lucide-react';
 import { ContactItem } from '../types';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 
@@ -109,10 +109,12 @@ export default function ContactEditorSheet({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition"
-            aria-label="Close contact editor"
+            className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-slate-300 hover:bg-slate-800 hover:text-white transition active:scale-95"
+            aria-label="Back"
+            title="Back"
           >
-            <X className="h-5 w-5" />
+            <ArrowLeft className="h-5 w-5" />
+            <span className="text-xs font-semibold">Back</span>
           </button>
         </div>
 

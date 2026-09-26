@@ -1,6 +1,7 @@
-import { FormEvent, memo, useMemo, useState } from 'react';
+import { FormEvent, memo, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  ArrowLeft,
   Briefcase,
   Building2,
   Clock,
@@ -12,6 +13,7 @@ import {
   Search,
   Shield,
   ShieldCheck,
+  Smartphone,
   Star,
   Trash2,
   UserRound,
@@ -37,6 +39,8 @@ interface ContactsTabProps {
 }
 
 type CategoryFilter = 'ALL' | 'FAVORITES' | 'FAMILY' | 'WORK' | 'BUSINESSES' | 'RECENT';
+type AccountFilter = 'ALL' | 'GOOGLE' | 'SIM1' | 'SIM2' | 'PHONE';
+
 const clean = (v: string) => v.replace(/\D/g, '');
 
 function ContactsTab({
@@ -48,39 +52,113 @@ function ContactsTab({
   onToggleFavorite,
   density = 'comfortable',
   onOpenCallerDetail,
+  recentCalls,
   privateCallPrefix = '*67',
 }: ContactsTabProps) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<CategoryFilter>('ALL');
+  const [accountFilter, setAccountFilter] = useState<AccountFilter>('ALL');
   const [selected, setSelected] = useState<ContactItem | null>(null);
   const [editing, setEditing] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState('');
   const [number, setNumber] = useState('');
   const [category, setCategory] = useState<ContactItem['category']>('GENERAL');
+  const [accountType, setAccountType] = useState<NonNullable<ContactItem['accountType']>>('GOOGLE');
+
+  // Handle hardware / gesture back navigation for contact subviews
+  useEffect(() => {
+    const handleBack = (e: any) => {
+      if (showAdd || editing) {
+        setShowAdd(false);
+        setEditing(false);
+        if (e.detail && typeof e.detail.handled === 'function') e.detail.handled();
+      } else if (selected) {
+        setSelected(null);
+        if (e.detail && typeof e.detail.handled === 'function') e.detail.handled();
+      }
+    };
+    window.addEventListener('callshield_back_request', handleBack);
+    return () => window.removeEventListener('callshield_back_request', handleBack);
+  }, [showAdd, editing, selected]);
+
+  // Map recent call activity to contact numbers for accurate "RECENT" filtering
+  const contactRecentMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    if (!recentCalls) return map;
+    recentCalls.forEach((c) => {
+      const d = clean(c.number);
+      if (!d) return;
+      const key10 = d.length >= 10 ? d.slice(-10) : d;
+      if (!map[key10] || c.timestamp > map[key10]) {
+        map[key10] = c.timestamp;
+      }
+    });
+    return map;
+  }, [recentCalls]);
 
   const counts = useMemo(() => {
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     return {
       ALL: contacts.length,
-      FAVORITES: contacts.filter((c) => c.isFavorite).length,
+      FAVORITES: contacts.filter((c) => c.isFavorite || c.category === 'FAVORITE').length,
       FAMILY: contacts.filter((c) => c.category === 'FAMILY').length,
       WORK: contacts.filter((c) => c.category === 'WORK').length,
-      BUSINESSES: contacts.filter((c) => c.category === 'BUSINESS').length,
-      RECENT: contacts.filter((c) => c.lastCallTimestamp && c.lastCallTimestamp > Date.now() - 604800000).length,
+      BUSINESSES: contacts.filter((c) => c.category === 'BUSINESS' || Boolean(c.businessCategory) || c.isVerifiedBusiness).length,
+      RECENT: contacts.filter((c) => {
+        const lastCall = c.lastCallTimestamp || contactRecentMap[clean(c.number).slice(-10)] || 0;
+        return lastCall > weekAgo;
+      }).length,
+    };
+  }, [contacts, contactRecentMap]);
+
+  const resolveAccountType = (c: ContactItem): 'GOOGLE' | 'SIM1' | 'SIM2' | 'PHONE' => {
+    if (c.accountType) return c.accountType;
+    const note = (c.notes || '').toLowerCase();
+    const lbl = (c.accountLabel || '').toLowerCase();
+    if (note.includes('sim 1') || lbl.includes('sim 1') || note.includes('sim1') || lbl.includes('sim1')) return 'SIM1';
+    if (note.includes('sim 2') || lbl.includes('sim 2') || note.includes('sim2') || lbl.includes('sim2')) return 'SIM2';
+    if (note.includes('phone') || lbl.includes('phone') || note.includes('device') || lbl.includes('device') || note.includes('storage')) return 'PHONE';
+    return 'GOOGLE';
+  };
+
+  const accountCounts = useMemo(() => {
+    return {
+      ALL: contacts.length,
+      GOOGLE: contacts.filter((c) => resolveAccountType(c) === 'GOOGLE').length,
+      SIM1: contacts.filter((c) => resolveAccountType(c) === 'SIM1').length,
+      SIM2: contacts.filter((c) => resolveAccountType(c) === 'SIM2').length,
+      PHONE: contacts.filter((c) => resolveAccountType(c) === 'PHONE').length,
     };
   }, [contacts]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase(),
       d = clean(query);
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
     return contacts
       .filter((c) => {
-        if (filter === 'FAVORITES' && !c.isFavorite) return false;
+        // 1. Account / Storage filter
+        if (accountFilter !== 'ALL') {
+          const acc = resolveAccountType(c);
+          if (acc !== accountFilter) return false;
+        }
+
+        // 2. Category filter
+        if (filter === 'FAVORITES' && !c.isFavorite && c.category !== 'FAVORITE') return false;
         if (filter === 'FAMILY' && c.category !== 'FAMILY') return false;
         if (filter === 'WORK' && c.category !== 'WORK') return false;
-        if (filter === 'BUSINESSES' && c.category !== 'BUSINESS') return false;
-        if (filter === 'RECENT' && (!c.lastCallTimestamp || c.lastCallTimestamp < Date.now() - 604800000)) return false;
+        if (filter === 'BUSINESSES' && c.category !== 'BUSINESS' && !c.businessCategory && !c.isVerifiedBusiness) return false;
+        if (filter === 'RECENT') {
+          const cClean = clean(c.number);
+          const c10 = cClean.length >= 10 ? cClean.slice(-10) : cClean;
+          const lastCall = c.lastCallTimestamp || contactRecentMap[c10] || (cClean ? contactRecentMap[cClean] : 0) || 0;
+          if (lastCall < weekAgo && !c.lastCallTimestamp) return false;
+        }
+
+        // 3. Search query
         if (!q) return true;
         return (
           String(c.name ?? '').toLowerCase().includes(q) ||
@@ -89,7 +167,7 @@ function ContactsTab({
         );
       })
       .sort((a, b) => Number(Boolean(b.isFavorite)) - Number(Boolean(a.isFavorite)) || a.name.localeCompare(b.name));
-  }, [contacts, query, filter]);
+  }, [contacts, query, filter, accountFilter, contactRecentMap]);
 
   const importDevice = () => {
     if (!telecomBridge.isAndroidEnvironment()) return;
@@ -100,6 +178,8 @@ function ContactsTab({
         category: 'GENERAL',
         trusted: true,
         isFavorite: c.isFavorite,
+        accountType: 'GOOGLE',
+        accountLabel: 'ashiqm867@gmail.com',
         notes: 'Android Contacts',
       }),
     );
@@ -110,14 +190,35 @@ function ContactsTab({
     setName(c.name);
     setNumber(c.number);
     setCategory(c.category);
+    setAccountType(c.accountType || 'GOOGLE');
     setEditing(true);
+    if (typeof window !== 'undefined' && window.history) {
+      try {
+        window.history.pushState({ app: 'callshield', view: 'contact_edit', id: c.id }, '', window.location.href);
+      } catch {}
+    }
   };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !number.trim()) return;
+    const accLabel =
+      accountType === 'GOOGLE'
+        ? 'ashiqm867@gmail.com'
+        : accountType === 'SIM1'
+        ? 'SIM 1 Card'
+        : accountType === 'SIM2'
+        ? 'SIM 2 Card'
+        : 'Internal Phone Storage';
+
     if (editing && selected) {
-      onUpdateContact(selected.id, { name: name.trim(), number: number.trim(), category });
+      onUpdateContact(selected.id, { 
+        name: name.trim(), 
+        number: number.trim(), 
+        category,
+        accountType,
+        accountLabel: accLabel,
+      });
     } else {
       onAddContact({
         name: name.trim(),
@@ -125,12 +226,15 @@ function ContactsTab({
         category,
         trusted: true,
         isFavorite: category === 'FAVORITE',
+        accountType,
+        accountLabel: accLabel,
         notes: '',
       });
     }
     setName('');
     setNumber('');
     setCategory('GENERAL');
+    setAccountType('GOOGLE');
     setEditing(false);
     setShowAdd(false);
     setSelected(null);
@@ -169,6 +273,11 @@ function ContactsTab({
               setNumber('');
               setCategory('GENERAL');
               setShowAdd(true);
+              if (typeof window !== 'undefined' && window.history) {
+                try {
+                  window.history.pushState({ app: 'callshield', view: 'contact_add' }, '', window.location.href);
+                } catch {}
+              }
             }}
             className={`flex items-center gap-1 rounded-xl bg-emerald-500 hover:bg-emerald-400 font-bold text-slate-950 shadow-md shadow-emerald-500/20 transition-all ${isCompact ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1.5 text-xs'}`}
           >
@@ -196,6 +305,119 @@ function ContactsTab({
             <X className={isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
           </button>
         )}
+      </div>
+
+      {/* Modern Hardware & Account Storage Dock */}
+      <div className={`flex items-center gap-1.5 p-1 rounded-2xl bg-[#0c121b]/80 border border-white/[0.07] backdrop-blur-md overflow-x-auto no-scrollbar transition-all ${isCompact ? 'mb-2' : 'mb-2.5'}`}>
+        {/* All Contacts */}
+        <button
+          type="button"
+          onClick={() => setAccountFilter('ALL')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200 active:scale-95 ${
+            accountFilter === 'ALL'
+              ? 'bg-slate-700/80 text-white shadow-sm ring-1 ring-white/10'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+          }`}
+        >
+          <Users className="h-3.5 w-3.5 opacity-80" />
+          <span>All</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+            accountFilter === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-800/80 text-slate-400'
+          }`}>
+            {accountCounts.ALL}
+          </span>
+        </button>
+
+        <div className="h-4 w-[1px] bg-white/[0.08] shrink-0" />
+
+        {/* Google Account */}
+        <button
+          type="button"
+          onClick={() => setAccountFilter('GOOGLE')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200 active:scale-95 ${
+            accountFilter === 'GOOGLE'
+              ? 'bg-gradient-to-r from-blue-500/20 to-indigo-500/15 text-blue-200 border border-blue-500/40 shadow-sm shadow-blue-500/10 ring-1 ring-blue-500/30'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent'
+          }`}
+        >
+          <div className="flex items-center justify-center w-4 h-4 rounded-full bg-white/10 p-0.5 shadow-xs">
+            <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.66v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.15z"/>
+              <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.15C3.26 21.36 7.33 24 12 24z"/>
+              <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.24C.45 8.15 0 9.92 0 12s.45 3.85 1.24 5.42l4.04-3.15z"/>
+              <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.24 6.58l4.04 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+            </svg>
+          </div>
+          <span>Google</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+            accountFilter === 'GOOGLE' ? 'bg-blue-500/25 text-blue-200' : 'bg-slate-800/80 text-slate-400'
+          }`}>
+            {accountCounts.GOOGLE}
+          </span>
+        </button>
+
+        {/* SIM 1 */}
+        <button
+          type="button"
+          onClick={() => setAccountFilter('SIM1')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200 active:scale-95 ${
+            accountFilter === 'SIM1'
+              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/10 ring-1 ring-emerald-500/30'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent'
+          }`}
+        >
+          <div className="relative flex items-center justify-center w-4 h-4.5 rounded-[3px] border border-emerald-400/50 bg-emerald-500/20 text-[9px] font-black text-emerald-400 shadow-xs">
+            <span className="absolute -top-[1px] -right-[1px] w-1 h-1 bg-[#0c121b] rotate-45" />
+            1
+          </div>
+          <span>SIM 1</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+            accountFilter === 'SIM1' ? 'bg-emerald-500/25 text-emerald-200' : 'bg-slate-800/80 text-slate-400'
+          }`}>
+            {accountCounts.SIM1}
+          </span>
+        </button>
+
+        {/* SIM 2 */}
+        <button
+          type="button"
+          onClick={() => setAccountFilter('SIM2')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200 active:scale-95 ${
+            accountFilter === 'SIM2'
+              ? 'bg-sky-500/15 text-sky-300 border border-sky-500/40 shadow-sm shadow-sky-500/10 ring-1 ring-sky-500/30'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent'
+          }`}
+        >
+          <div className="relative flex items-center justify-center w-4 h-4.5 rounded-[3px] border border-sky-400/50 bg-sky-500/20 text-[9px] font-black text-sky-400 shadow-xs">
+            <span className="absolute -top-[1px] -right-[1px] w-1 h-1 bg-[#0c121b] rotate-45" />
+            2
+          </div>
+          <span>SIM 2</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+            accountFilter === 'SIM2' ? 'bg-sky-500/25 text-sky-200' : 'bg-slate-800/80 text-slate-400'
+          }`}>
+            {accountCounts.SIM2}
+          </span>
+        </button>
+
+        {/* Device Storage */}
+        <button
+          type="button"
+          onClick={() => setAccountFilter('PHONE')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200 active:scale-95 ${
+            accountFilter === 'PHONE'
+              ? 'bg-purple-500/15 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/10 ring-1 ring-purple-500/30'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent'
+          }`}
+        >
+          <Smartphone className="h-3.5 w-3.5 text-purple-400" />
+          <span>Device</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+            accountFilter === 'PHONE' ? 'bg-purple-500/25 text-purple-200' : 'bg-slate-800/80 text-slate-400'
+          }`}>
+            {accountCounts.PHONE}
+          </span>
+        </button>
       </div>
 
       {/* Modern Filter Navigation Bar with full text, scroll chevrons & popover */}
@@ -228,6 +450,11 @@ function ContactsTab({
                     onOpenCallerDetail({ number: c.number, name: c.name, contact: c });
                   } else {
                     setSelected(c);
+                    if (typeof window !== 'undefined' && window.history) {
+                      try {
+                        window.history.pushState({ app: 'callshield', view: 'contact_detail', id: c.id }, '', window.location.href);
+                      } catch {}
+                    }
                   }
                 }}
                 className={`grid shrink-0 place-items-center rounded-full bg-gradient-to-br from-slate-700 to-slate-800 font-bold text-white transition-all ${isCompact ? 'h-7.5 w-7.5 text-[10px]' : 'h-9 w-9 text-xs'}`}
@@ -245,13 +472,27 @@ function ContactsTab({
                     onOpenCallerDetail({ number: c.number, name: c.name, contact: c });
                   } else {
                     setSelected(c);
+                    if (typeof window !== 'undefined' && window.history) {
+                      try {
+                        window.history.pushState({ app: 'callshield', view: 'contact_detail', id: c.id }, '', window.location.href);
+                      } catch {}
+                    }
                   }
                 }}
                 className="min-w-0 flex-1 text-left"
               >
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <span className={`truncate font-semibold text-white transition-all ${isCompact ? 'text-xs' : 'text-sm'}`}>{c.name}</span>
                   {c.isVerifiedBusiness && <ShieldCheck className={`text-blue-400 shrink-0 ${isCompact ? 'h-2.5 w-2.5' : 'h-3 w-3'}`} />}
+                  {c.accountType === 'SIM1' ? (
+                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">SIM 1</span>
+                  ) : c.accountType === 'SIM2' ? (
+                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">SIM 2</span>
+                  ) : c.accountType === 'PHONE' ? (
+                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30">Phone</span>
+                  ) : (
+                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30">Google</span>
+                  )}
                 </div>
                 <div className={`truncate text-slate-500 transition-all ${isCompact ? 'mt-0 text-[10px]' : 'mt-0.5 text-[11px]'}`}>
                   {c.number}
@@ -294,9 +535,12 @@ function ContactsTab({
               <button
                 type="button"
                 onClick={() => setSelected(null)}
-                className="rounded-full p-2 text-slate-500 hover:text-white"
+                className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-slate-300 hover:bg-white/10 hover:text-white transition active:scale-95"
+                aria-label="Back"
+                title="Back to contacts list"
               >
-                <X className="h-5 w-5" />
+                <ArrowLeft className="h-5 w-5 text-slate-300" />
+                <span className="text-xs font-semibold text-slate-300">Back</span>
               </button>
             </div>
             <div className="mt-6 grid grid-cols-4 gap-2">
@@ -384,9 +628,12 @@ function ContactsTab({
                   setEditing(false);
                   setSelected(null);
                 }}
-                className="rounded-full p-2 text-slate-500 hover:text-white"
+                className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-slate-300 hover:bg-white/10 hover:text-white transition active:scale-95"
+                aria-label="Back"
+                title="Back to contacts list"
               >
-                <X className="h-5 w-5" />
+                <ArrowLeft className="h-5 w-5 text-slate-300" />
+                <span className="text-xs font-semibold text-slate-300">Back</span>
               </button>
             </div>
             <label className="mb-3 block text-xs font-semibold text-slate-400">
@@ -407,6 +654,19 @@ function ContactsTab({
                 required
                 className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white outline-none focus:border-emerald-500/40"
               />
+            </label>
+            <label className="mb-3 block text-xs font-semibold text-slate-400">
+              Save contact to
+              <select
+                value={accountType}
+                onChange={(e) => setAccountType(e.target.value as any)}
+                className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-[#10161d] px-3 text-sm text-white outline-none focus:border-emerald-500/40"
+              >
+                <option value="GOOGLE">Google Account (ashiqm867@gmail.com)</option>
+                <option value="SIM1">SIM 1 Card</option>
+                <option value="SIM2">SIM 2 Card</option>
+                <option value="PHONE">Device Storage (Phone)</option>
+              </select>
             </label>
             <label className="mb-5 block text-xs font-semibold text-slate-400">
               {t('contact_category')}

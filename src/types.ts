@@ -11,7 +11,23 @@ export type FirewallMode = 'STANDARD' | 'STRICT' | 'CUSTOM' | 'MAXIMUM';
 export type TemporaryProtectionMode = 'DISABLED' | 'TWO_HOURS' | 'UNTIL_TOMORROW';
 export type TrustedCategory = 'FAMILY' | 'FRIENDS' | 'WORK' | 'DOCTOR' | 'SCHOOL' | 'DELIVERY' | 'SERVICES';
 export type TabId = 'dialer' | 'recents' | 'contacts' | 'protection' | 'assistant' | 'home' | 'calls' | 'intelligence' | 'search' | 'profile';
-export interface ContactItem { id:string; name:string; number:string; avatarColor?:string; category:'FAVORITE'|'FAMILY'|'WORK'|'BUSINESS'|'GENERAL'|'PERSONAL'; isFavorite?:boolean; isVerifiedBusiness?:boolean; businessCategory?:string; website?:string; notes?:string; trusted:boolean; totalCallsCount?:number; lastCallTimestamp?:number; }
+export interface ContactItem { 
+  id: string; 
+  name: string; 
+  number: string; 
+  avatarColor?: string; 
+  category: 'FAVORITE' | 'FAMILY' | 'WORK' | 'BUSINESS' | 'GENERAL' | 'PERSONAL'; 
+  isFavorite?: boolean; 
+  isVerifiedBusiness?: boolean; 
+  businessCategory?: string; 
+  website?: string; 
+  notes?: string; 
+  trusted: boolean; 
+  totalCallsCount?: number; 
+  lastCallTimestamp?: number; 
+  accountType?: 'GOOGLE' | 'SIM1' | 'SIM2' | 'PHONE'; 
+  accountLabel?: string; 
+}
 export interface ActiveCallSession { id:string; number:string; name:string; isSpam:boolean; spamCategory?:SpamCategory; riskScore:number; riskLevel:RiskLevel; durationSeconds:number; status:'DIALING'|'CONNECTED'|'MUTED'|'HELD'; isMuted:boolean; isSpeaker:boolean; isHeld:boolean; isKeypadOpen:boolean; selectedSim?:'SIM 1 (Personal)'|'SIM 2 (Work)'; sim?:string; isVerifiedBusiness?:boolean; riskWarningUpdated?:boolean; warningDismissed?:boolean; notes?:string; isPrivateCall?:boolean; usedAiScreener?:boolean; screeningTranscript?:ScreeningTranscriptEntry[]; screeningDetectedIntent?:string; }
 export interface CallRecordingItem {
   id: string;
@@ -50,4 +66,4 @@ export interface ShieldSettings { masterEnabled:boolean; firewallMode:FirewallMo
 export interface PermissionStatus { callScreeningRole:boolean; defaultSmsRole:boolean; readContacts:boolean; postNotifications:boolean; callLogAccess?:boolean; overlayDrawAccess?:boolean; }
 export interface ScreeningResult { isBlocked:boolean; action:ActionTaken; reason:string; riskScore:number; category:SpamCategory; callerName?:string; reportsCount:number; carrier?:string; location?:string; lineType?:string; topTags?:string[]; matchedRule?:BlockRule; flaggedKeywords?:string[]; extractedUrls?:string[]; }
 export interface ScreeningTranscriptEntry { id:string; sender:'assistant'|'caller'|'user'; text:string; timestamp:number; }
-export interface IncomingCallState { active:boolean; callId?:string; number:string; callerName:string; carrier:string; location:string; lineType?:string; topTags?:string[]; isSpam:boolean; isVerifiedBusiness?:boolean; spamCategory?:SpamCategory; spamReason?:string; riskScore:number; spamScore?:number; reportsCount:number; countdown:number; status:'RINGING'|'CANCELLED'|'ANSWERED'|'DECLINED'|'SCREENING'; isNeighborSpoof?:boolean; isPingBackScam?:boolean; screeningTranscript?:ScreeningTranscriptEntry[]; screeningDetectedIntent?:string; isRingerSilenced?:boolean; spoofWarning?:string; isPingBackMuted?:boolean; viewMode?:'popup'|'fullscreen'; }
+export interface IncomingCallState { active:boolean; callId?:string; number:string; callerName:string; carrier:string; location:string; lineType?:string; topTags?:string[]; isSpam:boolean; isVerifiedBusiness?:boolean; spamCategory?:SpamCategory; spamReason?:string; riskScore:number; spamScore?:number; reportsCount:number; countdown:number; status:'RINGING'|'CANCELLED'|'ANSWERED'|'DECLINED'|'SCREENING'; isNeighborSpoof?:boolean; isPingBackScam?:boolean; screeningTranscript?:ScreeningTranscriptEntry[]; screeningDetectedIntent?:string; isRingerSilenced?:boolean; spoofWarning?:string; isPingBackMuted?:boolean; viewMode?:'popup'|'fullscreen'|'notification'; }

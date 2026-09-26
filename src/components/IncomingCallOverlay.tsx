@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef, useCallback, type MouseEvent } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import {
   AlertTriangle,
   Bot,
@@ -30,6 +30,7 @@ interface IncomingCallOverlayProps {
   onScreenCall?: (call: IncomingCallState) => void;
   onExpand?: () => void;
   onMinimize?: () => void;
+  onSwipeToNotification?: () => void;
   initialMode?: 'popup' | 'fullscreen';
 }
 
@@ -45,6 +46,7 @@ export default function IncomingCallOverlay({
   onScreenCall,
   onExpand,
   onMinimize,
+  onSwipeToNotification,
   initialMode,
 }: IncomingCallOverlayProps) {
   const { t } = useI18n();
@@ -54,7 +56,7 @@ export default function IncomingCallOverlay({
 
   const [displayMode, setDisplayMode] = useState<'popup' | 'fullscreen'>(() => {
     if (isDeviceLocked || call?.viewMode === 'fullscreen') return 'fullscreen';
-    return initialMode || call?.viewMode || 'popup';
+    return initialMode || 'popup';
   });
 
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -64,12 +66,69 @@ export default function IncomingCallOverlay({
   const [countdown, setCountdown] = useState(0);
   const alertControllerRef = useRef<IncomingCallAlertController | null>(null);
 
+  // Swipe-to-notification gesture tracking
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
+  const [isDismissingToNotification, setIsDismissingToNotification] = useState(false);
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const isDraggingRef = useRef(false);
+
+  const triggerSwipeToNotification = useCallback(() => {
+    setIsDismissingToNotification(true);
+    telecomBridge.vibratePhone([30]);
+    setTimeout(() => {
+      if (onSwipeToNotification) {
+        onSwipeToNotification();
+      } else if (onMinimize) {
+        onMinimize();
+      }
+      setIsDismissingToNotification(false);
+      setDragOffset(null);
+    }, 200);
+  }, [onSwipeToNotification, onMinimize]);
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLElement> | React.MouseEvent<HTMLElement>) => {
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    touchStartRef.current = { x: clientX, y: clientY, time: Date.now() };
+    isDraggingRef.current = true;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLElement> | React.MouseEvent<HTMLElement>) => {
+    if (!touchStartRef.current || !isDraggingRef.current) return;
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const dx = clientX - touchStartRef.current.x;
+    const dy = clientY - touchStartRef.current.y;
+    // Allow dragging upward (negative dy) and slightly horizontal
+    if (dy < 15 || Math.abs(dx) > 15) {
+      setDragOffset({ x: dx, y: Math.min(15, dy) });
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStartRef.current || !isDraggingRef.current) return;
+    isDraggingRef.current = false;
+    const offset = dragOffset;
+    const elapsed = Date.now() - touchStartRef.current.time;
+    touchStartRef.current = null;
+
+    if (offset) {
+      const isUpSwipe = offset.y < -35 || (offset.y < -18 && elapsed < 350);
+      const isSideSwipe = Math.abs(offset.x) > 85;
+      if (isUpSwipe || isSideSwipe) {
+        triggerSwipeToNotification();
+        return;
+      }
+    }
+    setDragOffset(null);
+  };
+
   // Sync mode if lockscreen state changes or if call forces a viewMode
   useEffect(() => {
     if (isDeviceLocked || call?.viewMode === 'fullscreen') {
       setDisplayMode('fullscreen');
-    } else if (call?.viewMode) {
-      setDisplayMode(call.viewMode);
+    } else if (call?.viewMode === 'popup') {
+      setDisplayMode('popup');
     }
   }, [isDeviceLocked, call?.viewMode]);
 
@@ -213,7 +272,7 @@ export default function IncomingCallOverlay({
     return () => window.clearInterval(timer);
   }, [call, autoCancelEnabled, onCancelCall]);
 
-  if (!call) return null;
+  if (!call || call.viewMode === 'notification') return null;
 
   // Active AI Screening Mode
   if (call.status === 'SCREENING' || isScreeningInternal) {
@@ -308,29 +367,48 @@ export default function IncomingCallOverlay({
   const formattedNumber = formatPhoneNumber(rawNumStr);
   const rawDigits = rawNumStr.replace(/\D/g, '');
 
-  // Look up in contacts address book if callerName is blank or echoes the phone number
+  // Look up in contacts address book with high-accuracy matching + fallback to localStorage
   const matchedContact = useMemo(() => {
-    if (!contacts || !rawDigits) return null;
+    let sourceContacts = contacts;
+    if (!sourceContacts || sourceContacts.length === 0) {
+      try {
+        const raw = localStorage.getItem('callshield_contacts');
+        if (raw) sourceContacts = JSON.parse(raw);
+      } catch {}
+    }
+    if (!sourceContacts || !rawDigits) return null;
     return (
-      contacts.find((c) => {
+      sourceContacts.find((c) => {
         const cDigits = (c.number || '').replace(/\D/g, '');
         if (!cDigits) return false;
-        return (
-          cDigits === rawDigits ||
-          (cDigits.length >= 7 && rawDigits.length >= 7 && (cDigits.endsWith(rawDigits) || rawDigits.endsWith(cDigits)))
-        );
+        if (cDigits === rawDigits) return true;
+        if (cDigits.length >= 7 && rawDigits.length >= 7) {
+          const c10 = cDigits.slice(-10);
+          const r10 = rawDigits.slice(-10);
+          const c7 = cDigits.slice(-7);
+          const r7 = rawDigits.slice(-7);
+          return c10 === r10 || c7 === r7 || cDigits.endsWith(rawDigits) || rawDigits.endsWith(cDigits);
+        }
+        return false;
       }) || null
     );
   }, [contacts, rawDigits]);
+
+  // Native Android bridge contact name lookup
+  const nativeContactName = useMemo(() => {
+    if (!rawNumStr) return null;
+    return telecomBridge.lookupContactName(rawNumStr);
+  }, [rawNumStr]);
 
   const callerNameStr = typeof call.callerName === 'string' ? call.callerName.trim() : call.callerName != null ? String(call.callerName).trim() : '';
   const isNameDigitsOnly = Boolean(callerNameStr && callerNameStr.replace(/\D/g, '') === rawDigits);
   const isGeneric = !callerNameStr || isNameDigitsOnly || callerNameStr.toLowerCase() === 'unknown caller' || callerNameStr.toLowerCase() === 'unknown';
 
-  const effectiveCallerName = (!isGeneric ? callerNameStr : matchedContact?.name) || matchedContact?.name || callerNameStr || '';
+  // Saved contact name strictly takes highest precedence over generic, simulated or carrier string
+  const effectiveCallerName = matchedContact?.name || nativeContactName || (!isGeneric ? callerNameStr : '') || callerNameStr || '';
   const hasSpecificName = Boolean(effectiveCallerName && effectiveCallerName.replace(/\D/g, '') !== rawDigits);
   const callerDisplayName = hasSpecificName ? effectiveCallerName : formattedNumber;
-  const isSavedContact = Boolean(matchedContact || hasSpecificName);
+  const isSavedContact = Boolean(matchedContact || nativeContactName);
   const avatarInitial = (callerDisplayName?.trim()?.[0] || '📞').toUpperCase();
 
   // =========================================================================
@@ -344,8 +422,25 @@ export default function IncomingCallOverlay({
         <div
           id="inapp-caller-popup-collapsed"
           onClick={handleBannerClick}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
+          style={{
+            transform: isDismissingToNotification
+              ? 'translateY(-140%) scale(0.92)'
+              : dragOffset
+              ? `translate(${dragOffset.x}px, ${dragOffset.y}px)`
+              : undefined,
+            opacity: isDismissingToNotification
+              ? 0
+              : dragOffset
+              ? Math.max(0.2, 1 - Math.abs(dragOffset.y) / 90)
+              : 1,
+            transition: dragOffset ? 'none' : 'all 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
+          }}
           className="fixed top-3 left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-lg z-[99999] flex items-center justify-between gap-2.5 rounded-full border border-white/20 bg-[#070b13]/95 px-3.5 py-2 shadow-2xl shadow-black/90 backdrop-blur-2xl cursor-pointer select-none transition-all duration-200 animate-spring-down hover:border-white/35 active:scale-[0.99]"
-          title="Click to expand caller details"
+          title="Click to expand caller details · Swipe up to send to notification panel"
           role="button"
           tabIndex={0}
         >
@@ -406,6 +501,19 @@ export default function IncomingCallOverlay({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
+                triggerSwipeToNotification();
+              }}
+              className="flex items-center gap-1 rounded-full bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 text-[10px] font-bold text-cyan-300 hover:bg-cyan-500/25 hover:text-white transition active:scale-95"
+              title="Swipe up to move to notification panel"
+              aria-label="Move to notification panel"
+            >
+              <ChevronUp className="h-3 w-3" />
+              <span className="hidden sm:inline">To Notification</span>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
                 setIsCollapsed(false);
               }}
               className="grid h-7 w-7 place-items-center rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition active:scale-90"
@@ -424,11 +532,37 @@ export default function IncomingCallOverlay({
       <div
         id="inapp-caller-popup-card"
         onClick={handleBannerClick}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+        style={{
+          transform: isDismissingToNotification
+            ? 'translateY(-140%) scale(0.92)'
+            : dragOffset
+            ? `translate(${dragOffset.x}px, ${dragOffset.y}px)`
+            : undefined,
+          opacity: isDismissingToNotification
+            ? 0
+            : dragOffset
+            ? Math.max(0.2, 1 - Math.abs(dragOffset.y) / 90)
+            : 1,
+          transition: dragOffset ? 'none' : 'all 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
+        }}
         className="fixed top-3 left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[99999] rounded-2xl sm:rounded-3xl border border-white/[0.14] bg-[#070b13]/98 p-3.5 sm:p-4 text-white shadow-2xl shadow-black/95 backdrop-blur-2xl cursor-pointer select-none transition-all duration-200 animate-spring-down hover:border-white/25 active:scale-[0.99]"
-        title="Tap anywhere to display fullscreen"
+        title="Tap anywhere to display fullscreen · Swipe up to send to notification panel"
         role="button"
         tabIndex={0}
       >
+        {/* Touch drag handle & swipe prompt */}
+        <div className="flex flex-col items-center justify-center -mt-1 pb-2 cursor-grab active:cursor-grabbing">
+          <div className="w-12 h-1.5 rounded-full bg-white/30 mb-1" />
+          <div className="flex items-center gap-1 text-[10px] text-cyan-300 font-semibold tracking-wide">
+            <ChevronUp className="h-3 w-3 animate-bounce" />
+            <span>Swipe up to move to notification panel</span>
+          </div>
+        </div>
+
         {/* Top meta row with trust status and collapse handle */}
         <div className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-2.5">
           <div className="flex items-center gap-1.5 min-w-0">
@@ -473,7 +607,20 @@ export default function IncomingCallOverlay({
             )}
           </div>
 
-          <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                triggerSwipeToNotification();
+              }}
+              className="flex items-center gap-1 rounded-full bg-cyan-500/15 border border-cyan-500/30 px-2 py-0.5 text-[10px] font-bold text-cyan-300 hover:bg-cyan-500/25 hover:text-white transition active:scale-95"
+              title="Swipe up to move to notification panel"
+              aria-label="Move to notification panel"
+            >
+              <ChevronUp className="h-3 w-3" />
+              <span>To Notification</span>
+            </button>
             <button
               type="button"
               onClick={(e) => {

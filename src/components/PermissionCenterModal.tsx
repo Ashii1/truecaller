@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, CheckCircle2, Clock, PhoneCall, ShieldAlert, ShieldCheck, Users, X, Moon, Gauge, CalendarClock, UserRoundCheck, VolumeX, Landmark, AlertTriangle, Fingerprint } from 'lucide-react';
+import { ArrowLeft, Bell, CheckCircle2, Clock, PhoneCall, ShieldAlert, ShieldCheck, Users, Moon, Gauge, CalendarClock, UserRoundCheck, VolumeX, Landmark, AlertTriangle, Fingerprint } from 'lucide-react';
 import { ShieldSettings } from '../types';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 import Phase3SafetyCenter from './Phase3SafetyCenter';
@@ -134,7 +134,7 @@ export default function PermissionCenterModal({ isOpen, onClose, settings, onUpd
       <section className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-700 bg-slate-950 shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-800 p-5">
           <div className="flex min-w-0 items-center gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-blue-500/30 bg-blue-500/10 text-blue-400"><ShieldCheck className="h-5 w-5" /></div><div className="min-w-0"><h2 className="text-lg font-extrabold text-white">Settings & Protection</h2><p className="text-xs text-slate-400">Live permissions and everyday call protection</p></div></div>
-          <button onClick={onClose} className="rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close settings"><X className="h-5 w-5" /></button>
+          <button onClick={onClose} className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-slate-300 hover:bg-slate-800 hover:text-white transition active:scale-95" aria-label="Back" title="Back"><ArrowLeft className="h-5 w-5" /><span className="text-xs font-semibold">Back</span></button>
         </div>
         <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-5">
           <section className="space-y-3">

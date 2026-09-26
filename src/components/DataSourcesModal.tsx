@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
+  ArrowLeft,
   ShieldCheck, 
-  X, 
   Database, 
   Lock, 
   Globe, 
@@ -116,9 +116,12 @@ export default function DataSourcesModal({
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-slate-300 hover:bg-slate-800 hover:text-white transition active:scale-95"
+            aria-label="Back"
+            title="Back"
           >
-            <X className="w-5 h-5" />
+            <ArrowLeft className="w-5 h-5" />
+            <span className="text-xs font-semibold">Back</span>
           </button>
         </div>
 

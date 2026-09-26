@@ -14,6 +14,7 @@ import {
   Filter, 
   Layers, 
   X, 
+  ArrowLeft,
   Sparkles,
   Info,
   ChevronRight,
@@ -613,10 +614,14 @@ function ProtectionTab({
                 <h3 className="text-base font-bold text-white">Visual Block Rule Builder</h3>
               </div>
               <button
+                type="button"
                 onClick={() => setIsRuleBuilderOpen(false)}
-                className="p-1 rounded-full text-slate-400 hover:text-white"
+                className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-slate-300 hover:bg-slate-800 hover:text-white transition active:scale-95"
+                aria-label="Back"
+                title="Back"
               >
-                <X className="w-5 h-5" />
+                <ArrowLeft className="w-5 h-5" />
+                <span className="text-xs font-semibold">Back</span>
               </button>
             </div>
 

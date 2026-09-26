@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { Check, X, UserPlus, ShieldBan, AlertTriangle, FileText, Clock, Phone, Star, ShieldCheck, HelpCircle, Flag, StickyNote, Copy, Bot, Sparkles, ChevronDown, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Check, X, UserPlus, ShieldBan, AlertTriangle, FileText, Clock, Phone, Star, ShieldCheck, HelpCircle, Flag, StickyNote, Copy, Bot, Sparkles, ChevronDown, MessageSquare } from 'lucide-react';
 import { PostCallState, SpamCategory, ContactItem } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import CallContextCard from './CallContextCard';
@@ -90,8 +90,9 @@ export default function PostCallModal({ postCall, onDismiss, onAddContact, onBlo
             <span className="w-2 h-2 rounded-full bg-indigo-400" />
             <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">Post-Call Intelligence</h3>
           </div>
-          <button onClick={onDismiss} className="p-1 rounded-full text-slate-400 hover:text-white" aria-label="Close">
-            <X className="w-5 h-5" />
+          <button onClick={onDismiss} className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-slate-300 hover:bg-slate-800 hover:text-white transition active:scale-95" aria-label="Back" title="Back">
+            <ArrowLeft className="w-4 h-4" />
+            <span className="text-xs font-semibold">Back</span>
           </button>
         </div>
 

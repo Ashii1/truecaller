@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, ChangeEvent } from 'react';
 import {
   Activity,
+  ArrowLeft,
   X,
   Server,
   Smartphone,
@@ -277,9 +278,12 @@ export default function SystemDiagnosticsModal({
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-slate-300 hover:bg-slate-800 hover:text-white transition active:scale-95"
+            aria-label="Back"
+            title="Back"
           >
-            <X className="w-5 h-5" />
+            <ArrowLeft className="w-5 h-5" />
+            <span className="text-xs font-semibold">Back</span>
           </button>
         </div>
 

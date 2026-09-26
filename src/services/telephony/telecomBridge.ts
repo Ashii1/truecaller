@@ -248,7 +248,41 @@ class TelecomBridgeService {
       return false;
     }
   }
-  public setSecuritySetting(k:string,v:boolean){return this.native()&&!!window.AndroidTelecomBridge!.setSecuritySetting?window.AndroidTelecomBridge!.setSecuritySetting(k,v):false;} public syncBlockRules(r:any[]){return this.native()&&!!window.AndroidTelecomBridge!.syncBlockRules?window.AndroidTelecomBridge!.syncBlockRules(JSON.stringify(r)):false;} public createContact(n:string,name?:string){return this.native()&&!!window.AndroidTelecomBridge!.createContact?window.AndroidTelecomBridge!.createContact(n,name):false;}
+  public setSecuritySetting(k:string,v:boolean){return this.native()&&!!window.AndroidTelecomBridge!.setSecuritySetting?window.AndroidTelecomBridge!.setSecuritySetting(k,v):false;} 
+  public syncBlockRules(r:any[]){return this.native()&&!!window.AndroidTelecomBridge!.syncBlockRules?window.AndroidTelecomBridge!.syncBlockRules(JSON.stringify(r)):false;} 
+  public createContact(n:string,name?:string){return this.native()&&!!window.AndroidTelecomBridge?.createContact?window.AndroidTelecomBridge.createContact(n,name):false;}
+  public updateContact(idOrNumber:string,name:string,number:string){
+    if (!this.native()) return false;
+    const bridge = window.AndroidTelecomBridge as any;
+    if (typeof bridge?.updateContact === 'function') {
+      try { return Boolean(bridge.updateContact(idOrNumber, name, number)); } catch { return false; }
+    }
+    return false;
+  }
+  public deleteContact(idOrNumber:string,number?:string){
+    if (!this.native()) return false;
+    const bridge = window.AndroidTelecomBridge as any;
+    if (typeof bridge?.deleteContact === 'function') {
+      try { return Boolean(bridge.deleteContact(idOrNumber, number || idOrNumber)); } catch { return false; }
+    }
+    return false;
+  }
+  public deleteCallLog(idOrNumber:string,number?:string){
+    if (!this.native()) return false;
+    const bridge = window.AndroidTelecomBridge as any;
+    if (typeof bridge?.deleteCallLog === 'function') {
+      try { return Boolean(bridge.deleteCallLog(idOrNumber, number || '')); } catch { return false; }
+    }
+    return false;
+  }
+  public deleteCallLogs(ids:string[]){
+    if (!this.native()) return false;
+    const bridge = window.AndroidTelecomBridge as any;
+    if (typeof bridge?.deleteCallLogs === 'function') {
+      try { return Boolean(bridge.deleteCallLogs(JSON.stringify(ids))); } catch { return false; }
+    }
+    return false;
+  }
   public pinWidget(type: 'speed_dial' | 'security'): { success: boolean; message: string } {
     if (!this.native() || !window.AndroidTelecomBridge?.pinWidget) {
       return { success: false, message: 'Widget pinning requires the installed Android app.' };

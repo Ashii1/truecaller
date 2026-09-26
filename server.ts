@@ -4,7 +4,8 @@ import { GoogleGenAI } from '@google/genai';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 
 const app = express();
-const PORT = 3000;
+const isDev = process.env.NODE_ENV === 'development' || Boolean(process.env.K_SERVICE?.startsWith('ais-dev-'));
+const PORT = isDev ? 3000 : (Number(process.env.PORT) || 3000);
 
 // VAPT baseline: reject oversized JSON payloads and apply conservative browser-facing
 // security headers without relying on an additional middleware dependency.
@@ -1010,7 +1011,7 @@ app.get('/vigilshield_app.zip', (req, res) => {
 
 // Vite Middleware for Dev and Static Serving for Production
 async function startServer() {
-  if (process.env.NODE_ENV !== 'production') {
+  if (isDev) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -1026,7 +1027,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`CallShield Production Call Security Server running on http://0.0.0.0:${PORT}`);
+    console.log(`CallShield ${isDev ? 'Development' : 'Production'} Server running on http://0.0.0.0:${PORT}`);
   });
 }
 

@@ -1,5 +1,5 @@
 import { useState, FormEvent } from 'react';
-import { X, Flag, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Flag, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { SpamCategory } from '../types';
 
 interface FastReportModalProps {
@@ -60,9 +60,12 @@ export default function FastReportModal({
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition"
+            className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-slate-300 hover:bg-slate-800 hover:text-white transition active:scale-95"
+            aria-label="Back"
+            title="Back"
           >
-            <X className="w-5 h-5" />
+            <ArrowLeft className="w-5 h-5" />
+            <span className="text-xs font-semibold">Back</span>
           </button>
         </div>
 

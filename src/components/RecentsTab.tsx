@@ -2,6 +2,7 @@ import { memo, useMemo, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import {
   Disc,
+  Layers,
   ListFilter,
   Phone,
   PhoneIncoming,
@@ -16,6 +17,7 @@ import {
 import { CallLogItem, CallDirection, BlockRule, WhitelistEntry, ShieldSettings, CallShieldDirectoryProfile, DisplayDensity } from '../types';
 import { groupCallsByNumber, CallGroup } from '../utils/callHistory';
 import { useI18n } from '../i18n/LanguageContext';
+import { formatTimeAmPm } from '../utils/timeFormat';
 import ModernFilterBar, { FilterTabOption } from './ModernFilterBar';
 import SwipeableCallItem from './SwipeableCallItem';
 
@@ -66,6 +68,7 @@ function RecentsTab({
   const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('ALL');
+  const [simFilter, setSimFilter] = useState<'ALL' | 'SIM 1' | 'SIM 2'>('ALL');
 
   const handleDeleteCalls = (ids: string[]) => {
     if (onDeleteCalls) {
@@ -85,17 +88,38 @@ function RecentsTab({
     return d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'short' });
   };
 
-  const timeLabel = (ts: number) =>
-    new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const timeLabel = (ts: number) => formatTimeAmPm(ts);
+
+  const isBlockedCall = (c: CallLogItem) =>
+    c.type === 'BLOCKED_CANCELLED' || c.isSpam || c.userAction === 'BLOCKED' || c.classification === 'SPAM';
+
+  const isRecordedCall = (c: CallLogItem) =>
+    Boolean(c.recordingUri) || (typeof c.notes === 'string' && c.notes.trim().length > 0) || Boolean(c.usedAiScreener);
+
+  const matchSim = (call: CallLogItem, targetSim: 'SIM 1' | 'SIM 2') => {
+    const simStr = (call.sim || call.carrier || '').toLowerCase();
+    if (targetSim === 'SIM 1') {
+      return !call.sim || simStr.includes('sim 1') || simStr.includes('personal') || simStr.includes('slot 0') || (call as any).simSlot === 0;
+    }
+    return simStr.includes('sim 2') || simStr.includes('work') || simStr.includes('slot 1') || (call as any).simSlot === 1;
+  };
 
   const counts = useMemo(() => {
     return {
       ALL: calls.length,
       MISSED: calls.filter((c) => c.type === 'MISSED').length,
-      INCOMING: calls.filter((c) => c.type === 'INCOMING').length,
+      INCOMING: calls.filter((c) => c.type === 'INCOMING' || c.type === 'BLOCKED_CANCELLED').length,
       OUTGOING: calls.filter((c) => c.type === 'OUTGOING').length,
-      RECORDED: calls.filter((c) => Boolean(c.recordingUri)).length,
-      BLOCKED: calls.filter((c) => c.type === 'BLOCKED_CANCELLED' || c.isSpam).length,
+      RECORDED: calls.filter(isRecordedCall).length,
+      BLOCKED: calls.filter(isBlockedCall).length,
+    };
+  }, [calls]);
+
+  const simCounts = useMemo(() => {
+    return {
+      ALL: calls.length,
+      SIM1: calls.filter((c) => matchSim(c, 'SIM 1')).length,
+      SIM2: calls.filter((c) => matchSim(c, 'SIM 2')).length,
     };
   }, [calls]);
 
@@ -103,18 +127,23 @@ function RecentsTab({
     const q = query.trim().toLowerCase(),
       d = q.replace(/\D/g, '');
     return calls.filter((c) => {
+      // SIM Filter
+      if (simFilter === 'SIM 1' && !matchSim(c, 'SIM 1')) return false;
+      if (simFilter === 'SIM 2' && !matchSim(c, 'SIM 2')) return false;
+
+      // Type Filter
       if (filter === 'MISSED' && c.type !== 'MISSED') return false;
-      if (filter === 'INCOMING' && c.type !== 'INCOMING') return false;
+      if (filter === 'INCOMING' && c.type !== 'INCOMING' && c.type !== 'BLOCKED_CANCELLED') return false;
       if (filter === 'OUTGOING' && c.type !== 'OUTGOING') return false;
-      if (filter === 'RECORDED' && !c.recordingUri) return false;
-      if (filter === 'BLOCKED' && c.type !== 'BLOCKED_CANCELLED' && !c.isSpam) return false;
+      if (filter === 'RECORDED' && !isRecordedCall(c)) return false;
+      if (filter === 'BLOCKED' && !isBlockedCall(c)) return false;
       if (!q) return true;
       return (
         String(c.callerName ?? '').toLowerCase().includes(q) ||
         (d.length > 0 && c.number.replace(/\D/g, '').includes(d))
       );
     });
-  }, [calls, query, filter]);
+  }, [calls, query, filter, simFilter]);
 
   const groups = useMemo<CallGroup[]>(() => groupCallsByNumber(filtered), [filtered]);
   const days = useMemo<Record<string, CallGroup[]>>(
@@ -130,12 +159,12 @@ function RecentsTab({
   const dayEntries = useMemo(() => Object.entries(days), [days]);
 
   const filterTabs: FilterTabOption<Filter>[] = [
-    { id: 'ALL', label: t('filter_all'), icon: ListFilter, count: counts.ALL, badgeVariant: 'default' },
-    { id: 'MISSED', label: t('filter_missed'), icon: PhoneMissed, count: counts.MISSED, badgeVariant: 'missed' },
-    { id: 'INCOMING', label: t('filter_incoming'), icon: PhoneIncoming, count: counts.INCOMING, badgeVariant: 'default' },
-    { id: 'OUTGOING', label: t('filter_outgoing'), icon: PhoneOutgoing, count: counts.OUTGOING, badgeVariant: 'default' },
-    { id: 'RECORDED', label: 'Recorded', icon: Disc, count: counts.RECORDED, badgeVariant: 'recorded' },
-    { id: 'BLOCKED', label: t('filter_blocked'), icon: PhoneOff, count: counts.BLOCKED, badgeVariant: 'blocked' },
+    { id: 'ALL', label: t('filter_all') || 'All', icon: ListFilter, count: counts.ALL, badgeVariant: 'default' },
+    { id: 'MISSED', label: t('filter_missed') || 'Missed', icon: PhoneMissed, count: counts.MISSED, badgeVariant: 'missed' },
+    { id: 'INCOMING', label: t('filter_incoming') || 'Incoming', icon: PhoneIncoming, count: counts.INCOMING, badgeVariant: 'default' },
+    { id: 'OUTGOING', label: t('filter_outgoing') || 'Outgoing', icon: PhoneOutgoing, count: counts.OUTGOING, badgeVariant: 'default' },
+    { id: 'RECORDED', label: t('filter_recorded') || 'Recorded', icon: Disc, count: counts.RECORDED, badgeVariant: 'recorded' },
+    { id: 'BLOCKED', label: t('filter_blocked') || 'Blocked', icon: PhoneOff, count: counts.BLOCKED, badgeVariant: 'blocked' },
   ];
 
   const isCompact = density === 'compact';
@@ -171,6 +200,73 @@ function RecentsTab({
           )}
         </div>
       </header>
+
+      {/* Modern Hardware Line & SIM Switcher Dock */}
+      <div className={`flex items-center gap-1.5 p-1 rounded-2xl bg-[#0c121b]/80 border border-white/[0.07] backdrop-blur-md overflow-x-auto no-scrollbar transition-all ${isCompact ? 'mb-2' : 'mb-2.5'}`}>
+        <button
+          type="button"
+          onClick={() => setSimFilter('ALL')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200 active:scale-95 ${
+            simFilter === 'ALL'
+              ? 'bg-slate-700/80 text-white shadow-sm ring-1 ring-white/10'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+          }`}
+        >
+          <Layers className="h-3.5 w-3.5 opacity-80" />
+          <span>All Lines</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+            simFilter === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-800/80 text-slate-400'
+          }`}>
+            {simCounts.ALL}
+          </span>
+        </button>
+
+        <div className="h-4 w-[1px] bg-white/[0.08] shrink-0" />
+
+        <button
+          type="button"
+          onClick={() => setSimFilter('SIM 1')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200 active:scale-95 ${
+            simFilter === 'SIM 1'
+              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/10 ring-1 ring-emerald-500/30'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent'
+          }`}
+        >
+          {/* Micro Hardware SIM 1 Icon */}
+          <div className="relative flex items-center justify-center w-4 h-4.5 rounded-[3px] border border-emerald-400/50 bg-emerald-500/20 text-[9px] font-black text-emerald-400 shadow-xs">
+            <span className="absolute -top-[1px] -right-[1px] w-1 h-1 bg-[#0c121b] rotate-45" />
+            1
+          </div>
+          <span>SIM 1</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+            simFilter === 'SIM 1' ? 'bg-emerald-500/25 text-emerald-200' : 'bg-slate-800/80 text-slate-400'
+          }`}>
+            {simCounts.SIM1}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSimFilter('SIM 2')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200 active:scale-95 ${
+            simFilter === 'SIM 2'
+              ? 'bg-sky-500/15 text-sky-300 border border-sky-500/40 shadow-sm shadow-sky-500/10 ring-1 ring-sky-500/30'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent'
+          }`}
+        >
+          {/* Micro Hardware SIM 2 Icon */}
+          <div className="relative flex items-center justify-center w-4 h-4.5 rounded-[3px] border border-sky-400/50 bg-sky-500/20 text-[9px] font-black text-sky-400 shadow-xs">
+            <span className="absolute -top-[1px] -right-[1px] w-1 h-1 bg-[#0c121b] rotate-45" />
+            2
+          </div>
+          <span>SIM 2</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-colors ${
+            simFilter === 'SIM 2' ? 'bg-sky-500/25 text-sky-200' : 'bg-slate-800/80 text-slate-400'
+          }`}>
+            {simCounts.SIM2}
+          </span>
+        </button>
+      </div>
 
       {/* Search Input */}
       <div className={`flex items-center rounded-xl border border-white/10 bg-[#0e141c] shadow-inner shadow-black/20 focus-within:border-emerald-500/40 focus-within:ring-1 focus-within:ring-emerald-500/20 transition-all ${isCompact ? 'mb-2 h-8.5 px-2.5' : 'mb-2.5 h-10 px-3'}`}>

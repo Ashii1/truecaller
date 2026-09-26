@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  ArrowLeft,
   Phone,
   PhoneIncoming,
   PhoneOutgoing,
@@ -45,6 +46,7 @@ import { callRecordingService, normalizePhoneNumber } from '../services/callReco
 import { telecomBridge } from '../services/telephony/telecomBridge';
 import CallAudioPlayer from './CallAudioPlayer';
 import ContactEditorSheet from './ContactEditorSheet';
+import { useI18n } from '../i18n/LanguageContext';
 
 interface CallerDetailModalProps {
   call: CallLogItem | null;
@@ -72,6 +74,8 @@ interface CallerDetailModalProps {
   onSaveCallNote?: (callId: string, note: string) => void;
 }
 
+import { formatTimeAmPm } from '../utils/timeFormat';
+
 const formatDuration = (s: number) => {
   if (!s || s <= 0) return '00:00';
   const mins = Math.floor(s / 60);
@@ -80,11 +84,11 @@ const formatDuration = (s: number) => {
 };
 
 const formatTimeOfDay = (ts: number) => {
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return formatTimeAmPm(ts);
 };
 
 // Group chronological calls by human-friendly day headings
-function groupCallsByDay(calls: CallLogItem[]) {
+function groupCallsByDay(calls: CallLogItem[], t?: (k: any) => string) {
   const groups: { label: string; items: CallLogItem[] }[] = [];
   const now = new Date();
   const todayStr = now.toDateString();
@@ -98,9 +102,9 @@ function groupCallsByDay(calls: CallLogItem[]) {
     const dateStr = d.toDateString();
     let label = '';
     if (dateStr === todayStr) {
-      label = 'Today';
+      label = t ? t('today') : 'Today';
     } else if (dateStr === yesterdayStr) {
-      label = 'Yesterday';
+      label = t ? t('yesterday') : 'Yesterday';
     } else {
       label = d.toLocaleDateString([], { month: 'short', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
     }
@@ -135,6 +139,7 @@ export default function CallerDetailModal({
   onInitiateCall,
   onSaveNote,
 }: CallerDetailModalProps) {
+  const { t } = useI18n();
   // Navigation & View state
   const [expandedCallId, setExpandedCallId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<'ALL' | 'INCOMING' | 'OUTGOING' | 'MISSED'>('ALL');
@@ -158,6 +163,36 @@ export default function CallerDetailModal({
 
   const number = call?.number || profile?.number || '';
   const key = normalizePhoneNumber(number);
+
+  // Reset all search, filter, and expanded states
+  const resetModalState = useCallback(() => {
+    setExpandedCallId(null);
+    setFilterType('ALL');
+    setSearchQuery('');
+    setIsSearchActive(false);
+    setEditingNoteCallId(null);
+    setDraftNoteText('');
+    setIsContactEditorOpen(false);
+    setIsBlockConfirmOpen(false);
+    setIsMoreMenuOpen(false);
+    setToastMessage(null);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    resetModalState();
+    onClose();
+  }, [resetModalState, onClose]);
+
+  // Reset when isOpen becomes false or when the caller number changes
+  useEffect(() => {
+    if (!isOpen) {
+      resetModalState();
+    }
+  }, [isOpen, resetModalState]);
+
+  useEffect(() => {
+    resetModalState();
+  }, [number, resetModalState]);
 
   // Load recordings and call-specific notes for this caller
   useEffect(() => {
@@ -402,7 +437,7 @@ export default function CallerDetailModal({
     });
   }, [callerHistory, filterType, searchQuery, callNotesMap]);
 
-  const groupedCalls = useMemo(() => groupCallsByDay(filteredCalls), [filteredCalls]);
+  const groupedCalls = useMemo(() => groupCallsByDay(filteredCalls, t), [filteredCalls, t]);
 
   // Aggregate stats
   const totalCallsCount = callerHistory.length;
@@ -416,12 +451,13 @@ export default function CallerDetailModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 p-0 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200 select-none"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 p-0 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200 select-none cursor-pointer"
       role="dialog"
       aria-modal="true"
+      onClick={handleClose}
     >
       <div
-        className="flex h-full w-full max-w-lg flex-col overflow-hidden bg-[#070b12] sm:h-auto sm:max-h-[92vh] sm:rounded-[32px] sm:border sm:border-slate-800/90 shadow-2xl relative"
+        className="flex h-full w-full max-w-lg flex-col overflow-hidden bg-[#070b12] sm:h-auto sm:max-h-[92vh] sm:rounded-[32px] sm:border sm:border-slate-800/90 shadow-2xl relative cursor-default"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Floating Toast Notice */}
@@ -440,14 +476,16 @@ export default function CallerDetailModal({
           <div className="flex items-center justify-between">
             <button
               type="button"
-              onClick={onClose}
-              className="rounded-full p-2 text-slate-400 hover:bg-slate-800/80 hover:text-white transition active:scale-95"
-              aria-label="Close caller page"
+              onClick={handleClose}
+              className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-slate-300 hover:bg-slate-800/80 hover:text-white transition active:scale-95"
+              aria-label="Back"
+              title="Back to previous page"
             >
-              <X className="h-5 w-5" />
+              <ArrowLeft className="h-5 w-5 text-slate-300" />
+              <span className="text-xs font-semibold text-slate-300">Back</span>
             </button>
 
-            {/* Quick search toggle if caller has substantial history (> 3 calls) */}
+            {/* Quick search toggle */}
             <div className="flex items-center gap-1.5">
               {totalCallsCount > 3 && (
                 <button
@@ -595,10 +633,10 @@ export default function CallerDetailModal({
                 type="button"
                 onClick={() => handleCall(false)}
                 className="flex-1 min-w-[90px] flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 py-3 px-3 text-white font-bold text-xs shadow-lg shadow-emerald-950/60 transition active:scale-95 cursor-pointer"
-                title="Place phone call"
+                title={t('call_action_label')}
               >
                 <Phone className="h-4 w-4 fill-current shrink-0" />
-                <span>Call</span>
+                <span>{t('call_action_label')}</span>
               </button>
 
               {/* Message (SMS) Button */}
@@ -606,10 +644,10 @@ export default function CallerDetailModal({
                 type="button"
                 onClick={handleLaunchSMS}
                 className="flex-1 min-w-[90px] flex items-center justify-center gap-2 rounded-2xl border border-slate-700/80 bg-slate-900/90 hover:bg-slate-800 py-3 px-3 text-slate-200 font-semibold text-xs transition active:scale-95 cursor-pointer"
-                title="Send SMS message"
+                title={t('message_action_label')}
               >
                 <MessageSquare className="h-4 w-4 text-purple-400 shrink-0" />
-                <span>Message</span>
+                <span>{t('message_action_label')}</span>
               </button>
 
               {/* Dynamic Messaging Apps (e.g. WhatsApp) */}
@@ -636,8 +674,8 @@ export default function CallerDetailModal({
                       ? 'border-indigo-500 bg-slate-800 text-white shadow-md'
                       : 'border-slate-700/80 bg-slate-900/90 hover:bg-slate-800 text-slate-300'
                   }`}
-                  title="More actions"
-                  aria-label="More actions"
+                  title={t('more_options_label')}
+                  aria-label={t('more_options_label')}
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </button>
@@ -662,7 +700,7 @@ export default function CallerDetailModal({
                         className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs font-medium text-slate-200 hover:bg-slate-800/80 transition cursor-pointer text-left"
                       >
                         <Phone className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
-                        <span>Call with *67 Private</span>
+                        <span>{t('call_private_label')}</span>
                       </button>
 
                       <button
@@ -674,7 +712,7 @@ export default function CallerDetailModal({
                         className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs font-medium text-slate-200 hover:bg-slate-800/80 transition cursor-pointer text-left"
                       >
                         <Edit2 className="h-3.5 w-3.5 text-blue-400 shrink-0" />
-                        <span>{isSaved ? 'Edit Contact' : 'Add to Contacts'}</span>
+                        <span>{isSaved ? t('edit_contact') : t('add_to_contacts')}</span>
                       </button>
 
                       <button
@@ -686,7 +724,7 @@ export default function CallerDetailModal({
                         className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs font-medium text-slate-200 hover:bg-slate-800/80 transition cursor-pointer text-left"
                       >
                         <Copy className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                        <span>Copy Number</span>
+                        <span>{t('copy_number_action')}</span>
                       </button>
 
                       <button
@@ -705,7 +743,7 @@ export default function CallerDetailModal({
                         className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs font-medium text-slate-200 hover:bg-slate-800/80 transition cursor-pointer text-left"
                       >
                         <Share2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                        <span>Share Contact</span>
+                        <span>{t('share_contact_action')}</span>
                       </button>
 
                       <div className="my-1 border-t border-slate-800" />
@@ -723,7 +761,7 @@ export default function CallerDetailModal({
                         }`}
                       >
                         <Ban className="h-3.5 w-3.5 shrink-0" />
-                        <span>{isBlocked ? 'Unblock Number' : 'Block Number'}</span>
+                        <span>{isBlocked ? t('unblock_number_action') : t('block_number_action')}</span>
                       </button>
                     </div>
                   </>
@@ -739,7 +777,7 @@ export default function CallerDetailModal({
                 className="hover:text-white transition flex items-center gap-1.5 py-1 px-2 rounded-lg hover:bg-slate-800/50 cursor-pointer"
               >
                 {isSaved ? <Edit2 className="h-3.5 w-3.5 text-indigo-400" /> : <UserPlus className="h-3.5 w-3.5 text-blue-400" />}
-                <span>{isSaved ? 'Edit Contact' : 'Add Contact'}</span>
+                <span>{isSaved ? t('edit_contact') : t('add_contact')}</span>
               </button>
 
               <span className="text-slate-700">•</span>
@@ -752,7 +790,7 @@ export default function CallerDetailModal({
                 }`}
               >
                 <Ban className="h-3.5 w-3.5" />
-                <span>{isBlocked ? 'Unblock' : 'Block'}</span>
+                <span>{isBlocked ? t('unblock_number_action') : t('block_number_action')}</span>
               </button>
             </div>
           </div>
@@ -766,20 +804,20 @@ export default function CallerDetailModal({
           {totalCallsCount > 0 && (
             <div className="flex items-center justify-between px-2 py-1 text-[11px] text-slate-400">
               <div className="flex items-center gap-2 font-medium">
-                <span className="font-bold text-white">{totalCallsCount} calls</span>
+                <span className="font-bold text-white">{totalCallsCount} {t('calls_count_suffix')}</span>
                 <span>•</span>
-                <span>{incomingCount} in</span>
+                <span>{incomingCount} {t('in_suffix')}</span>
                 <span>•</span>
-                <span>{outgoingCount} out</span>
+                <span>{outgoingCount} {t('out_suffix')}</span>
                 {missedCount > 0 && (
                   <>
                     <span>•</span>
-                    <span className="text-rose-400 font-semibold">{missedCount} missed</span>
+                    <span className="text-rose-400 font-semibold">{missedCount} {t('missed_suffix')}</span>
                   </>
                 )}
               </div>
               {totalMinutes > 0 && (
-                <div className="text-slate-500 font-medium">Talk time: {totalMinutes}m</div>
+                <div className="text-slate-500 font-medium">{t('talk_time_label')}: {totalMinutes}m</div>
               )}
             </div>
           )}
@@ -792,7 +830,7 @@ export default function CallerDetailModal({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search date, call notes..."
+                placeholder={t('search_date_notes_placeholder')}
                 className="w-full rounded-xl border border-slate-700/80 bg-slate-900/90 pl-9 pr-8 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500"
                 autoFocus
               />
@@ -822,7 +860,13 @@ export default function CallerDetailModal({
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  {ft === 'ALL' ? 'All' : ft.charAt(0) + ft.slice(1).toLowerCase()}
+                  {ft === 'ALL'
+                    ? t('filter_type_all')
+                    : ft === 'INCOMING'
+                    ? t('filter_type_incoming')
+                    : ft === 'OUTGOING'
+                    ? t('filter_type_outgoing')
+                    : t('filter_type_missed')}
                 </button>
               ))}
             </div>
@@ -833,10 +877,10 @@ export default function CallerDetailModal({
             <div className="rounded-2xl border border-slate-800/80 bg-[#0a0f19] p-8 text-center text-slate-500 my-4">
               <Clock className="mx-auto h-7 w-7 text-slate-600 mb-2" />
               <p className="text-sm font-semibold text-slate-300">
-                {searchQuery ? 'No matching calls found' : 'No calls yet'}
+                {searchQuery ? t('no_calls_found') : t('no_calls_yet_title')}
               </p>
               <p className="text-xs text-slate-500 mt-0.5">
-                {searchQuery ? 'Try clearing your search query' : 'When calls occur, they will appear here.'}
+                {searchQuery ? t('search_recents_placeholder') : t('no_calls_yet_desc')}
               </p>
             </div>
           ) : (

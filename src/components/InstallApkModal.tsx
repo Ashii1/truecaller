@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  X, 
+  ArrowLeft,
   Download, 
   Smartphone, 
   ExternalLink, 
@@ -105,9 +105,12 @@ npx cap open android # Opens Android Studio to click "Build APK"`;
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition"
+            className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-slate-300 hover:bg-slate-800 hover:text-white transition active:scale-95"
+            aria-label="Back"
+            title="Back"
           >
-            <X className="w-5 h-5" />
+            <ArrowLeft className="w-5 h-5" />
+            <span className="text-xs font-semibold">Back</span>
           </button>
         </div>
 

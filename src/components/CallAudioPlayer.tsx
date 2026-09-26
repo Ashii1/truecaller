@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw, Volume2, VolumeX, Share2, Trash2 } from 'lucide-react';
 import { CallRecordingItem } from '../types';
+import { useI18n } from '../i18n/LanguageContext';
 
 interface CallAudioPlayerProps {
   recording: CallRecordingItem;
@@ -16,6 +17,7 @@ const formatAudioTime = (seconds: number) => {
 };
 
 export default function CallAudioPlayer({ recording, onDelete, autoPlay = false }: CallAudioPlayerProps) {
+  const { t } = useI18n();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -131,8 +133,8 @@ export default function CallAudioPlayer({ recording, onDelete, autoPlay = false 
               ? 'bg-amber-500 text-slate-950 shadow-amber-500/20'
               : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20'
           }`}
-          title={isPlaying ? 'Pause recording' : 'Play recording'}
-          aria-label={isPlaying ? 'Pause recording' : 'Play recording'}
+          title={isPlaying ? t('pause_recording') : t('play_recording')}
+          aria-label={isPlaying ? t('pause_recording') : t('play_recording')}
         >
           {isPlaying ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current ml-0.5" />}
         </button>
@@ -161,7 +163,7 @@ export default function CallAudioPlayer({ recording, onDelete, autoPlay = false 
               {isPlaying && (
                 <span className="flex items-center gap-0.5 text-emerald-400 font-sans text-[10px] font-bold">
                   <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
-                  Playing
+                  {t('playing_audio')}
                 </span>
               )}
               <span>{formatAudioTime(duration)}</span>
@@ -184,8 +186,8 @@ export default function CallAudioPlayer({ recording, onDelete, autoPlay = false 
             type="button"
             onClick={toggleMute}
             className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition active:scale-95 cursor-pointer"
-            title={isMuted ? 'Unmute' : 'Mute'}
-            aria-label={isMuted ? 'Unmute' : 'Mute'}
+            title={isMuted ? t('unmute') : t('mute')}
+            aria-label={isMuted ? t('unmute') : t('mute')}
           >
             {isMuted ? <VolumeX className="h-4 w-4 text-rose-400" /> : <Volume2 className="h-4 w-4" />}
           </button>
@@ -194,8 +196,8 @@ export default function CallAudioPlayer({ recording, onDelete, autoPlay = false 
             type="button"
             onClick={handleShare}
             className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition active:scale-95 cursor-pointer"
-            title="Export / Share recording"
-            aria-label="Export or share recording"
+            title={t('export_recording')}
+            aria-label={t('export_recording')}
           >
             <Share2 className="h-4 w-4" />
           </button>
@@ -205,8 +207,8 @@ export default function CallAudioPlayer({ recording, onDelete, autoPlay = false 
               type="button"
               onClick={() => onDelete(recording.id)}
               className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-950/60 hover:text-rose-400 transition active:scale-95 cursor-pointer"
-              title="Delete this recording"
-              aria-label="Delete this recording"
+              title={t('delete_recording')}
+              aria-label={t('delete_recording')}
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -216,7 +218,7 @@ export default function CallAudioPlayer({ recording, onDelete, autoPlay = false 
 
       {copyFeedback && (
         <div className="mt-1.5 text-right text-[10px] font-semibold text-emerald-400 animate-in fade-in">
-          Recording downloaded to device
+          {t('recording_downloaded')}
         </div>
       )}
     </div>
