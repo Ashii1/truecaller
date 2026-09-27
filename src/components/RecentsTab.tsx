@@ -11,7 +11,6 @@ import {
   PhoneOff,
   PhoneOutgoing,
   RefreshCw,
-  Search,
   Smartphone,
   Trash2,
   X,

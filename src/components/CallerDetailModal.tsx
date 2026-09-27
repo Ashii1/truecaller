@@ -284,10 +284,27 @@ export default function CallerDetailModal({
 
   // Safety Classification Badge
   const allCallerCalls = useMemo(() => {
-    return calls.filter((c) => normalizePhoneNumber(c.number) === key).sort((a, b) => b.timestamp - a.timestamp);
+    if (!key) return [];
+    return calls
+      .filter((c) => {
+        const cNorm = normalizePhoneNumber(c.number || '');
+        return Boolean(cNorm && (cNorm === key || (key.length >= 10 && cNorm.endsWith(key.slice(-10)))));
+      })
+      .sort((a, b) => b.timestamp - a.timestamp);
   }, [calls, key]);
 
-  const callerHistory = allCallerCalls.length > 0 ? allCallerCalls : call ? [call] : [];
+  const callerHistory = useMemo(() => {
+    if (!key) return [];
+    if (allCallerCalls.length > 0) return allCallerCalls;
+    // Only use call prop if its number genuinely matches this caller's number!
+    if (call && call.number) {
+      const cNorm = normalizePhoneNumber(call.number);
+      if (cNorm && (cNorm === key || (key.length >= 10 && cNorm.endsWith(key.slice(-10)))) && !call.id.startsWith('contact-view-')) {
+        return [call];
+      }
+    }
+    return [];
+  }, [allCallerCalls, call, key]);
 
   const classification: CallClassification = useMemo(() => {
     if (callerHistory.some((c) => c.classification === 'SCAM') || profile?.riskLevel === 'HIGH_RISK') return 'SCAM';
@@ -451,13 +468,13 @@ export default function CallerDetailModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 p-0 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200 select-none cursor-pointer"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 p-2 sm:p-4 safe-top-modal backdrop-blur-sm animate-in fade-in duration-200 select-none cursor-pointer"
       role="dialog"
       aria-modal="true"
       onClick={handleClose}
     >
       <div
-        className="flex h-full w-full max-w-lg flex-col overflow-hidden bg-[#070b12] sm:h-auto sm:max-h-[92vh] sm:rounded-[32px] sm:border sm:border-slate-800/90 shadow-2xl relative cursor-default"
+        className="flex w-full max-w-lg max-h-[92vh] flex-col overflow-hidden bg-[#070b12] rounded-[28px] sm:rounded-[32px] border border-slate-800/90 shadow-2xl relative cursor-default"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Floating Toast Notice */}

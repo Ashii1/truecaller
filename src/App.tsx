@@ -22,6 +22,7 @@ import { lookupCallShieldDirectory } from './utils/spamEngine';
 import { detectNeighborSpoof, detectPingBackScam, formatPrivateCallNumber } from './utils/spoofEngine';
 import { triggerCallConnectedHaptic } from './utils/audioAlerts';
 import { telecomBridge } from './services/telephony/telecomBridge';
+import { callRecordingService } from './services/callRecordingService';
 import { externalDirectoryService } from './services/externalDirectoryService';
 import { readThemePreferences, persistAndApplyTheme, applyTheme } from './services/theme/themeService';
 
@@ -314,6 +315,11 @@ export default function App(){
   useEffect(() => { safeStore('callshield_autocancel', autoCancelEnabled); }, [autoCancelEnabled]);
   useEffect(() => {
     setIsDefaultDialer(telecomBridge.isDefaultDialer());
+    const hasLaunched = localStorage.getItem('callshield_onboarding_completed_v1');
+    if (!hasLaunched) {
+      setIsPermissionCenterOpen(true);
+      localStorage.setItem('callshield_onboarding_completed_v1', 'true');
+    }
     if (telecomBridge.isAndroidEnvironment()) {
       syncNativeDeviceData();
       setIsDeviceLocked(telecomBridge.isDeviceLocked());
@@ -882,12 +888,13 @@ export default function App(){
       const note = callerNotes || activeCallSession.notes;
       const isScreened = Boolean(activeCallSession.usedAiScreener);
       const transcript = activeCallSession.screeningTranscript;
-      const callLogId = `call-${Date.now()}`;
+      const callLogId = activeCallSession.id || `call-${Date.now()}`;
+      const isIncoming = Boolean(activeCallSession.wasIncoming);
       const newCallLog: CallLogItem = {
         id: callLogId,
         number: activeCallSession.number,
         callerName: activeCallSession.name || activeCallSession.number,
-        type: 'OUTGOING',
+        type: isIncoming ? 'INCOMING' : 'OUTGOING',
         timestamp: Date.now(),
         durationSeconds: dur,
         isSpam: Boolean(activeCallSession.isSpam),
@@ -904,6 +911,12 @@ export default function App(){
       };
       setCalls(p => [newCallLog, ...p]);
       if (recordingItem) {
+        callRecordingService.saveRecording({
+          ...recordingItem,
+          callId: callLogId,
+          number: activeCallSession.number,
+          callerName: activeCallSession.name || activeCallSession.number,
+        });
         showToast(`Saved to ${recordingItem.folderPath}${recordingItem.fileName}`, 'success');
       }
     }
@@ -940,26 +953,21 @@ export default function App(){
   const handleAddRule = useCallback((d: any) => setRules(p => [{ ...d, id: `rule-${Date.now()}`, hitCount: 0, createdAt: Date.now() }, ...p]), []);
   const handleRemoveWhitelist = useCallback((id: string) => setWhitelist(p => p.filter(w => w.id !== id)), []);
   const handleOpenCallerDetail = useCallback((item: any) => {
-    const n = 'number' in item ? item.number : '';
+    const n = ('number' in item ? item.number : '') || '';
+    const cleanN = n.replace(/\D/g, '');
     const prof = lookupCallShieldDirectory(n, rules, whitelist);
     if ('name' in item && item.name && (prof.name === n || !prof.name)) {
       prof.name = item.name;
     }
     setSelectedProfile(prof);
-    const existingCall = calls.find(c => c.number.replace(/\D/g, '') === n.replace(/\D/g, ''));
-    const chosenCall = existingCall || ({
-      id: `contact-view-${Date.now()}`,
-      number: n,
-      callerName: ('name' in item ? item.name : prof.name) || n,
-      type: 'INCOMING',
-      timestamp: Date.now(),
-      isSpam: prof.isSpam,
-      riskScore: prof.spamScore,
-      classification: prof.isSpam ? 'SPAM' : prof.isVerified ? 'VERIFIED' : 'SAFE',
-      isContact: true,
-    } as CallLogItem);
-    setSelectedCall(chosenCall);
-    setMinimizedCaller(chosenCall);
+    const existingCall = cleanN.length >= 3
+      ? calls.find(c => {
+          const cClean = (c.number || '').replace(/\D/g, '');
+          return Boolean(cClean && (cClean === cleanN || (cleanN.length >= 10 && cClean.endsWith(cleanN.slice(-10)))));
+        })
+      : null;
+    setSelectedCall(existingCall || null);
+    setMinimizedCaller(existingCall || null);
     setIsCallerModalOpen(true);
     pushNavState('modal', 'caller');
   }, [rules, whitelist, calls, pushNavState]);
@@ -1106,6 +1114,7 @@ export default function App(){
         usedAiScreener: Boolean(transcript && transcript.length > 0),
         screeningTranscript: transcript,
         screeningDetectedIntent: screeningData?.intent || activeIncomingCall.screeningDetectedIntent || undefined,
+        wasIncoming: true,
       });
     }
     setActiveIncomingCall(null);
@@ -1223,7 +1232,7 @@ export default function App(){
     {activeTab==='assistant'&&<AssistantTab calls={calls} contacts={contacts} rules={rules} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onAddRule={handleAddRule}/>} 
    </main>
 
-  <CallerDetailModal call={selectedCall} calls={calls} contacts={contacts} profile={selectedProfile} isOpen={isCallerModalOpen} onClose={()=>setIsCallerModalOpen(false)} onBlockNumber={handleBlockNumber} onUnblockNumber={handleUnblockNumber} onMarkSafe={handleWhitelistNumber} onInitiateCall={(number, name, sim, isPrivate) => { setIsCallerModalOpen(false); handleInitiateCall(number, name, sim, isPrivate); }} onOpenReportModal={handleOpenFastReport} onOpenDisputeModal={handleOpenDispute} onUpdateCallerName={handleUpdateCallerName} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} onDeleteContact={handleDeleteContact} onSaveNote={handleSaveNote}/>
+  <CallerDetailModal call={selectedCall} calls={calls} contacts={contacts} profile={selectedProfile} isOpen={isCallerModalOpen} onClose={() => { setIsCallerModalOpen(false); setSelectedCall(null); setSelectedProfile(null); }} onBlockNumber={handleBlockNumber} onUnblockNumber={handleUnblockNumber} onMarkSafe={handleWhitelistNumber} onInitiateCall={(number, name, sim, isPrivate) => { setIsCallerModalOpen(false); handleInitiateCall(number, name, sim, isPrivate); }} onOpenReportModal={handleOpenFastReport} onOpenDisputeModal={handleOpenDispute} onUpdateCallerName={handleUpdateCallerName} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} onDeleteContact={handleDeleteContact} onSaveNote={handleSaveNote}/>
   {activeIncomingCall && (
     <IncomingCallOverlay
       call={activeIncomingCall}

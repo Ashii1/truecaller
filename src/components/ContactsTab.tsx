@@ -41,7 +41,8 @@ interface ContactsTabProps {
 }
 
 type CategoryFilter = 'ALL' | 'FAVORITES' | 'FAMILY' | 'WORK' | 'BUSINESSES' | 'RECENT';
-type AccountFilter = 'ALL' | 'GOOGLE' | 'SIM1' | 'SIM2' | 'PHONE';
+type AccountFilter = 'ALL' | 'GOOGLE_ALL' | 'GOOGLE_PERSONAL' | 'GOOGLE_WORK' | 'SIM1' | 'SIM2' | 'PHONE';
+type AccountChoice = 'GOOGLE_PERSONAL' | 'GOOGLE_WORK' | 'SIM1' | 'SIM2' | 'PHONE';
 
 const clean = (v: string) => v.replace(/\D/g, '');
 
@@ -67,7 +68,7 @@ function ContactsTab({
   const [name, setName] = useState('');
   const [number, setNumber] = useState('');
   const [category, setCategory] = useState<ContactItem['category']>('GENERAL');
-  const [accountType, setAccountType] = useState<NonNullable<ContactItem['accountType']>>('GOOGLE');
+  const [accountChoice, setAccountChoice] = useState<AccountChoice>('GOOGLE_PERSONAL');
   const [showAccountMenu, setShowAccountMenu] = useState(false);
 
   // Handle hardware / gesture back navigation for contact subviews
@@ -126,10 +127,18 @@ function ContactsTab({
     return 'GOOGLE';
   };
 
+  const isGoogleWorkAccount = (c: ContactItem): boolean => {
+    const lbl = (c.accountLabel || '').toLowerCase();
+    const note = (c.notes || '').toLowerCase();
+    return lbl.includes('work') || lbl.includes('corp') || lbl.includes('office') || note.includes('work google');
+  };
+
   const accountCounts = useMemo(() => {
     return {
       ALL: contacts.length,
-      GOOGLE: contacts.filter((c) => resolveAccountType(c) === 'GOOGLE').length,
+      GOOGLE_ALL: contacts.filter((c) => resolveAccountType(c) === 'GOOGLE').length,
+      GOOGLE_PERSONAL: contacts.filter((c) => resolveAccountType(c) === 'GOOGLE' && !isGoogleWorkAccount(c)).length,
+      GOOGLE_WORK: contacts.filter((c) => resolveAccountType(c) === 'GOOGLE' && isGoogleWorkAccount(c)).length,
       SIM1: contacts.filter((c) => resolveAccountType(c) === 'SIM1').length,
       SIM2: contacts.filter((c) => resolveAccountType(c) === 'SIM2').length,
       PHONE: contacts.filter((c) => resolveAccountType(c) === 'PHONE').length,
@@ -146,7 +155,12 @@ function ContactsTab({
         // 1. Account / Storage filter
         if (accountFilter !== 'ALL') {
           const acc = resolveAccountType(c);
-          if (acc !== accountFilter) return false;
+          if (accountFilter === 'GOOGLE_ALL' && acc !== 'GOOGLE') return false;
+          if (accountFilter === 'GOOGLE_PERSONAL' && (acc !== 'GOOGLE' || isGoogleWorkAccount(c))) return false;
+          if (accountFilter === 'GOOGLE_WORK' && (acc !== 'GOOGLE' || !isGoogleWorkAccount(c))) return false;
+          if (accountFilter === 'SIM1' && acc !== 'SIM1') return false;
+          if (accountFilter === 'SIM2' && acc !== 'SIM2') return false;
+          if (accountFilter === 'PHONE' && acc !== 'PHONE') return false;
         }
 
         // 2. Category filter
@@ -193,7 +207,11 @@ function ContactsTab({
     setName(c.name);
     setNumber(c.number);
     setCategory(c.category);
-    setAccountType(c.accountType || 'GOOGLE');
+    if (c.accountType === 'SIM1') setAccountChoice('SIM1');
+    else if (c.accountType === 'SIM2') setAccountChoice('SIM2');
+    else if (c.accountType === 'PHONE') setAccountChoice('PHONE');
+    else if (isGoogleWorkAccount(c)) setAccountChoice('GOOGLE_WORK');
+    else setAccountChoice('GOOGLE_PERSONAL');
     setEditing(true);
     if (typeof window !== 'undefined' && window.history) {
       try {
@@ -205,21 +223,25 @@ function ContactsTab({
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !number.trim()) return;
+    const accType: ContactItem['accountType'] =
+      accountChoice === 'SIM1' ? 'SIM1' : accountChoice === 'SIM2' ? 'SIM2' : accountChoice === 'PHONE' ? 'PHONE' : 'GOOGLE';
     const accLabel =
-      accountType === 'GOOGLE'
-        ? 'ashiqm867@gmail.com'
-        : accountType === 'SIM1'
-        ? 'SIM 1 Card'
-        : accountType === 'SIM2'
-        ? 'SIM 2 Card'
-        : 'Internal Phone Storage';
+      accountChoice === 'GOOGLE_WORK'
+        ? 'Google (Work)'
+        : accountChoice === 'GOOGLE_PERSONAL'
+        ? 'Google (Personal)'
+        : accountChoice === 'SIM1'
+        ? 'SIM 1 (Personal)'
+        : accountChoice === 'SIM2'
+        ? 'SIM 2 (Work)'
+        : 'Device Storage';
 
     if (editing && selected) {
       onUpdateContact(selected.id, { 
         name: name.trim(), 
         number: number.trim(), 
         category,
-        accountType,
+        accountType: accType,
         accountLabel: accLabel,
       });
     } else {
@@ -229,7 +251,7 @@ function ContactsTab({
         category,
         trusted: true,
         isFavorite: category === 'FAVORITE',
-        accountType,
+        accountType: accType,
         accountLabel: accLabel,
         notes: '',
       });
@@ -237,7 +259,7 @@ function ContactsTab({
     setName('');
     setNumber('');
     setCategory('GENERAL');
-    setAccountType('GOOGLE');
+    setAccountChoice('GOOGLE_PERSONAL');
     setEditing(false);
     setShowAdd(false);
     setSelected(null);
@@ -301,11 +323,13 @@ function ContactsTab({
                     Filter by Storage Account
                   </div>
                   {[
-                    { id: 'ALL' as const, label: 'All Contacts', count: accountCounts.ALL, icon: Users },
-                    { id: 'GOOGLE' as const, label: 'Google Account', count: accountCounts.GOOGLE, icon: Building2 },
+                    { id: 'ALL' as const, label: 'All Accounts', count: accountCounts.ALL, icon: Users },
+                    { id: 'GOOGLE_ALL' as const, label: 'All Google Accounts', count: accountCounts.GOOGLE_ALL, icon: Building2 },
+                    { id: 'GOOGLE_PERSONAL' as const, label: 'Google (Personal)', count: accountCounts.GOOGLE_PERSONAL, icon: Building2 },
+                    { id: 'GOOGLE_WORK' as const, label: 'Google (Work / Workspace)', count: accountCounts.GOOGLE_WORK, icon: Briefcase },
                     { id: 'SIM1' as const, label: 'SIM 1 Storage', count: accountCounts.SIM1, icon: Smartphone },
                     { id: 'SIM2' as const, label: 'SIM 2 Storage', count: accountCounts.SIM2, icon: Smartphone },
-                    { id: 'PHONE' as const, label: 'Device Memory', count: accountCounts.PHONE, icon: Smartphone },
+                    { id: 'PHONE' as const, label: 'Device Storage', count: accountCounts.PHONE, icon: Smartphone },
                   ].map((acc) => {
                     const Icon = acc.icon;
                     const isSelected = accountFilter === acc.id;
@@ -606,11 +630,12 @@ function ContactsTab({
             <label className="mb-3 block text-xs font-semibold text-slate-400">
               Save contact to
               <select
-                value={accountType}
-                onChange={(e) => setAccountType(e.target.value as any)}
+                value={accountChoice}
+                onChange={(e) => setAccountChoice(e.target.value as AccountChoice)}
                 className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-[#10161d] px-3 text-sm text-white outline-none focus:border-emerald-500/40"
               >
-                <option value="GOOGLE">Google Account (ashiqm867@gmail.com)</option>
+                <option value="GOOGLE_PERSONAL">Google Account (Personal - ashiqm867@gmail.com)</option>
+                <option value="GOOGLE_WORK">Google Account (Work)</option>
                 <option value="SIM1">SIM 1 Card</option>
                 <option value="SIM2">SIM 2 Card</option>
                 <option value="PHONE">Device Storage (Phone)</option>

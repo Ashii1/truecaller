@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowLeft, Shield, FileText, Lock, CheckCircle2, ShieldCheck, AlertCircle } from 'lucide-react';
 import { useI18n } from '../i18n/LanguageContext';
 
@@ -14,9 +15,12 @@ export default function PrivacyTermsModal({ isOpen, onClose, defaultTab = 'priva
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/75 p-3 safe-top-modal sm:p-5 backdrop-blur-sm animate-fade-in">
-      <section className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-700 bg-slate-950 shadow-2xl">
+  return createPortal(
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/85 p-3 safe-top-modal sm:p-5 backdrop-blur-md animate-fade-in" onClick={onClose}>
+      <section
+        className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-700 bg-slate-950 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 p-5">
           <div className="flex items-center gap-3">
@@ -162,6 +166,7 @@ export default function PrivacyTermsModal({ isOpen, onClose, defaultTab = 'priva
           </div>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body
   );
 }

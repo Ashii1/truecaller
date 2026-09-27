@@ -28,7 +28,7 @@ export interface ContactItem {
   accountType?: 'GOOGLE' | 'SIM1' | 'SIM2' | 'PHONE'; 
   accountLabel?: string; 
 }
-export interface ActiveCallSession { id:string; number:string; name:string; isSpam:boolean; spamCategory?:SpamCategory; riskScore:number; riskLevel:RiskLevel; durationSeconds:number; status:'DIALING'|'CONNECTED'|'MUTED'|'HELD'; isMuted:boolean; isSpeaker:boolean; isHeld:boolean; isKeypadOpen:boolean; selectedSim?:'SIM 1 (Personal)'|'SIM 2 (Work)'; sim?:string; isVerifiedBusiness?:boolean; riskWarningUpdated?:boolean; warningDismissed?:boolean; notes?:string; isPrivateCall?:boolean; usedAiScreener?:boolean; screeningTranscript?:ScreeningTranscriptEntry[]; screeningDetectedIntent?:string; }
+export interface ActiveCallSession { id:string; number:string; name:string; isSpam:boolean; spamCategory?:SpamCategory; riskScore:number; riskLevel:RiskLevel; durationSeconds:number; status:'DIALING'|'CONNECTED'|'MUTED'|'HELD'; isMuted:boolean; isSpeaker:boolean; isHeld:boolean; isKeypadOpen:boolean; selectedSim?:'SIM 1 (Personal)'|'SIM 2 (Work)'; sim?:string; isVerifiedBusiness?:boolean; riskWarningUpdated?:boolean; warningDismissed?:boolean; notes?:string; isPrivateCall?:boolean; usedAiScreener?:boolean; screeningTranscript?:ScreeningTranscriptEntry[]; screeningDetectedIntent?:string; wasIncoming?:boolean; }
 export interface CallRecordingItem {
   id: string;
   callId?: string;

@@ -286,6 +286,10 @@ html.vs-reduce-motion *::after {
 .safe-top-panel {
   padding-top: max(env(safe-area-inset-top, 0px), 1rem);
 }
+.safe-top-modal {
+  padding-top: max(env(safe-area-inset-top, 0px), 1.25rem);
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 1rem);
+}
 
 /* Scrollbar hide */
 .no-scrollbar::-webkit-scrollbar {
