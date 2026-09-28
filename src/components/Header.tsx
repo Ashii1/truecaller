@@ -265,8 +265,23 @@ function Header({
     setPrivacy((prev) => ({ ...prev, [key]: value } as PrivacySettings));
 
   const activeNotifications = useMemo(() => {
-    return recentSpamCalls.filter((c) => !dismissedNotificationIds.includes(c.id)).slice(0, 10);
-  }, [recentSpamCalls, dismissedNotificationIds]);
+    const incDigits = (activeIncomingCall?.number || '').replace(/\D/g, '');
+    const onDigits = (activeCallSession?.number || '').replace(/\D/g, '');
+    const incId = activeIncomingCall?.callId;
+    const onId = activeCallSession?.id;
+
+    return recentSpamCalls
+      .filter((c) => {
+        if (dismissedNotificationIds.includes(c.id)) return false;
+        const cDigits = (c.number || '').replace(/\D/g, '');
+        if (incDigits && (cDigits === incDigits || (cDigits.length >= 7 && incDigits.endsWith(cDigits.slice(-10))))) return false;
+        if (onDigits && (cDigits === onDigits || (cDigits.length >= 7 && onDigits.endsWith(cDigits.slice(-10))))) return false;
+        if (incId && (c.id === incId || (c as any).callId === incId)) return false;
+        if (onId && (c.id === onId || (c as any).callId === onId)) return false;
+        return true;
+      })
+      .slice(0, 10);
+  }, [recentSpamCalls, dismissedNotificationIds, activeIncomingCall?.number, activeIncomingCall?.callId, activeCallSession?.number, activeCallSession?.id]);
 
   const handleDismissNotification = (id: string) => {
     setDismissedNotificationIds((prev) => {
@@ -364,7 +379,13 @@ function Header({
 
             {/* Settings Button */}
             <button
-              onClick={() => setShowSettings(true)}
+              onClick={() => {
+                if (onSettingsOpenChange) {
+                  onSettingsOpenChange(true);
+                } else {
+                  setShowSettings(true);
+                }
+              }}
               className="grid h-8 w-8 place-items-center rounded-lg border border-slate-700/80 bg-slate-900 text-slate-300 transition hover:bg-slate-800 hover:text-white"
               aria-label={t('settings_title')}
             >
@@ -393,7 +414,7 @@ function Header({
                   {formatPhoneNumber(activeCallSession.number)}
                 </span>
                 <span className="font-mono text-xs font-bold text-emerald-300 bg-emerald-900/60 border border-emerald-500/40 px-1.5 py-0.2 rounded-full shrink-0">
-                  {formatCallDuration(liveCallDuration)}
+                  {activeCallSession.status === 'DIALING' ? 'Dialing...' : formatCallDuration(liveCallDuration)}
                 </span>
               </div>
             </div>
@@ -422,7 +443,7 @@ function Header({
         )}
 
         {/* Live Incoming Call Persistent Mini-Bar right under Header (when swiped to notification or minimized) */}
-        {!activeCallSession && activeIncomingCall && activeIncomingCall.viewMode === 'notification' && (
+        {!showNotifications && !activeCallSession && activeIncomingCall && activeIncomingCall.viewMode === 'notification' && (
           <div
             onClick={onExpandIncomingCall}
             className="border-t border-blue-500/40 bg-blue-950/85 hover:bg-blue-900/90 px-3.5 sm:px-6 py-2 transition-all cursor-pointer flex items-center justify-between gap-3 text-white backdrop-blur-md animate-pulse"
@@ -536,11 +557,15 @@ function Header({
                         <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
                       </span>
                       <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400">
-                        {activeCallSession.status === 'HELD' ? t('on_hold') : 'Active Call in Progress'}
+                        {activeCallSession.status === 'HELD'
+                          ? t('on_hold')
+                          : activeCallSession.status === 'DIALING'
+                          ? 'Outgoing Call Ringing / Dialing...'
+                          : 'Active Call in Progress'}
                       </span>
                     </div>
                     <span className="font-mono text-xs font-bold text-emerald-300 bg-emerald-900/60 border border-emerald-500/40 px-2 py-0.5 rounded-full">
-                      {formatCallDuration(liveCallDuration)}
+                      {activeCallSession.status === 'DIALING' ? 'Calling...' : formatCallDuration(liveCallDuration)}
                     </span>
                   </div>
 
@@ -591,58 +616,69 @@ function Header({
                 </div>
               )}
 
-              {/* 2. Live Incoming Call Notification Card (if ringing/minimized) */}
+              {/* 2. Live Incoming Call Notification Card (Permanently expanded with large prominent controls) */}
               {activeIncomingCall && (
                 <div
                   onClick={() => {
                     setShowNotifications(false);
                     onExpandIncomingCall?.();
                   }}
-                  className="rounded-2xl border-2 border-blue-500/50 bg-gradient-to-r from-blue-950/80 via-slate-900/90 to-slate-950 p-3.5 shadow-lg shadow-blue-950/60 text-white animate-pulse cursor-pointer hover:border-blue-400/70 transition active:scale-[0.99]"
-                  title="Click to view incoming call"
+                  className="rounded-2xl border-2 border-blue-500/60 bg-gradient-to-br from-blue-950/95 via-slate-900/98 to-slate-950 p-4 shadow-xl shadow-blue-950/70 text-white cursor-pointer hover:border-blue-400 transition active:scale-[0.99]"
+                  title="Incoming Call Ringing · Click to view fullscreen"
                 >
-                  <div className="flex items-center justify-between pb-2 border-b border-blue-500/20">
+                  <div className="flex items-center justify-between pb-2.5 border-b border-blue-500/25">
                     <div className="flex items-center gap-2">
-                      <span className="relative flex h-2.5 w-2.5">
+                      <span className="relative flex h-3 w-3">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500" />
                       </span>
-                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-blue-400">
+                      <span className="text-xs font-black uppercase tracking-wider text-blue-300">
                         Incoming Call Ringing
                       </span>
                     </div>
-                    {activeIncomingCall.isSpam && (
-                      <span className="rounded bg-rose-500/20 px-1.5 py-0.2 text-[9px] font-black uppercase text-rose-300 border border-rose-500/30">
-                        {activeIncomingCall.spamCategory || 'SPAM'}
+                    {activeIncomingCall.isSpam ? (
+                      <span className="rounded-lg bg-rose-500/25 px-2 py-0.5 text-[10px] font-black uppercase text-rose-300 border border-rose-500/40">
+                        {activeIncomingCall.spamCategory || 'SPAM'} • High Risk
+                      </span>
+                    ) : (
+                      <span className="rounded-lg bg-emerald-500/20 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-300 border border-emerald-500/30">
+                        Verified Safe
                       </span>
                     )}
                   </div>
 
-                  <div className="mt-2.5 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <div className="grid h-10 w-10 place-items-center rounded-full bg-blue-500/20 text-blue-300 font-bold border border-blue-500/30 shrink-0">
-                        <Phone className="h-5 w-5" />
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="grid h-12 w-12 place-items-center rounded-2xl bg-blue-500/20 text-blue-300 font-bold border border-blue-500/40 shrink-0 shadow-inner">
+                        <Phone className="h-6 w-6 animate-pulse" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h4 className="text-sm font-black text-white truncate">
+                        <h4 className="text-base font-black text-white truncate leading-tight">
                           {activeIncomingCall.callerName || activeIncomingCall.number}
                         </h4>
-                        <span className="text-xs text-slate-300 font-mono block mt-0.5">
-                          {formatPhoneNumber(activeIncomingCall.number)}
-                        </span>
+                        <div className="text-xs text-slate-300 font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
+                          <span>{formatPhoneNumber(activeIncomingCall.number)}</span>
+                          {activeIncomingCall.location && (
+                            <>
+                              <span>•</span>
+                              <span className="text-slate-400">{activeIncomingCall.location}</span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
                         onClick={() => {
                           setShowNotifications(false);
                           onAnswerIncomingCall?.();
                         }}
-                        className="flex items-center gap-1 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500 transition shadow-sm active:scale-95"
+                        className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2.5 text-xs font-black text-white hover:bg-emerald-500 transition shadow-md shadow-emerald-950/60 active:scale-95"
+                        title="Answer call"
                       >
-                        <Phone className="h-3.5 w-3.5" />
+                        <Phone className="h-4 w-4" />
                         <span>Answer</span>
                       </button>
                       <button
@@ -651,9 +687,11 @@ function Header({
                           setShowNotifications(false);
                           onDeclineIncomingCall?.();
                         }}
-                        className="flex items-center gap-1 rounded-xl bg-rose-600 px-2.5 py-2 text-xs font-bold text-white hover:bg-rose-500 transition shadow-sm active:scale-95"
+                        className="flex items-center gap-1.5 rounded-xl bg-rose-600 px-3 py-2.5 text-xs font-black text-white hover:bg-rose-500 transition shadow-md shadow-rose-950/60 active:scale-95"
+                        title="Decline call"
                       >
-                        <PhoneOff className="h-3.5 w-3.5" />
+                        <PhoneOff className="h-4 w-4" />
+                        <span>Decline</span>
                       </button>
                     </div>
                   </div>
@@ -765,599 +803,6 @@ function Header({
         document.body
       )}
 
-      {/* CATEGORIZED REDESIGNED SETTINGS MODAL */}
-      {showSettings && createPortal(
-        <div className="fixed inset-0 z-[10000] bg-black/80 p-3 sm:p-5 safe-top-modal flex items-center justify-center backdrop-blur-md" onClick={() => setShowSettings(false)}>
-          <section
-            className="w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl rounded-3xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900/95 px-5 py-4 shrink-0">
-              <div className="flex items-center gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setShowSettings(false)}
-                  className="rounded-full p-2 text-slate-300 hover:bg-slate-800 hover:text-white transition active:scale-95 flex items-center justify-center mr-0.5"
-                  aria-label="Back"
-                  title="Back to previous screen"
-                >
-                  <ArrowLeft className="h-5 w-5 text-slate-300" />
-                </button>
-                <div className="grid h-9 w-9 place-items-center rounded-xl bg-blue-500/10 text-blue-400">
-                  <Settings className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-white leading-tight">{t('settings_title')}</h2>
-                  <p className="text-xs text-slate-400">{t('settings_subtitle')}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Unified Settings List */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-6">
-              {/* 1. LANGUAGE & DISPLAY SECTION */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 pb-1.5 border-b border-slate-800 text-xs font-bold uppercase tracking-wider text-blue-400">
-                  <Globe className="h-3.5 w-3.5" />
-                  <span>{t('settings_cat_lang_display')}</span>
-                </div>
-                  {/* Language Section */}
-                  <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-3">
-                    <div className="flex items-start gap-3">
-                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-500/10 text-blue-400">
-                        <Globe className="h-5 w-5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-bold text-white">{t('language_section_title')}</div>
-                        <div className="mt-0.5 text-xs text-slate-400">{t('language_section_desc')}</div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => setLanguage('en')}
-                        className={`flex items-center gap-2.5 rounded-xl border p-3 text-left transition ${
-                          language === 'en'
-                            ? 'border-blue-500 bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                            : 'border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800'
-                        }`}
-                      >
-                        <span className="text-lg">🇬🇧</span>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-xs font-bold">English</div>
-                          <div className={`text-[10px] ${language === 'en' ? 'text-blue-100' : 'text-slate-500'}`}>Default</div>
-                        </div>
-                        {language === 'en' && <Check className="h-4 w-4 shrink-0" />}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setLanguage('ta')}
-                        className={`flex items-center gap-2.5 rounded-xl border p-3 text-left transition ${
-                          language === 'ta'
-                            ? 'border-blue-500 bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                            : 'border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800'
-                        }`}
-                      >
-                        <span className="text-lg">🇮🇳</span>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-xs font-bold">தமிழ்</div>
-                          <div className={`text-[10px] ${language === 'ta' ? 'text-blue-100' : 'text-slate-500'}`}>Tamil</div>
-                        </div>
-                        {language === 'ta' && <Check className="h-4 w-4 shrink-0" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Appearance & Themes Launcher */}
-                  <button
-                    onClick={() => {
-                      setShowSettings(false);
-                      setShowTheme(true);
-                    }}
-                    className="flex w-full items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left hover:bg-slate-800/80 transition"
-                  >
-                    <span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-500/10 text-blue-400">
-                      <Palette className="h-5 w-5" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-bold text-white">{t('appearance_title')}</span>
-                      <span className="mt-0.5 block text-xs text-slate-400">{t('appearance_desc')}</span>
-                    </span>
-                    <span className="text-xs font-bold text-blue-400">{t('customize')} &rarr;</span>
-                  </button>
-                </div>
-
-              {/* 2. SPAM SHIELD & PRIVACY SECTION */}
-              <div className="space-y-3 pt-2">
-                <div className="flex items-center gap-2 pb-1.5 border-b border-slate-800 text-xs font-bold uppercase tracking-wider text-emerald-400">
-                  <Shield className="h-3.5 w-3.5" />
-                  <span>{t('settings_cat_protection')}</span>
-                </div>
-                  <SettingRow
-                    icon={<ShieldCheck className="h-4 w-4" />}
-                    title={t('autocancel_spam_title')}
-                    description={t('autocancel_spam_desc')}
-                    checked={autoCancelEnabled !== false}
-                    onChange={onToggleAutoCancel || (() => {})}
-                  />
-
-                  <SettingRow
-                    icon={<Lock className="h-4 w-4" />}
-                    title={t('private_notification_title')}
-                    description={t('private_notification_desc')}
-                    checked={privacy.privacyMode}
-                    onChange={(v) => updatePrivacy('privacyMode', v)}
-                  />
-
-                  <SettingRow
-                    icon={<Bell className="h-4 w-4" />}
-                    title={t('detailed_notifications_title')}
-                    description={t('detailed_notifications_desc')}
-                    checked={privacy.showCallerDetailsInNotifications}
-                    onChange={(v) => updatePrivacy('showCallerDetailsInNotifications', v)}
-                  />
-
-                  {/* Repeated-Call Emergency Alert Configuration */}
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex min-w-0 gap-3">
-                        <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-800 text-slate-300">
-                          <Radio className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold text-white">{t('emergency_repeat_title')}</div>
-                          <div className="mt-0.5 text-xs text-slate-400">{t('emergency_repeat_desc')}</div>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={privacy.emergencyRepeatEnabled}
-                        onClick={() => updatePrivacy('emergencyRepeatEnabled', !privacy.emergencyRepeatEnabled)}
-                        className={`relative h-6 w-11 shrink-0 rounded-full transition ${
-                          privacy.emergencyRepeatEnabled ? 'bg-blue-600' : 'bg-slate-700'
-                        }`}
-                      >
-                        <span
-                          className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition ${
-                            privacy.emergencyRepeatEnabled ? 'left-6' : 'left-1'
-                          }`}
-                        />
-                      </button>
-                    </div>
-
-                    {privacy.emergencyRepeatEnabled && (
-                      <div className="space-y-3 pt-2 border-t border-slate-800">
-                        <div>
-                          <label className="text-xs font-semibold text-slate-300 block mb-1">{t('calls_needed')}</label>
-                          <div className="grid grid-cols-3 gap-2">
-                            {[3, 4, 5].map((count) => (
-                              <button
-                                key={count}
-                                type="button"
-                                onClick={() => updatePrivacy('emergencyRepeatThreshold', count as 3 | 4 | 5)}
-                                className={`rounded-xl p-2 text-xs font-bold transition border ${
-                                  privacy.emergencyRepeatThreshold === count
-                                    ? 'border-blue-500 bg-blue-500/20 text-blue-300'
-                                    : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white'
-                                }`}
-                              >
-                                {count} {isTamil ? 'அழைப்புகள்' : 'calls'}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="text-xs font-semibold text-slate-300 block mb-1">{t('time_window')}</label>
-                          <div className="grid grid-cols-3 gap-2">
-                            {[3, 5, 10].map((mins) => (
-                              <button
-                                key={mins}
-                                type="button"
-                                onClick={() => updatePrivacy('emergencyRepeatWindow', mins as 3 | 5 | 10)}
-                                className={`rounded-xl p-2 text-xs font-bold transition border ${
-                                  privacy.emergencyRepeatWindow === mins
-                                    ? 'border-blue-500 bg-blue-500/20 text-blue-300'
-                                    : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white'
-                                }`}
-                              >
-                                {mins} {isTamil ? 'நிமிடங்கள்' : 'min'}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-              {/* 3. CALL & HARDWARE CONTROLS SECTION */}
-              <div className="space-y-3 pt-2">
-                <div className="flex items-center gap-2 pb-1.5 border-b border-slate-800 text-xs font-bold uppercase tracking-wider text-amber-400">
-                  <Phone className="h-3.5 w-3.5" />
-                  <span>{t('settings_cat_call_controls')}</span>
-                </div>
-                  {/* Power Button Ends Call */}
-                  <SettingRow
-                    icon={<Power className="h-4 w-4" />}
-                    title={t('power_ends_call_title')}
-                    description={t('power_ends_call_desc')}
-                    checked={Boolean(settings?.powerButtonEndsCall)}
-                    onChange={(v) => updateShieldSetting('powerButtonEndsCall', v)}
-                  />
-
-                  {/* Volume Button Behavior */}
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-2.5">
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-800 text-slate-300">
-                        {settings?.volumeButtonAction === 'REJECT_CALL' ? (
-                          <PhoneOff className="h-4 w-4 text-rose-400" />
-                        ) : (
-                          <VolumeX className="h-4 w-4 text-amber-400" />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-white">{t('volume_button_behavior')}</div>
-                        <div className="mt-0.5 text-xs text-slate-400">{t('volume_button_behavior_desc')}</div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          updateShieldSetting('volumeButtonAction', 'MUTE_RINGER');
-                          updateShieldSetting('volumeButtonSilencesRinger', true);
-                        }}
-                        className={`flex items-center gap-2 rounded-xl p-3 text-xs font-bold transition border text-left ${
-                          (settings?.volumeButtonAction || 'MUTE_RINGER') === 'MUTE_RINGER'
-                            ? 'border-amber-500 bg-amber-500/15 text-amber-300'
-                            : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        <VolumeX className="h-4 w-4 shrink-0" />
-                        <div className="min-w-0">
-                          <div className="truncate font-semibold">{t('mute_ringer')}</div>
-                          <div className="text-[10px] font-normal opacity-75">{t('mute_ringer_desc')}</div>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          updateShieldSetting('volumeButtonAction', 'REJECT_CALL');
-                          updateShieldSetting('volumeButtonSilencesRinger', false);
-                        }}
-                        className={`flex items-center gap-2 rounded-xl p-3 text-xs font-bold transition border text-left ${
-                          settings?.volumeButtonAction === 'REJECT_CALL'
-                            ? 'border-rose-500 bg-rose-500/15 text-rose-300'
-                            : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        <PhoneOff className="h-4 w-4 shrink-0" />
-                        <div className="min-w-0">
-                          <div className="truncate font-semibold">{t('reject_call')}</div>
-                          <div className="text-[10px] font-normal opacity-75">{t('reject_call_desc')}</div>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* System Ringer Sync Mode */}
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-2.5">
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-800 text-slate-300">
-                        <Volume2 className="h-4 w-4 text-emerald-400" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-white">{t('system_ringer_sync_title')}</div>
-                        <div className="mt-0.5 text-xs text-slate-400">{t('system_ringer_sync_desc')}</div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => updateShieldSetting('ringerMode', 'NORMAL')}
-                        className={`flex flex-col items-center justify-center gap-1 rounded-xl p-2.5 text-xs font-bold transition border ${
-                          (settings?.ringerMode || 'NORMAL') === 'NORMAL'
-                            ? 'border-emerald-500 bg-emerald-500/15 text-emerald-300'
-                            : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        <Volume2 className="h-4 w-4" />
-                        <span>{t('sound_and_vibrate')}</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => updateShieldSetting('ringerMode', 'VIBRATE')}
-                        className={`flex flex-col items-center justify-center gap-1 rounded-xl p-2.5 text-xs font-bold transition border ${
-                          settings?.ringerMode === 'VIBRATE'
-                            ? 'border-amber-500 bg-amber-500/15 text-amber-300'
-                            : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        <Vibrate className="h-4 w-4" />
-                        <span>{t('vibrate_only')}</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => updateShieldSetting('ringerMode', 'SILENT')}
-                        className={`flex flex-col items-center justify-center gap-1 rounded-xl p-2.5 text-xs font-bold transition border ${
-                          settings?.ringerMode === 'SILENT'
-                            ? 'border-slate-500 bg-slate-500/20 text-slate-200'
-                            : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        <VolumeX className="h-4 w-4" />
-                        <span>{t('silent_ring')}</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <SettingRow
-                    icon={<Vibrate className="h-4 w-4" />}
-                    title={t('vibrate_on_connected')}
-                    description={t('vibrate_on_connected_desc')}
-                    checked={settings?.vibrateOnCallConnected !== false}
-                    onChange={(v) => updateShieldSetting('vibrateOnCallConnected', v)}
-                  />
-
-                  <SettingRow
-                    icon={<Smartphone className="h-4 w-4" />}
-                    title={t('flip_to_silence')}
-                    description={t('flip_to_silence_desc')}
-                    checked={settings?.flipToSilence !== false}
-                    onChange={(v) => updateShieldSetting('flipToSilence', v)}
-                  />
-
-                  <SettingRow
-                    icon={<Sparkles className="h-4 w-4" />}
-                    title={t('flash_alert')}
-                    description={t('flash_alert_desc')}
-                    checked={Boolean(settings?.flashAlertOnIncomingCall)}
-                    onChange={(v) => updateShieldSetting('flashAlertOnIncomingCall', v)}
-                  />
-                </div>
-
-              {/* 4. CALL RECORDING & AUDIO SECTION */}
-              <div className="space-y-3 pt-2">
-                <div className="flex items-center gap-2 pb-1.5 border-b border-slate-800 text-xs font-bold uppercase tracking-wider text-rose-400">
-                  <Mic className="h-3.5 w-3.5" />
-                  <span>{t('settings_cat_recording')}</span>
-                </div>
-                  <SettingRow
-                    icon={<Mic className="h-4 w-4" />}
-                    title={t('call_recording_title')}
-                    description={t('call_recording_desc')}
-                    checked={privacy.callRecordingEnabled}
-                    onChange={(v) => updatePrivacy('callRecordingEnabled', v)}
-                  />
-
-                  {/* Lossless HD Recording Badge Info */}
-                  <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-4 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                      <span className="text-sm font-bold text-white">{t('recording_clear_title')}</span>
-                    </div>
-                    <p className="text-xs text-slate-300 leading-relaxed">
-                      {t('recording_hardware_note')}
-                    </p>
-                    <div className="flex items-center gap-2 pt-1 text-[11px] font-semibold text-emerald-400">
-                      <Check className="h-3.5 w-3.5" />
-                      <span>{t('noise_cancellation_active')}</span>
-                    </div>
-                  </div>
-
-                  {/* Storage folder path */}
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-1.5">
-                    <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
-                      <FolderOpen className="h-4 w-4 text-blue-400" />
-                      <span>{t('recording_storage_folder')}</span>
-                    </div>
-                    <div className="font-mono text-xs text-slate-400 break-all bg-slate-950 p-2.5 rounded-xl border border-slate-800">
-                      {DEFAULT_RECORDINGS_FOLDER}
-                    </div>
-                  </div>
-                </div>
-
-              {/* 5. SYSTEM & INTEGRATION SECTION */}
-              <div className="space-y-3 pt-2">
-                <div className="flex items-center gap-2 pb-1.5 border-b border-slate-800 text-xs font-bold uppercase tracking-wider text-indigo-400">
-                  <Sliders className="h-3.5 w-3.5" />
-                  <span>{t('settings_cat_system')}</span>
-                </div>
-                  {/* Default Phone App status */}
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
-                    <div className="flex items-start gap-3">
-                      <div className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl ${isDefaultDialer ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>
-                        <PhoneCall className="h-5 w-5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-bold text-white">
-                          {isDefaultDialer ? t('default_phone_status_active') : t('default_phone_title')}
-                        </div>
-                        <div className="mt-0.5 text-xs text-slate-400">
-                          {isDefaultDialer ? t('default_phone_role_desc') : t('default_phone_desc')}
-                        </div>
-                      </div>
-                    </div>
-                    {!isDefaultDialer && onRequestDefaultDialer && (
-                      <button
-                        onClick={onRequestDefaultDialer}
-                        className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-500 transition"
-                      >
-                        {t('set_as_default_phone_button')}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Permission Center */}
-                  {onOpenPermissionCenter && (
-                    <button
-                      onClick={() => {
-                        setShowSettings(false);
-                        onOpenPermissionCenter();
-                      }}
-                      className="flex w-full items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left hover:bg-slate-800/80 transition"
-                    >
-                      <span className="grid h-9 w-9 place-items-center rounded-xl bg-indigo-500/10 text-indigo-400">
-                        <Sliders className="h-5 w-5" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-bold text-white">{t('permission_center')}</span>
-                        <span className="mt-0.5 block text-xs text-slate-400">{t('permission_center_desc')}</span>
-                      </span>
-                    </button>
-                  )}
-
-                  {/* Sync Device Data */}
-                  {onSyncDatabase && (
-                    <button
-                      onClick={onSyncDatabase}
-                      disabled={isSyncing}
-                      className="flex w-full items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left hover:bg-slate-800/80 transition disabled:opacity-60"
-                    >
-                      <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400">
-                        <Database className="h-5 w-5" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-bold text-white">{isSyncing ? t('synchronizing') : t('sync_device_data')}</span>
-                        <span className="mt-0.5 block text-xs text-slate-400">{t('sync_device_desc')}</span>
-                      </span>
-                    </button>
-                  )}
-
-                  {/* Diagnostics */}
-                  {onOpenDiagnostics && (
-                    <button
-                      onClick={() => {
-                        setShowSettings(false);
-                        onOpenDiagnostics();
-                      }}
-                      className="flex w-full items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left hover:bg-slate-800/80 transition"
-                    >
-                      <span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-800 text-slate-300">
-                        <Stethoscope className="h-5 w-5" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-bold text-white">{t('system_diagnostics')}</span>
-                        <span className="mt-0.5 block text-xs text-slate-400">{t('system_diagnostics_desc')}</span>
-                      </span>
-                    </button>
-                  )}
-
-                  {/* Data Sources & Privacy */}
-                  {onOpenDataSources && (
-                    <button
-                      onClick={() => {
-                        setShowSettings(false);
-                        onOpenDataSources();
-                      }}
-                      className="flex w-full items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left hover:bg-slate-800/80 transition"
-                    >
-                      <span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-800 text-slate-300">
-                        <Database className="h-5 w-5" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-bold text-white">{t('data_sources_privacy')}</span>
-                        <span className="mt-0.5 block text-xs text-slate-400">{t('data_sources_desc')}</span>
-                      </span>
-                    </button>
-                  )}
-
-                  {/* Install Packaging */}
-                  {onOpenInstallModal && (
-                    <button
-                      onClick={() => {
-                        setShowSettings(false);
-                        onOpenInstallModal();
-                      }}
-                      className="flex w-full items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left hover:bg-slate-800/80 transition"
-                    >
-                      <span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-800 text-slate-300">
-                        <Download className="h-5 w-5" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-bold text-white">{t('install_packaging')}</span>
-                        <span className="mt-0.5 block text-xs text-slate-400">{t('install_packaging_desc')}</span>
-                      </span>
-                    </button>
-                  )}
-                </div>
-
-                {/* 6. ABOUT & LEGAL SECTION (Production Ready) */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center gap-2 pb-1.5 border-b border-slate-800 text-xs font-bold uppercase tracking-wider text-emerald-400">
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                    <span>About & Legal</span>
-                  </div>
-
-                  {/* About Us */}
-                  <button
-                    onClick={() => {
-                      setShowSettings(false);
-                      setShowAbout(true);
-                    }}
-                    className="flex w-full items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left hover:bg-slate-800/80 transition"
-                  >
-                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-500/10 text-blue-400">
-                      <Info className="h-5 w-5" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-bold text-white">{t('about_us')}</span>
-                      <span className="mt-0.5 block text-xs text-slate-400">CallShield v2.4.0 Production • Zero-telemetry protection</span>
-                    </span>
-                  </button>
-
-                  {/* Privacy Policy */}
-                  <button
-                    onClick={() => {
-                      setShowSettings(false);
-                      setPrivacyTermsTab('privacy');
-                      setShowPrivacyTerms(true);
-                    }}
-                    className="flex w-full items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left hover:bg-slate-800/80 transition"
-                  >
-                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400">
-                      <Lock className="h-5 w-5" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-bold text-white">{t('privacy_policy')}</span>
-                      <span className="mt-0.5 block text-xs text-slate-400">Strict on-device processing • No cloud contact uploads</span>
-                    </span>
-                  </button>
-
-                  {/* Terms of Service */}
-                  <button
-                    onClick={() => {
-                      setShowSettings(false);
-                      setPrivacyTermsTab('terms');
-                      setShowPrivacyTerms(true);
-                    }}
-                    className="flex w-full items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left hover:bg-slate-800/80 transition"
-                  >
-                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-purple-500/10 text-purple-400">
-                      <FileText className="h-5 w-5" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-bold text-white">{t('terms_of_service')}</span>
-                      <span className="mt-0.5 block text-xs text-slate-400">Emergency routing, local recording terms & compliance</span>
-                    </span>
-                  </button>
-                </div>
-              </div>
-          </section>
-        </div>,
-        document.body
-      )}
-
       {/* Theme Customizer Modal */}
       <ThemeCustomizerModal isOpen={showTheme} onClose={() => setShowTheme(false)} />
 
@@ -1379,43 +824,6 @@ function Header({
         defaultTab={privacyTermsTab}
       />
     </>
-  );
-}
-
-function SettingRow({
-  icon,
-  title,
-  description,
-  checked,
-  onChange,
-}: {
-  icon: ReactNode;
-  title: string;
-  description: string;
-  checked: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-      <div className="flex min-w-0 gap-3">
-        <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-800 text-slate-300">
-          {icon}
-        </div>
-        <div className="min-w-0">
-          <div className="text-sm font-semibold text-white">{title}</div>
-          <div className="mt-0.5 text-xs text-slate-400">{description}</div>
-        </div>
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition ${checked ? 'bg-blue-600' : 'bg-slate-700'}`}
-      >
-        <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition ${checked ? 'left-6' : 'left-1'}`} />
-      </button>
-    </div>
   );
 }
 

@@ -16,6 +16,12 @@ import DataSourcesModal from './components/DataSourcesModal';
 import SystemDiagnosticsModal from './components/SystemDiagnosticsModal';
 import PermissionCenterModal from './components/PermissionCenterModal';
 import LockscreenBarrier from './components/LockscreenBarrier';
+import SettingsPage from './components/SettingsPage';
+import ModernInAppNotification, { InAppToastPayload } from './components/ModernInAppNotification';
+import { INITIAL_CONTACTS } from './data/defaultContacts';
+import AboutAppModal from './components/AboutAppModal';
+import PrivacyTermsModal from './components/PrivacyTermsModal';
+import ThemeCustomizerModal from './components/ThemeCustomizerModal';
 import { BlockRule, WhitelistEntry, ShieldSettings, CallLogItem, IncomingCallState, ActiveCallSession, SecurityTimelineEvent, CallShieldDirectoryProfile, ContactItem, SpamCategory, TabId, CallRecordingItem, DisplayDensity, ScreeningTranscriptEntry } from './types';
 import { INITIAL_SETTINGS } from './data/defaultData';
 import { lookupCallShieldDirectory } from './utils/spamEngine';
@@ -40,7 +46,20 @@ export default function App(){
  const [settings,setSettings]=useState<ShieldSettings>(()=>safeParse('callshield_settings',INITIAL_SETTINGS));
  const [rules,setRules]=useState<BlockRule[]>(()=>safeParse('callshield_rules',BASELINE_RULES));
  const [whitelist,setWhitelist]=useState<WhitelistEntry[]>(()=>safeParse('callshield_whitelist',[]));
- const [contacts,setContacts]=useState<ContactItem[]>(()=>safeParse('callshield_contacts',[]));
+ const [contacts,setContacts]=useState<ContactItem[]>(() => {
+   const parsed = safeParse<ContactItem[]>('callshield_contacts', []);
+   if (!parsed || parsed.length === 0) return INITIAL_CONTACTS;
+   const existingIds = new Set(parsed.map(c => c.id));
+   const existingDigits = new Set(parsed.map(c => c.number.replace(/\D/g, '')));
+   const merged = [...parsed];
+   for (const init of INITIAL_CONTACTS) {
+     const d = init.number.replace(/\D/g, '');
+     if (!existingIds.has(init.id) && !existingDigits.has(d)) {
+       merged.push(init);
+     }
+   }
+   return merged;
+ });
  const [calls,setCalls]=useState<CallLogItem[]>(()=>safeParse('callshield_calls',[]));
  const [timelineEvents,setTimelineEvents]=useState<SecurityTimelineEvent[]>(()=>safeParse('callshield_timeline',INITIAL_TIMELINE_EVENTS));
  const [autoCancelEnabled,setAutoCancelEnabled]=useState<boolean>(()=>safeParse('callshield_autocancel',true));
@@ -48,7 +67,10 @@ export default function App(){
  const [selectedProfile,setSelectedProfile]=useState<CallShieldDirectoryProfile|null>(null); const [selectedCall,setSelectedCall]=useState<CallLogItem|null>(null); const [isCallerModalOpen,setIsCallerModalOpen]=useState(false);
  const [isInstallModalOpen,setIsInstallModalOpen]=useState(false); const [isFastReportOpen,setIsFastReportOpen]=useState(false); const [fastReportNumber,setFastReportNumber]=useState(''); const [isDisputeOpen,setIsDisputeOpen]=useState(false); const [disputeNumber,setDisputeNumber]=useState(''); const [disputeName,setDisputeName]=useState('');
  const [isSyncing,setIsSyncing]=useState(false); const [isDataSourcesModalOpen,setIsDataSourcesModalOpen]=useState(false); const [isDiagnosticsModalOpen,setIsDiagnosticsModalOpen]=useState(false); const [isPermissionCenterOpen,setIsPermissionCenterOpen]=useState(false); const [dialerInitialNumber,setDialerInitialNumber]=useState(''); const [deferredPrompt,setDeferredPrompt]=useState<any>(null); const [isDefaultDialer,setIsDefaultDialer]=useState(()=>telecomBridge.isDefaultDialer());
- const [toastMessage,setToastMessage]=useState<{text:string,type:'info'|'error'|'success'}|null>(null);
+ const [toastMessage,setToastMessage]=useState<InAppToastPayload|null>(null);
+ const [isAboutOpen, setIsAboutOpen] = useState(false);
+ const [isPrivacyTermsOpen, setIsPrivacyTermsOpen] = useState(false);
+ const [privacyTermsTab, setPrivacyTermsTab] = useState<'privacy' | 'terms'>('privacy');
  const [isDeviceLocked, setIsDeviceLocked] = useState<boolean>(() => telecomBridge.isDeviceLocked());
  const [appInForeground, setAppInForeground] = useState<boolean>(() => typeof document === 'undefined' || document.visibilityState === 'visible');
  
@@ -79,7 +101,7 @@ export default function App(){
    pushNavState('tab', tab);
  }, [pushNavState]);
  
- const showToast=(text:string,type:'info'|'error'|'success'='info')=>{setToastMessage({text,type});window.setTimeout(()=>setToastMessage(null),3800)};
+ const showToast=(text:string,type:'info'|'error'|'success'='info',title?:string)=>{setToastMessage({text,type,title});window.setTimeout(()=>setToastMessage(null),4000)};
 
  const [density, setDensity] = useState<DisplayDensity>(() => {
    const tp = readThemePreferences();
@@ -566,20 +588,42 @@ export default function App(){
           });
         }
       } else if (eventType === 'CALL_REMOVED' || eventType === 'CALL_DISCONNECTED' || eventType === 'CALL_REJECTED') {
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+          try { window.speechSynthesis.cancel(); } catch {}
+        }
         setActiveIncomingCall(null);
         if (dataRef.current.phoneOnly) {
           telecomBridge.finishAppSurface();
         }
         setActiveCallSession((prev) => {
-          if (!prev || prev.id !== callId) return prev;
+          if (!prev) return null;
           const dur = prev.durationSeconds || 1;
           const isScreened = Boolean(prev.usedAiScreener);
           const transcript = prev.screeningTranscript;
-          const callLogId = prev.id;
-
-
+          const callLogId = prev.id || `call-${Date.now()}`;
+          setCalls(existing => {
+            if (existing.some(c => c.id === callLogId)) return existing;
+            return [{
+              id: callLogId,
+              number: prev.number,
+              callerName: prev.name || prev.number,
+              type: prev.wasIncoming ? 'INCOMING' : 'OUTGOING',
+              timestamp: Date.now(),
+              durationSeconds: dur,
+              isSpam: Boolean(prev.isSpam),
+              spamCategory: prev.spamCategory,
+              riskScore: prev.riskScore || 0,
+              riskLevel: prev.riskLevel || 'SAFE',
+              reportsCount: 0,
+              usedAiScreener: isScreened,
+              screeningTranscript: transcript,
+              screeningDetectedIntent: prev.screeningDetectedIntent,
+              screenedAt: isScreened ? Date.now() : undefined,
+            }, ...existing];
+          });
           return null;
         });
+        telecomBridge.clearStaleCallNotifications();
         if (telecomBridge.isAndroidEnvironment()) {
           try {
             const fresh = telecomBridge.fetchDeviceCallLogs(100);
@@ -881,8 +925,11 @@ export default function App(){
   }, [deferredPrompt]);
 
   const handleEndCall = useCallback((recordingItem?: CallRecordingItem | null, callDuration?: number, callerNotes?: string) => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch {}
+    }
     if (activeCallSession?.id) telecomBridge.disconnectCall(activeCallSession.id, activeCallSession.number);
-    else telecomBridge.clearStaleCallNotifications();
+    telecomBridge.clearStaleCallNotifications();
     if (activeCallSession) {
       const dur = callDuration || activeCallSession.durationSeconds || 1;
       const note = callerNotes || activeCallSession.notes;
@@ -1180,57 +1227,85 @@ export default function App(){
   }
 
   return <div className="min-h-screen transition-colors duration-200">
-   {!phoneOnly && <Header
-     closeSettingsSignal={navigationSignal}
-     settings={settings}
-     onUpdateSettings={setSettings}
-     isDefaultDialer={isDefaultDialer}
-     onRequestDefaultDialer={handleRequestDefaultDialer}
-     onOpenPermissionCenter={handleOpenPermissionCenter}
-     onSyncDatabase={handleSyncDeviceData}
-     isSyncing={isSyncing}
-     autoCancelEnabled={autoCancelEnabled}
-     onToggleAutoCancel={()=>setAutoCancelEnabled(v=>!v)}
-     onOpenInstallModal={handleOpenInstallModal}
-     onOpenDataSources={handleOpenDataSources}
-     onOpenDiagnostics={handleOpenDiagnostics}
-     recentSpamCalls={recentSpamCalls}
-     onSelectCall={openCaller}
-     onOpenRecents={()=>navigateToTab('recents')}
-     onOpenProtection={()=>navigateToTab('protection')}
-     density={density}
-     onDensityChange={handleDensityChange}
-     activeIncomingCall={activeIncomingCall}
-     onAnswerIncomingCall={handleAnswerIncomingCall}
-     onDeclineIncomingCall={() => handleCancelIncomingCall('Declined by user', false)}
-     onExpandIncomingCall={() => { if (activeIncomingCall) setActiveIncomingCall(prev => prev ? { ...prev, viewMode: 'fullscreen' } : null); }}
-     isDeviceLocked={isDeviceLocked}
-     onToggleLockDevice={() => setIsDeviceLocked(v => !v)}
-     onTriggerIncomingCall={() => handleTriggerScreeningDemo()}
-     activeCallSession={activeCallSession}
-     onMaximizeOngoingCall={() => setIsOngoingCallMinimized(false)}
-     onEndOngoingCall={handleEndCall}
-     isSettingsOpen={isSettingsOpen}
-     onSettingsOpenChange={handleOpenSettings}
-     isNotificationsOpen={isNotificationsOpen}
-     onNotificationsOpenChange={handleOpenNotifications}
-     isThemeOpen={isThemeOpen}
-     onThemeOpenChange={handleOpenTheme}
-     minimizedCaller={minimizedCaller}
-     onReopenCaller={() => {
-       if (minimizedCaller) {
-         openCaller(minimizedCaller);
-       }
-     }}
-   />} 
-   <Navigation activeTab={activeTab} onChangeTab={(tab) => { setNavigationSignal(v => v + 1); navigateToTab(tab); }} spamCallsCount={spamCallsCount} activeRulesCount={activeRulesCount} assistantAlertsCount={3} phoneOnly={phoneOnly}/> 
-   <main className={phoneOnly ? "min-h-screen w-full animate-in fade-in duration-200" : "mx-auto w-full max-w-4xl px-3 py-3 pb-28 sm:pb-32 animate-in fade-in duration-200"}>
-    {activeTab==='dialer'&&<DialerTab contacts={contacts} recentCalls={calls} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onOpenCallerDetail={handleOpenCallerDetail} onSaveContact={(n,nm)=>handleUpdateCallerName(n,nm)} selectedSim={selectedSim} onChangeSim={setSelectedSim} initialNumber={dialerInitialNumber} density={density}/>} 
-    {activeTab==='recents'&&<RecentsTab calls={calls} rules={rules} whitelist={whitelist} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onSelectCall={openCaller} onBlockNumber={handleBlockNumber} onWhitelistNumber={handleWhitelistNumber} onDeleteCall={handleDeleteCall} onDeleteCalls={handleDeleteCalls} onClearAllCalls={handleClearAllCalls} onSyncDeviceCalls={handleSyncDeviceData} density={density}/>} 
-    {activeTab==='contacts'&&<ContactsTab contacts={contacts} onInitiateCall={handleInitiateCall} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} onDeleteContact={handleDeleteContact} onToggleFavorite={handleToggleFavorite} recentCalls={calls} density={density} onOpenCallerDetail={handleOpenCallerDetail} privateCallPrefix={settings.privateCallPrefix}/>} 
-    {activeTab==='protection'&&<ProtectionTab settings={settings} onUpdateSettings={setSettings} rules={rules} onToggleRule={handleToggleRule} onDeleteRule={handleDeleteRule} onAddRule={handleAddRule} whitelist={whitelist} onRemoveWhitelist={handleRemoveWhitelist} timelineEvents={timelineEvents} onTriggerScreeningDemo={handleTriggerScreeningDemo}/>} 
-    {activeTab==='assistant'&&<AssistantTab calls={calls} contacts={contacts} rules={rules} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onAddRule={handleAddRule}/>} 
-   </main>
+   {isSettingsOpen ? (
+     <SettingsPage
+       settings={settings}
+       onUpdateSettings={setSettings}
+       isDefaultDialer={isDefaultDialer}
+       onRequestDefaultDialer={handleRequestDefaultDialer}
+       onOpenPermissionCenter={handleOpenPermissionCenter}
+       onSyncDatabase={handleSyncDeviceData}
+       isSyncing={isSyncing}
+       autoCancelEnabled={autoCancelEnabled}
+       onToggleAutoCancel={() => setAutoCancelEnabled(v => !v)}
+       onOpenInstallModal={handleOpenInstallModal}
+       onOpenDataSources={handleOpenDataSources}
+       onOpenDiagnostics={handleOpenDiagnostics}
+       density={density}
+       onDensityChange={handleDensityChange}
+       onBack={() => setIsSettingsOpen(false)}
+       onOpenAbout={() => setIsAboutOpen(true)}
+       onOpenPrivacyTerms={(tab) => {
+         setPrivacyTermsTab(tab || 'privacy');
+         setIsPrivacyTermsOpen(true);
+       }}
+       onOpenTheme={() => setIsThemeOpen(true)}
+     />
+   ) : (
+     <>
+       {!phoneOnly && <Header
+         closeSettingsSignal={navigationSignal}
+         settings={settings}
+         onUpdateSettings={setSettings}
+         isDefaultDialer={isDefaultDialer}
+         onRequestDefaultDialer={handleRequestDefaultDialer}
+         onOpenPermissionCenter={handleOpenPermissionCenter}
+         onSyncDatabase={handleSyncDeviceData}
+         isSyncing={isSyncing}
+         autoCancelEnabled={autoCancelEnabled}
+         onToggleAutoCancel={()=>setAutoCancelEnabled(v=>!v)}
+         onOpenInstallModal={handleOpenInstallModal}
+         onOpenDataSources={handleOpenDataSources}
+         onOpenDiagnostics={handleOpenDiagnostics}
+         recentSpamCalls={recentSpamCalls}
+         onSelectCall={openCaller}
+         onOpenRecents={()=>navigateToTab('recents')}
+         onOpenProtection={()=>navigateToTab('protection')}
+         density={density}
+         onDensityChange={handleDensityChange}
+         activeIncomingCall={activeIncomingCall}
+         onAnswerIncomingCall={handleAnswerIncomingCall}
+         onDeclineIncomingCall={() => handleCancelIncomingCall('Declined by user', false)}
+         onExpandIncomingCall={() => { if (activeIncomingCall) setActiveIncomingCall(prev => prev ? { ...prev, viewMode: 'fullscreen' } : null); }}
+         isDeviceLocked={isDeviceLocked}
+         onToggleLockDevice={() => setIsDeviceLocked(v => !v)}
+         onTriggerIncomingCall={() => handleTriggerScreeningDemo()}
+         activeCallSession={activeCallSession}
+         onMaximizeOngoingCall={() => setIsOngoingCallMinimized(false)}
+         onEndOngoingCall={handleEndCall}
+         isSettingsOpen={isSettingsOpen}
+         onSettingsOpenChange={handleOpenSettings}
+         isNotificationsOpen={isNotificationsOpen}
+         onNotificationsOpenChange={handleOpenNotifications}
+         isThemeOpen={isThemeOpen}
+         onThemeOpenChange={handleOpenTheme}
+         minimizedCaller={minimizedCaller}
+         onReopenCaller={() => {
+           if (minimizedCaller) {
+             openCaller(minimizedCaller);
+           }
+         }}
+       />} 
+       <Navigation activeTab={activeTab} onChangeTab={(tab) => { setNavigationSignal(v => v + 1); navigateToTab(tab); }} spamCallsCount={spamCallsCount} activeRulesCount={activeRulesCount} assistantAlertsCount={3} phoneOnly={phoneOnly}/> 
+       <main className={phoneOnly ? "min-h-screen w-full animate-in fade-in duration-200" : "mx-auto w-full max-w-4xl px-3 py-3 pb-28 sm:pb-32 animate-in fade-in duration-200"}>
+        {activeTab==='dialer'&&<DialerTab contacts={contacts} recentCalls={calls} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onOpenCallerDetail={handleOpenCallerDetail} onSaveContact={(n,nm)=>handleUpdateCallerName(n,nm)} selectedSim={selectedSim} onChangeSim={setSelectedSim} initialNumber={dialerInitialNumber} density={density}/>} 
+        {activeTab==='recents'&&<RecentsTab calls={calls} rules={rules} whitelist={whitelist} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onSelectCall={openCaller} onBlockNumber={handleBlockNumber} onWhitelistNumber={handleWhitelistNumber} onDeleteCall={handleDeleteCall} onDeleteCalls={handleDeleteCalls} onClearAllCalls={handleClearAllCalls} onSyncDeviceCalls={handleSyncDeviceData} density={density}/>} 
+        {activeTab==='contacts'&&<ContactsTab contacts={contacts} onInitiateCall={handleInitiateCall} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} onDeleteContact={handleDeleteContact} onToggleFavorite={handleToggleFavorite} recentCalls={calls} density={density} onOpenCallerDetail={handleOpenCallerDetail} privateCallPrefix={settings.privateCallPrefix}/>} 
+        {activeTab==='protection'&&<ProtectionTab settings={settings} onUpdateSettings={setSettings} rules={rules} onToggleRule={handleToggleRule} onDeleteRule={handleDeleteRule} onAddRule={handleAddRule} whitelist={whitelist} onRemoveWhitelist={handleRemoveWhitelist} timelineEvents={timelineEvents} onTriggerScreeningDemo={handleTriggerScreeningDemo}/>} 
+        {activeTab==='assistant'&&<AssistantTab calls={calls} contacts={contacts} rules={rules} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onAddRule={handleAddRule}/>} 
+       </main>
+     </>
+   )}
 
   <CallerDetailModal call={selectedCall} calls={calls} contacts={contacts} profile={selectedProfile} isOpen={isCallerModalOpen} onClose={() => { setIsCallerModalOpen(false); setSelectedCall(null); setSelectedProfile(null); }} onBlockNumber={handleBlockNumber} onUnblockNumber={handleUnblockNumber} onMarkSafe={handleWhitelistNumber} onInitiateCall={(number, name, sim, isPrivate) => { setIsCallerModalOpen(false); handleInitiateCall(number, name, sim, isPrivate); }} onOpenReportModal={handleOpenFastReport} onOpenDisputeModal={handleOpenDispute} onUpdateCallerName={handleUpdateCallerName} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} onDeleteContact={handleDeleteContact} onSaveNote={handleSaveNote}/>
   {activeIncomingCall && (
@@ -1271,16 +1346,28 @@ export default function App(){
       onEmergencyCall={(num) => handleInitiateCall(num, 'Emergency Services')}
     />
   )}
-  {toastMessage && (
-    <div className={`fixed bottom-24 sm:bottom-8 left-1/2 z-[100] -translate-x-1/2 max-w-[90vw] rounded-2xl border px-4 py-3 text-xs font-bold shadow-2xl backdrop-blur-md flex items-center space-x-2 transition-all duration-300 animate-in fade-in slide-in-from-bottom-2 ${
-      toastMessage.type === 'error'
-        ? 'bg-rose-950/95 border-rose-500/50 text-rose-200'
-        : toastMessage.type === 'success'
-        ? 'bg-emerald-950/95 border-emerald-500/50 text-emerald-200'
-        : 'bg-slate-900/95 border-slate-700/80 text-white'
-    }`}>
-      <span>{toastMessage.text}</span>
-    </div>
-  )}
+  <ModernInAppNotification
+    notification={toastMessage}
+    onDismiss={() => setToastMessage(null)}
+    onOpenNotificationPanel={() => setIsNotificationsOpen(true)}
+  />
+  <AboutAppModal
+    isOpen={isAboutOpen}
+    onClose={() => setIsAboutOpen(false)}
+    onOpenPrivacyTerms={(tab) => {
+      setIsAboutOpen(false);
+      setPrivacyTermsTab(tab || 'privacy');
+      setIsPrivacyTermsOpen(true);
+    }}
+  />
+  <PrivacyTermsModal
+    isOpen={isPrivacyTermsOpen}
+    onClose={() => setIsPrivacyTermsOpen(false)}
+    defaultTab={privacyTermsTab}
+  />
+  <ThemeCustomizerModal
+    isOpen={isThemeOpen}
+    onClose={() => setIsThemeOpen(false)}
+  />
  </div>;
 }

@@ -154,7 +154,33 @@ class TelecomBridgeService {
   public setMuted(v:boolean){return this.native()?window.AndroidTelecomBridge!.setMuted(v):false;} public setSpeakerRoute(v:boolean){return this.native()?window.AndroidTelecomBridge!.setSpeakerRoute(v):false;}
   public sendDtmfTone(id:string,d:string){return this.native()?window.AndroidTelecomBridge!.sendDtmfTone(id,d):false;} public holdCall(id:string){return this.native()?window.AndroidTelecomBridge!.holdCall(id):false;} public unholdCall(id:string){return this.native()?window.AndroidTelecomBridge!.unholdCall(id):false;} public swapCalls(){return this.native()?window.AndroidTelecomBridge!.swapCalls():false;} public mergeCalls(){return this.native()?window.AndroidTelecomBridge!.mergeCalls():false;}
   public fetchDeviceCallLogs(limit=100):CallLogItem[]{if(!this.native())return[];try{const a=JSON.parse(window.AndroidTelecomBridge!.fetchRealCallLogs(limit));return Array.isArray(a)?a.map((x:any)=>({...x,id:String(x.id),number:x.number||'',callerName:x.callerName||x.number||'Unknown caller',timestamp:Number(x.timestamp)||Date.now(),durationSeconds:Number(x.durationSeconds)||0,isSpam:!!x.isSpam,riskScore:Number(x.riskScore)||0,reportsCount:Number(x.reportsCount)||0,isContact:!!x.isContact,isVerifiedBusiness:!!x.isVerifiedBusiness,rawSource:'device_os' as const,identificationSource:x.identificationSource||'Android CallLog'})):[];}catch{return[];}}
-  public fetchDeviceContacts(limit=200):ContactItem[]{if(!this.native())return[];try{const a=JSON.parse(window.AndroidTelecomBridge!.fetchRealContacts(limit));return Array.isArray(a)?a.map((x:any)=>({id:String(x.id),name:x.name||'Contact',number:x.number||'',category:'GENERAL',trusted:true,isFavorite:!!x.isFavorite,notes:'Android Contacts'})):[];}catch{return[];}}
+  public fetchDeviceContacts(limit=200):ContactItem[]{
+    if(!this.native())return[];
+    try{
+      const a=JSON.parse(window.AndroidTelecomBridge!.fetchRealContacts(limit));
+      return Array.isArray(a)?a.map((x:any)=>{
+        const accType = x.accountType || (
+          x.account_name?.toLowerCase().includes('sim1') || x.accountType?.toLowerCase()?.includes('sim1') ? 'SIM1' :
+          x.account_name?.toLowerCase().includes('sim2') || x.accountType?.toLowerCase()?.includes('sim2') ? 'SIM2' :
+          x.account_name?.toLowerCase().includes('phone') || x.account_type?.toLowerCase()?.includes('phone') ? 'PHONE' :
+          'GOOGLE'
+        );
+        return {
+          id: String(x.id),
+          name: x.name || 'Contact',
+          number: x.number || '',
+          category: 'GENERAL',
+          trusted: true,
+          isFavorite: !!x.isFavorite,
+          accountType: accType,
+          accountLabel: x.accountLabel || x.account_name || (accType === 'SIM1' ? 'SIM 1' : accType === 'SIM2' ? 'SIM 2' : accType === 'PHONE' ? 'Device Storage' : 'Google Account'),
+          notes: x.notes || 'Android Contacts'
+        };
+      }):[];
+    }catch{
+      return[];
+    }
+  }
   public lookupContactName(number:string):string|null{if(!this.native()||!number?.trim())return null;const nativeLookup=window.AndroidTelecomBridge!.lookupContactName;if(typeof nativeLookup!=='function')return null;try{return nativeLookup(number.trim())?.trim()||null;}catch{return null;}}
   public getDiagnostics():TelephonyDiagnosticsData{
     const now=Date.now();

@@ -104,10 +104,15 @@ export default function ActiveCallModal({
   const durationRef = useRef(duration);
   durationRef.current = duration;
 
+  const [isFloatingBannerDismissed, setIsFloatingBannerDismissed] = useState(false);
+  const [bannerDragX, setBannerDragX] = useState(0);
+  const bannerTouchRef = useRef<{ x: number; time: number } | null>(null);
+
   // Reset internal minimized state if a new call starts
   useEffect(() => {
     if (session?.id) {
       setInternalMinimized(false);
+      setIsFloatingBannerDismissed(false);
       onToggleMinimize?.(false);
     }
   }, [session?.id, onToggleMinimize]);
@@ -310,6 +315,9 @@ export default function ActiveCallModal({
 
   const handleEndCallAction = async () => {
     triggerHapticFeedback(50);
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch {}
+    }
     let recordingItem: CallRecordingItem | null = null;
     if (isRecording) {
       setIsRecording(false);
@@ -318,8 +326,41 @@ export default function ActiveCallModal({
     if (callerNote.trim()) {
       saveNoteLocally(callerNote);
     }
+    if (session?.id) {
+      telecomBridge.disconnectCall(session.id, session.number);
+    }
+    telecomBridge.clearStaleCallNotifications();
     onEndCall(recordingItem, durationRef.current, callerNote.trim() || undefined);
   };
+
+  // Automated customer care / unattended voice message handling
+  useEffect(() => {
+    if (!session || isAttended || telecomBridge.isAndroidEnvironment()) return;
+    const cleanNum = (session.number || '').replace(/\D/g, '');
+    const isServiceOrShort = cleanNum.startsWith('198') || cleanNum.startsWith('121') || cleanNum.startsWith('199') || cleanNum.startsWith('1800') || (cleanNum.length > 0 && cleanNum.length <= 4);
+
+    let timeoutId: any;
+    let synthUtterance: SpeechSynthesisUtterance | null = null;
+
+    if (isServiceOrShort && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      const msg = 'Welcome to customer care assistance. All lines are currently busy. Your call will now disconnect.';
+      synthUtterance = new SpeechSynthesisUtterance(msg);
+      synthUtterance.rate = 1.0;
+      synthUtterance.onend = () => {
+        handleEndCallAction();
+      };
+      timeoutId = setTimeout(() => {
+        try { window.speechSynthesis.speak(synthUtterance!); } catch {}
+      }, 2000);
+    }
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        try { window.speechSynthesis.cancel(); } catch {}
+      }
+    };
+  }, [session?.id, session?.number, isAttended]);
 
   // Hardware Power Key Interception to End Active Call
   useEffect(() => {
@@ -364,12 +405,40 @@ export default function ActiveCallModal({
   // 1. MINIMIZED ONGOING CALL NOTIFICATION CARD (Floating at top of viewport)
   // =========================================================================
   if (isCallMinimized) {
+    if (isFloatingBannerDismissed) return null;
+
     return (
       <div
         id="ongoing-call-minimized-notification"
         onClick={() => setCallMinimized(false)}
+        onTouchStart={(e) => {
+          bannerTouchRef.current = { x: e.touches[0].clientX, time: Date.now() };
+        }}
+        onTouchMove={(e) => {
+          if (!bannerTouchRef.current) return;
+          const dx = e.touches[0].clientX - bannerTouchRef.current.x;
+          setBannerDragX(dx);
+        }}
+        onTouchEnd={() => {
+          if (!bannerTouchRef.current) return;
+          bannerTouchRef.current = null;
+          if (Math.abs(bannerDragX) > 60) {
+            triggerHapticFeedback(25);
+            setIsFloatingBannerDismissed(true);
+          }
+          setBannerDragX(0);
+        }}
+        onTouchCancel={() => {
+          bannerTouchRef.current = null;
+          setBannerDragX(0);
+        }}
+        style={{
+          transform: bannerDragX ? `translateX(${bannerDragX}px)` : undefined,
+          opacity: bannerDragX ? Math.max(0.2, 1 - Math.abs(bannerDragX) / 160) : 1,
+          transition: bannerDragX ? 'none' : 'all 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
+        }}
         className="fixed top-3 left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-lg z-[60] rounded-2xl border border-emerald-500/40 bg-[#070b13]/98 p-3.5 text-white shadow-2xl shadow-black/95 backdrop-blur-2xl cursor-pointer select-none transition-all duration-200 animate-spring-down animate-ongoing-glow hover:border-emerald-400/60 active:scale-[0.99]"
-        title="Tap to expand fullscreen call"
+        title="Tap to expand fullscreen call · Swipe left or right to send to notification panel"
         role="button"
         tabIndex={0}
       >

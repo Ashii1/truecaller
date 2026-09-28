@@ -21,6 +21,7 @@ import { useI18n } from '../i18n/LanguageContext';
 import { formatTimeAmPm } from '../utils/timeFormat';
 import ModernFilterBar, { FilterTabOption } from './ModernFilterBar';
 import SwipeableCallItem from './SwipeableCallItem';
+import GlobalSearchAutocomplete, { AutocompleteItem } from './common/GlobalSearchAutocomplete';
 
 interface RecentsTabProps {
   calls: CallLogItem[];
@@ -171,6 +172,25 @@ function RecentsTab({
 
   const isCompact = density === 'compact';
 
+  const autocompleteItems: AutocompleteItem[] = useMemo(() => {
+    const map = new Map<string, AutocompleteItem>();
+    calls.forEach((c) => {
+      const key = `${c.callerName || ''}_${c.number}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          id: c.id,
+          name: c.callerName || c.number,
+          number: c.number,
+          type: 'recent',
+          isSpam: c.isSpam,
+          category: c.isSpam ? (c.spamCategory || 'SPAM') : c.type,
+          timestamp: c.timestamp,
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [calls]);
+
   return (
     <div className={`mx-auto w-full max-w-2xl select-none transition-all ${isCompact ? 'px-2 pb-6 pt-1 sm:px-3' : 'px-3 pb-8 pt-2 sm:px-4'}`}>
       {/* Header */}
@@ -264,6 +284,21 @@ function RecentsTab({
           )}
         </div>
       </header>
+
+      {/* Global Search Bar with Live Autocomplete Filtering */}
+      <GlobalSearchAutocomplete
+        value={query}
+        onChange={setQuery}
+        placeholder={t('search_recents') || 'Search call history or enter number...'}
+        items={autocompleteItems}
+        onSelectItem={(item) => {
+          setQuery(item.name || item.number);
+          const found = calls.find((c) => c.id === item.id || c.number === item.number);
+          if (found) onSelectCall(found);
+        }}
+        onInitiateCall={(num, nm) => onInitiateCall(num, nm)}
+        density={density}
+      />
 
       {/* Modern Filter Navigation Bar with full text, scroll chevrons & popover */}
       <ModernFilterBar<Filter>

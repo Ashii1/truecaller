@@ -26,6 +26,7 @@ import { ContactItem, CallLogItem, DisplayDensity } from '../types';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 import { useI18n } from '../i18n/LanguageContext';
 import ModernFilterBar, { FilterTabOption } from './ModernFilterBar';
+import GlobalSearchAutocomplete, { AutocompleteItem } from './common/GlobalSearchAutocomplete';
 
 interface ContactsTabProps {
   contacts: ContactItem[];
@@ -111,8 +112,10 @@ function ContactsTab({
       WORK: contacts.filter((c) => c.category === 'WORK').length,
       BUSINESSES: contacts.filter((c) => c.category === 'BUSINESS' || Boolean(c.businessCategory) || c.isVerifiedBusiness).length,
       RECENT: contacts.filter((c) => {
-        const lastCall = c.lastCallTimestamp || contactRecentMap[clean(c.number).slice(-10)] || 0;
-        return lastCall > weekAgo;
+        const cClean = clean(c.number);
+        const c10 = cClean.length >= 10 ? cClean.slice(-10) : cClean;
+        const lastCall = c.lastCallTimestamp || contactRecentMap[c10] || (cClean ? contactRecentMap[cClean] : 0) || 0;
+        return lastCall > 0 && lastCall > weekAgo;
       }).length,
     };
   }, [contacts, contactRecentMap]);
@@ -172,7 +175,7 @@ function ContactsTab({
           const cClean = clean(c.number);
           const c10 = cClean.length >= 10 ? cClean.slice(-10) : cClean;
           const lastCall = c.lastCallTimestamp || contactRecentMap[c10] || (cClean ? contactRecentMap[cClean] : 0) || 0;
-          if (lastCall < weekAgo && !c.lastCallTimestamp) return false;
+          if (lastCall === 0 || lastCall < weekAgo) return false;
         }
 
         // 3. Search query
@@ -276,6 +279,17 @@ function ContactsTab({
 
   const isCompact = density === 'compact';
 
+  const autocompleteItems: AutocompleteItem[] = useMemo(() => {
+    return contacts.map((c) => ({
+      id: c.id,
+      name: c.name,
+      number: c.number,
+      category: c.category,
+      accountLabel: c.accountLabel || resolveAccountType(c),
+      type: 'contact',
+    }));
+  }, [contacts]);
+
   return (
     <div className={`mx-auto w-full max-w-2xl select-none transition-all ${isCompact ? 'px-2 pb-6 pt-1 sm:px-3' : 'px-3 pb-8 pt-2 sm:px-4'}`}>
       {/* Header */}
@@ -300,8 +314,12 @@ function ContactsTab({
               <span>
                 {accountFilter === 'ALL'
                   ? 'Accounts'
-                  : accountFilter === 'GOOGLE'
+                  : accountFilter === 'GOOGLE_ALL'
+                  ? 'All Google'
+                  : accountFilter === 'GOOGLE_PERSONAL'
                   ? 'Google'
+                  : accountFilter === 'GOOGLE_WORK'
+                  ? 'Work'
                   : accountFilter === 'SIM1'
                   ? 'SIM 1'
                   : accountFilter === 'SIM2'
@@ -392,12 +410,64 @@ function ContactsTab({
         </div>
       </header>
 
+      {/* Global Search Bar with Live Autocomplete Filtering */}
+      <GlobalSearchAutocomplete
+        value={query}
+        onChange={setQuery}
+        placeholder={t('search_contacts') || 'Search contacts or enter phone number...'}
+        items={autocompleteItems}
+        onSelectItem={(item) => {
+          setQuery(item.name || item.number);
+          const found = contacts.find((c) => c.id === item.id);
+          if (found) {
+            if (onOpenCallerDetail) {
+              onOpenCallerDetail({ number: found.number, name: found.name, contact: found });
+            } else {
+              setSelected(found);
+            }
+          }
+        }}
+        onInitiateCall={onInitiateCall}
+        density={density}
+      />
+
       {/* Modern Filter Navigation Bar with full text, scroll chevrons & popover */}
       <ModernFilterBar<CategoryFilter>
         tabs={categoryTabs}
         activeId={filter}
         onChange={setFilter}
       />
+
+      {/* Active Storage Account Filter Chip */}
+      {accountFilter !== 'ALL' && (
+        <div className="flex items-center justify-between gap-2 px-1 py-1 -mt-1 text-xs">
+          <div className="flex items-center gap-1.5 text-slate-400">
+            <span>Storage Filter:</span>
+            <span className="font-bold text-blue-300">
+              {accountFilter === 'GOOGLE_ALL'
+                ? 'All Google Accounts'
+                : accountFilter === 'GOOGLE_PERSONAL'
+                ? 'Google (Personal)'
+                : accountFilter === 'GOOGLE_WORK'
+                ? 'Google (Work / Workspace)'
+                : accountFilter === 'SIM1'
+                ? 'SIM 1 Storage'
+                : accountFilter === 'SIM2'
+                ? 'SIM 2 Storage'
+                : 'Device Storage'}
+            </span>
+            <span className="text-slate-500">({filtered.length} found)</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAccountFilter('ALL')}
+            className="flex items-center gap-1 text-[11px] font-semibold text-blue-400 hover:text-blue-300 transition"
+          >
+            <span>Reset to All</span>
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      )}
 
       {/* Contacts List */}
       {filtered.length === 0 ? (
