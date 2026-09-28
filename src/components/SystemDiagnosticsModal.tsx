@@ -52,6 +52,7 @@ interface SystemDiagnosticsModalProps {
   onImportAllData: (data: any) => void;
   isDefaultDialer?: boolean;
   onRequestDefaultDialer?: () => void;
+  inline?: boolean;
 }
 
 export default function SystemDiagnosticsModal({
@@ -67,6 +68,7 @@ export default function SystemDiagnosticsModal({
   onImportAllData,
   isDefaultDialer = false,
   onRequestDefaultDialer,
+  inline = false,
 }: SystemDiagnosticsModalProps) {
   const [pipelineTestNumber, setPipelineTestNumber] = useState('+91 14090 98984');
   const [pipelineResult, setPipelineResult] = useState<any>(null);
@@ -249,66 +251,66 @@ export default function SystemDiagnosticsModal({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
-      <div className="w-full max-w-2xl bg-slate-900 border border-slate-700/80 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-5 text-white max-h-[92vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
-              <Terminal className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-lg font-extrabold tracking-tight text-white flex items-center gap-2">
-                <span>System Diagnostics & Telephony Health</span>
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                  Real-time
-                </span>
-                {isThrottlingRisk && (
-                  <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1 animate-pulse">
-                    <BatteryWarning className="w-3 h-3 text-rose-400" /> Throttling Alert
-                  </span>
-                )}
-              </h2>
-              <p className="text-xs text-slate-400">
-                Live verification of permissions, battery throttling status, 8-tier caller ID pipeline, and local database integrity
-              </p>
-            </div>
-          </div>
+  const header = (
+    <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+      <div className="flex items-center space-x-2.5">
+        <div className="w-9 h-9 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
+          <Terminal className="w-5 h-5" />
+        </div>
+        <div>
+          <h2 className="text-lg font-extrabold tracking-tight text-white flex items-center gap-2">
+            <span>System Diagnostics & Telephony Health</span>
+            <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              Real-time
+            </span>
+            {isThrottlingRisk && (
+              <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1 animate-pulse">
+                <BatteryWarning className="w-3 h-3 text-rose-400" /> Throttling Alert
+              </span>
+            )}
+          </h2>
+          <p className="text-xs text-slate-400">
+            Live verification of permissions, battery throttling status, 8-tier caller ID pipeline, and local database integrity
+          </p>
+        </div>
+      </div>
 
+      <button
+        onClick={onClose}
+        className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white transition active:scale-95"
+        aria-label="Back"
+        title="Back"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        <span>Settings</span>
+      </button>
+    </div>
+  );
+
+  const bodyContent = (
+    <>
+      {/* Subtabs */}
+      <div className="flex items-center space-x-2 border-b border-slate-800 pb-2 overflow-x-auto">
+        {[
+          { id: 'OVERVIEW', label: 'Platform & Database' },
+          { id: 'PIPELINE', label: '8-Tier Pipeline Tester' },
+          { id: 'ACTIONS', label: 'Backup & State Management' },
+        ].map((tab) => (
           <button
-            onClick={onClose}
-            className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-slate-300 hover:bg-slate-800 hover:text-white transition active:scale-95"
-            aria-label="Back"
-            title="Back"
+            key={tab.id}
+            onClick={() => setActiveSubTab(tab.id as any)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition shrink-0 ${
+              activeSubTab === tab.id
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800 hover:text-white'
+            }`}
           >
-            <ArrowLeft className="w-5 h-5" />
-            <span className="text-xs font-semibold">Back</span>
+            {tab.label}
           </button>
-        </div>
+        ))}
+      </div>
 
-        {/* Subtabs */}
-        <div className="flex items-center space-x-2 border-b border-slate-800 pb-2">
-          {[
-            { id: 'OVERVIEW', label: 'Platform & Database' },
-            { id: 'PIPELINE', label: '8-Tier Pipeline Tester' },
-            { id: 'ACTIONS', label: 'Backup & State Management' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveSubTab(tab.id as any)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-                activeSubTab === tab.id
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-950/50'
-                  : 'bg-slate-800/60 text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* TAB 1: OVERVIEW */}
+      {/* TAB 1: OVERVIEW */}
         {activeSubTab === 'OVERVIEW' && (
           <div className="space-y-4">
             {/* Low-Battery & OS Protection Throttling Alert Banner */}
@@ -903,9 +905,26 @@ export default function SystemDiagnosticsModal({
             onClick={onClose}
             className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold"
           >
-            Close Diagnostics
+            Back to Settings
           </button>
         </div>
+    </>
+  );
+
+  if (inline) {
+    return (
+      <div className="w-full space-y-5 animate-in fade-in duration-200">
+        {header}
+        {bodyContent}
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+      <div className="w-full max-w-2xl bg-slate-900 border border-slate-700/80 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-5 text-white max-h-[92vh] overflow-y-auto">
+        {header}
+        {bodyContent}
       </div>
     </div>
   );

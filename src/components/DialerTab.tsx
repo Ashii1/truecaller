@@ -17,6 +17,7 @@ import { smartDialerSearch } from '../utils/t9Search';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import { useI18n } from '../i18n/LanguageContext';
 import { playDtmfTone } from '../utils/dtmfTones';
+import { triggerHapticFeedback } from '../utils/audioAlerts';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 
 interface DialerTabProps {
@@ -132,26 +133,45 @@ const DialerTab = memo(function DialerTab({
 
   const profile = useMemo(() => (digits.length >= 4 ? lookupProfile(value) : null), [digits, value, lookupProfile]);
 
+  const hapticIntensityMs = useMemo(() => {
+    if (settings?.keypadHapticFeedback === false) return 0;
+    if (settings?.keypadHapticIntensity === 'SOFT') return 15;
+    if (settings?.keypadHapticIntensity === 'STRONG') return 40;
+    return 25; // STANDARD (consistent across incoming call and manual dialer)
+  }, [settings?.keypadHapticFeedback, settings?.keypadHapticIntensity]);
+
+  const fireKeypadHaptic = (ms = hapticIntensityMs) => {
+    if (ms > 0) {
+      triggerHapticFeedback(ms);
+      telecomBridge.vibratePhone(ms);
+    }
+  };
+
   const handleKeyPress = (digit: string) => {
-    playDtmfTone(digit);
-    telecomBridge.vibratePhone(20);
+    if (settings?.keypadDtmfTones !== false) {
+      playDtmfTone(digit);
+    }
+    fireKeypadHaptic();
     setValue((v) => v + digit);
   };
 
   const handleKeyDown = (digit: string) => {
     if (digit === '0') {
       longPressTimerRef.current = window.setTimeout(() => {
-        playDtmfTone('0');
-        telecomBridge.vibratePhone(35);
-        setValue((v) => v.slice(0, -1) + '+');
+        if (settings?.keypadDtmfTones !== false) {
+          playDtmfTone('0');
+        }
+        fireKeypadHaptic(45);
+        setValue((v) => (v.endsWith('0') ? v.slice(0, -1) + '+' : v + '+'));
         longPressTimerRef.current = null;
-      }, 500);
+      }, 450);
     } else if (digit === '1' && !value) {
       longPressTimerRef.current = window.setTimeout(() => {
         // Voicemail shortcut
+        fireKeypadHaptic(45);
         onInitiateCall('*86', 'Voicemail', selectedSim);
         longPressTimerRef.current = null;
-      }, 700);
+      }, 650);
     }
   };
 
@@ -163,7 +183,7 @@ const DialerTab = memo(function DialerTab({
   };
 
   const startContinuousDelete = () => {
-    telecomBridge.vibratePhone(25);
+    fireKeypadHaptic(20);
     setValue((v) => v.slice(0, -1));
     deleteIntervalRef.current = window.setInterval(() => {
       setValue((v) => {
@@ -171,9 +191,10 @@ const DialerTab = memo(function DialerTab({
           if (deleteIntervalRef.current) clearInterval(deleteIntervalRef.current);
           return '';
         }
+        fireKeypadHaptic(12);
         return v.slice(0, -1);
       });
-    }, 120);
+    }, 110);
   };
 
   const stopContinuousDelete = () => {
@@ -185,13 +206,14 @@ const DialerTab = memo(function DialerTab({
 
   const call = (isPrivate = false) => {
     if (value.trim()) {
+      fireKeypadHaptic(35);
       onInitiateCall(value.trim(), matchedContact?.name || profile?.name || undefined, selectedSim, isPrivate);
     } else if (recentCalls && recentCalls.length > 0) {
       // Native phone dialer feature: recall last dialed/received number when dialer is blank
       const lastCall = recentCalls[0];
       if (lastCall?.number) {
+        fireKeypadHaptic(25);
         setValue(lastCall.number);
-        telecomBridge.vibratePhone(30);
       }
     }
   };
@@ -350,6 +372,7 @@ const DialerTab = memo(function DialerTab({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
+                fireKeypadHaptic(20);
                 setValue('');
                 inputRef.current?.focus();
               }}
@@ -414,7 +437,7 @@ const DialerTab = memo(function DialerTab({
               onMouseUp={handleKeyUp}
               onTouchStart={() => handleKeyDown(k.digit)}
               onTouchEnd={handleKeyUp}
-              className={`group mx-auto flex flex-col items-center justify-center rounded-full bg-slate-900/60 hover:bg-slate-800/80 border border-white/[0.04] hover:border-white/[0.1] transition-all duration-150 active:bg-slate-700/80 active:ring-2 active:ring-emerald-400/25 active:scale-95 focus:outline-none shrink-0 shadow-sm ${
+              className={`group mx-auto flex flex-col items-center justify-center rounded-full bg-slate-900/80 hover:bg-slate-800/90 active:bg-slate-700/90 border border-white/[0.08] hover:border-white/20 active:border-emerald-500/40 active:ring-2 active:ring-emerald-400/30 transition-all duration-100 active:scale-[0.91] active:shadow-inner focus:outline-none shrink-0 shadow-sm select-none ${
                 isCompact
                   ? 'h-[50px] w-[50px] sm:h-[52px] sm:w-[52px]'
                   : 'h-[58px] w-[58px] sm:h-[62px] sm:w-[62px]'
@@ -424,7 +447,7 @@ const DialerTab = memo(function DialerTab({
                 {k.digit}
               </span>
               {k.sub ? (
-                <span className="text-[9px] font-bold text-slate-400 -mt-0.5 tracking-wider leading-none">
+                <span className="text-[9.5px] font-bold text-slate-400 -mt-0.5 tracking-wider leading-none group-hover:text-slate-300">
                   {k.sub}
                 </span>
               ) : null}
@@ -438,7 +461,10 @@ const DialerTab = memo(function DialerTab({
           <div className="flex justify-center">
             <button
               type="button"
-              onClick={() => onChangeSim(isSim1 ? 'SIM 2 (Work)' : 'SIM 1 (Personal)')}
+              onClick={() => {
+                fireKeypadHaptic(20);
+                onChangeSim(isSim1 ? 'SIM 2 (Work)' : 'SIM 1 (Personal)');
+              }}
               className={`flex flex-col items-center justify-center rounded-full border transition-all active:scale-90 shrink-0 ${
                 isCompact
                   ? 'h-[44px] w-[44px]'

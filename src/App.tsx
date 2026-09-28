@@ -1233,23 +1233,22 @@ export default function App(){
        onUpdateSettings={setSettings}
        isDefaultDialer={isDefaultDialer}
        onRequestDefaultDialer={handleRequestDefaultDialer}
-       onOpenPermissionCenter={handleOpenPermissionCenter}
        onSyncDatabase={handleSyncDeviceData}
        isSyncing={isSyncing}
        autoCancelEnabled={autoCancelEnabled}
        onToggleAutoCancel={() => setAutoCancelEnabled(v => !v)}
-       onOpenInstallModal={handleOpenInstallModal}
-       onOpenDataSources={handleOpenDataSources}
-       onOpenDiagnostics={handleOpenDiagnostics}
        density={density}
        onDensityChange={handleDensityChange}
        onBack={() => setIsSettingsOpen(false)}
-       onOpenAbout={() => setIsAboutOpen(true)}
-       onOpenPrivacyTerms={(tab) => {
-         setPrivacyTermsTab(tab || 'privacy');
-         setIsPrivacyTermsOpen(true);
-       }}
-       onOpenTheme={() => setIsThemeOpen(true)}
+       contacts={contacts}
+       calls={calls}
+       rules={rules}
+       whitelist={whitelist}
+       timelineEvents={timelineEvents}
+       onClearAllData={handleClearAllData}
+       onImportAllData={handleImportAllData}
+       deferredPrompt={deferredPrompt}
+       onTriggerInstall={handleTriggerInstall}
      />
    ) : (
      <>

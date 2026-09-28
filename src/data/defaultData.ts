@@ -38,6 +38,9 @@ export const INITIAL_SETTINGS: ShieldSettings = {
   vibrateOnCallConnected: true,
   flipToSilence: true,
   flashAlertOnIncomingCall: false,
+  keypadHapticFeedback: true,
+  keypadHapticIntensity: 'STANDARD',
+  keypadDtmfTones: true,
 };
 
 export const INITIAL_PERMISSIONS: PermissionStatus = {

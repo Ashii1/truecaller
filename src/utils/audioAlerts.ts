@@ -226,11 +226,19 @@ export function playNotificationChime() {
 
 export function triggerHapticFeedback(pattern: number | number[] = 25) {
   try {
-    if (typeof window !== 'undefined' && 'vibrate' in navigator && navigator.vibrate) {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator && navigator.vibrate) {
       navigator.vibrate(pattern);
     }
   } catch {
     // ignore unsupported
+  }
+  try {
+    if (typeof window !== 'undefined' && (window as any).AndroidTelecomBridge?.vibrate) {
+      const ms = Array.isArray(pattern) ? (pattern[pattern.length - 1] || 25) : pattern;
+      (window as any).AndroidTelecomBridge.vibrate(ms);
+    }
+  } catch {
+    // ignore
   }
 }
 

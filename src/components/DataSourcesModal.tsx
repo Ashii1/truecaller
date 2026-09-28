@@ -19,12 +19,14 @@ interface DataSourcesModalProps {
   isOpen: boolean;
   onClose: () => void;
   onClearAllData: () => void;
+  inline?: boolean;
 }
 
 export default function DataSourcesModal({
   isOpen,
   onClose,
   onClearAllData,
+  inline = false,
 }: DataSourcesModalProps) {
   const [sources, setSources] = useState<any[]>([]);
   const [activeSubTab, setActiveSubTab] = useState<'SOURCES' | 'PRIVACY' | 'PLATFORM'>('SOURCES');
@@ -96,71 +98,69 @@ export default function DataSourcesModal({
     URL.revokeObjectURL(url);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-              <Database className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
-                Data Sources & Privacy Architecture
-              </h2>
-              <p className="text-xs text-slate-400">
-                Transparent data origins, cryptographic proofs & zero address-book leakage
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-slate-300 hover:bg-slate-800 hover:text-white transition active:scale-95"
-            aria-label="Back"
-            title="Back"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            <span className="text-xs font-semibold">Back</span>
-          </button>
+  const header = (
+    <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/90 rounded-2xl">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+          <Database className="w-5 h-5" />
         </div>
-
-        {/* Tab Navigation */}
-        <div className="flex border-b border-slate-800 bg-slate-950/50 px-5 pt-3 gap-4">
-          <button
-            onClick={() => setActiveSubTab('SOURCES')}
-            className={`pb-3 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 ${
-              activeSubTab === 'SOURCES'
-                ? 'border-indigo-500 text-indigo-400'
-                : 'border-transparent text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            Authorized Data Sources
-          </button>
-          <button
-            onClick={() => setActiveSubTab('PRIVACY')}
-            className={`pb-3 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 ${
-              activeSubTab === 'PRIVACY'
-                ? 'border-indigo-500 text-indigo-400'
-                : 'border-transparent text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            Zero-Leakage Privacy Policy
-          </button>
-          <button
-            onClick={() => setActiveSubTab('PLATFORM')}
-            className={`pb-3 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 ${
-              activeSubTab === 'PLATFORM'
-                ? 'border-indigo-500 text-indigo-400'
-                : 'border-transparent text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            OS Integration (Android vs iOS)
-          </button>
+        <div>
+          <h2 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
+            Data Sources & Privacy Architecture
+          </h2>
+          <p className="text-xs text-slate-400">
+            Transparent data origins, cryptographic proofs & zero address-book leakage
+          </p>
         </div>
+      </div>
+      <button
+        onClick={onClose}
+        className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white transition active:scale-95"
+        aria-label="Back"
+        title="Back"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        <span>Settings</span>
+      </button>
+    </div>
+  );
 
-        {/* Content */}
-        <div className="p-5 overflow-y-auto space-y-4 flex-1">
+  const innerContent = (
+    <div className="space-y-4">
+      {/* Tab Navigation */}
+      <div className="flex border-b border-slate-800 bg-slate-950/50 px-5 pt-3 gap-4 rounded-xl">
+        <button
+          onClick={() => setActiveSubTab('SOURCES')}
+          className={`pb-3 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 ${
+            activeSubTab === 'SOURCES'
+              ? 'border-indigo-500 text-indigo-400'
+              : 'border-transparent text-slate-400 hover:text-slate-300'
+          }`}
+        >
+          Authorized Data Sources
+        </button>
+        <button
+          onClick={() => setActiveSubTab('PRIVACY')}
+          className={`pb-3 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 ${
+            activeSubTab === 'PRIVACY'
+              ? 'border-indigo-500 text-indigo-400'
+              : 'border-transparent text-slate-400 hover:text-slate-300'
+          }`}
+        >
+          Zero-Knowledge Guarantees
+        </button>
+        <button
+          onClick={() => setActiveSubTab('PLATFORM')}
+          className={`pb-3 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 ${
+            activeSubTab === 'PLATFORM'
+              ? 'border-indigo-500 text-indigo-400'
+              : 'border-transparent text-slate-400 hover:text-slate-300'
+          }`}
+        >
+          Platform-Specific Limits
+        </button>
+      {/* Content */}
+      <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
           {activeSubTab === 'SOURCES' && (
             <div className="space-y-3">
               <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-300 flex items-start gap-2.5">
@@ -268,15 +268,33 @@ export default function DataSourcesModal({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between text-xs text-slate-500">
+        <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between text-xs text-slate-500 rounded-b-2xl">
           <span>Documentation reference: <code className="text-slate-400">docs/DATA_SOURCES.md</code></span>
           <button
             onClick={onClose}
             className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors font-medium"
           >
-            Done
+            Back to Settings
           </button>
         </div>
+      </div>
+    </div>
+  );
+
+  if (inline) {
+    return (
+      <div className="w-full space-y-5 animate-in fade-in duration-200">
+        {header}
+        {innerContent}
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        {header}
+        {innerContent}
       </div>
     </div>
   );
