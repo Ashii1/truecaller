@@ -43,6 +43,7 @@ import {
   ContactItem,
 } from '../types';
 import { callRecordingService, normalizePhoneNumber } from '../services/callRecordingService';
+import { callNotesService } from '../services/callNotesService';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 import CallAudioPlayer from './CallAudioPlayer';
 import ContactEditorSheet from './ContactEditorSheet';
@@ -198,39 +199,55 @@ export default function CallerDetailModal({
   useEffect(() => {
     if (!isOpen || !number) return;
 
-    // Load indexed recordings
-    callRecordingService.getRecordingsForNumber(number).then((items) => {
-      const callsWithRecs = calls
-        .filter((c) => normalizePhoneNumber(c.number) === key && c.recordingUri)
-        .map((c) => ({
-          id: `rec-call-${c.id}`,
-          callId: c.id,
-          number: c.number,
-          callerName: c.callerName,
-          timestamp: c.timestamp,
-          durationSeconds: c.durationSeconds || 15,
-          folderPath: 'Internal Storage/Recordings/CallShield/',
-          fileName: `REC_${normalizePhoneNumber(c.number)}_${new Date(c.timestamp).toISOString().slice(0, 10)}.wav`,
-          fileSizeBytes: 128000,
-          mimeType: 'audio/wav',
-          dataUri: c.recordingUri || '',
-          quality: '48 kHz Studio Lossless',
-        }));
+    let isMounted = true;
+    const loadData = () => {
+      // Load indexed recordings
+      callRecordingService.getRecordingsForNumber(number).then((items) => {
+        if (!isMounted) return;
+        const callsWithRecs = calls
+          .filter((c) => normalizePhoneNumber(c.number) === key && c.recordingUri)
+          .map((c) => ({
+            id: `rec-call-${c.id}`,
+            callId: c.id,
+            number: c.number,
+            callerName: c.callerName,
+            timestamp: c.timestamp,
+            durationSeconds: c.durationSeconds || 15,
+            folderPath: 'Internal Storage/Recordings/CallShield/',
+            fileName: `REC_${normalizePhoneNumber(c.number)}_${new Date(c.timestamp).toISOString().slice(0, 10)}.wav`,
+            fileSizeBytes: 128000,
+            mimeType: 'audio/wav',
+            dataUri: c.recordingUri || '',
+            quality: '48 kHz Studio Lossless',
+          }));
 
-      const combined = [
-        ...items,
-        ...callsWithRecs.filter((c) => !items.some((it) => it.dataUri === c.dataUri)),
-      ];
-      setRecordings(combined);
+        const combined = [
+          ...items,
+          ...callsWithRecs.filter((c) => !items.some((it) => it.dataUri === c.dataUri || it.id === c.id)),
+        ];
+        setRecordings(combined);
+      });
+
+      // Load call-specific notes from authoritative callNotesService
+      const notes = callNotesService.getAllCallNotes();
+      setCallNotesMap(notes);
+    };
+
+    loadData();
+
+    // Live subscriptions for zero-lag refresh (Requirements 10 & 12)
+    const unsubRec = callRecordingService.subscribe(() => {
+      if (isMounted) loadData();
+    });
+    const unsubNotes = callNotesService.subscribe((notes) => {
+      if (isMounted) setCallNotesMap(notes);
     });
 
-    // Load call-specific notes from localStorage
-    try {
-      const raw = localStorage.getItem('vigilshield_call_event_notes_v1');
-      if (raw) {
-        setCallNotesMap(JSON.parse(raw));
-      }
-    } catch {}
+    return () => {
+      isMounted = false;
+      unsubRec();
+      unsubNotes();
+    };
   }, [isOpen, number, key, calls]);
 
   // Identify saved contact
@@ -407,6 +424,7 @@ export default function CallerDetailModal({
   // Note saving for a specific call ID
   const handleSaveCallNote = (callId: string) => {
     const trimmed = draftNoteText.trim();
+    callNotesService.saveNoteForCall(callId, trimmed);
     const updated = { ...callNotesMap };
     if (trimmed) {
       updated[callId] = trimmed;
@@ -414,9 +432,6 @@ export default function CallerDetailModal({
       delete updated[callId];
     }
     setCallNotesMap(updated);
-    try {
-      localStorage.setItem('vigilshield_call_event_notes_v1', JSON.stringify(updated));
-    } catch {}
 
     onSaveNote?.(callId, trimmed);
     setEditingNoteCallId(null);
@@ -914,13 +929,26 @@ export default function CallerDetailModal({
                     {group.items.map((c) => {
                       const isExpanded = expandedCallId === c.id;
 
-                      // Exact recording for THIS specific call
-                      const callRec = recordings.find(
-                        (r) => r.callId === c.id || Math.abs(r.timestamp - c.timestamp) < 5000
-                      );
+                      // Exact recording(s) strictly for THIS specific call instance (Requirement 2, 15, 17)
+                      const callRecs = recordings.filter((r) => r.callId === c.id);
+                      const callRec = callRecs.length > 0 ? callRecs[0] : (c.recordingUri ? {
+                        id: `rec-${c.id}`,
+                        callId: c.id,
+                        number: c.number,
+                        callerName: c.callerName,
+                        timestamp: c.timestamp,
+                        durationSeconds: c.durationSeconds || 15,
+                        folderPath: 'Internal Storage/Recordings/CallShield/',
+                        fileName: `REC_${normalizePhoneNumber(c.number)}_${new Date(c.timestamp).toISOString().slice(0, 10)}.wav`,
+                        fileSizeBytes: 128000,
+                        mimeType: 'audio/wav',
+                        dataUri: c.recordingUri,
+                        quality: '48 kHz Studio HD',
+                      } : null);
+                      const isFinalizingThisCallRec = callRecordingService.isCallRecordingFinalizing(c.id);
 
-                      // Exact note for THIS specific call
-                      const callNote = callNotesMap[c.id] || c.notes || '';
+                      // Exact note strictly for THIS specific call instance (Requirement 3, 9, 15)
+                      const callNote = callNotesMap[c.id] || callNotesService.getNoteForCall(c.id) || c.notes || '';
                       const isEditingThisNote = editingNoteCallId === c.id;
 
                       return (
@@ -990,12 +1018,17 @@ export default function CallerDetailModal({
 
                                 {/* Compact Indicators for Recording & Note (Belonging to this exact call) */}
                                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                                  {callRec && (
+                                  {isFinalizingThisCallRec ? (
+                                    <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-300 animate-pulse">
+                                      <Disc className="h-2.5 w-2.5 animate-spin text-amber-400" />
+                                      Recording processing...
+                                    </span>
+                                  ) : callRec ? (
                                     <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 text-[9.5px] font-bold text-emerald-300">
                                       <Disc className="h-2.5 w-2.5 animate-pulse text-emerald-400" />
-                                      Recording
+                                      {callRecs.length > 1 ? `Recording (${callRecs.length} segments)` : 'Recording'}
                                     </span>
-                                  )}
+                                  ) : null}
                                   {callNote && (
                                     <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-300 truncate max-w-[180px]">
                                       <span>📝</span>
@@ -1084,7 +1117,45 @@ export default function CallerDetailModal({
                               )}
 
                               {/* Individual Call Recording Audio Player (Belongs strictly to THIS call) */}
-                              {callRec && (
+                              {isFinalizingThisCallRec && (
+                                <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-3 text-xs space-y-1">
+                                  <div className="flex items-center gap-2 font-bold text-amber-300">
+                                    <Disc className="h-4 w-4 animate-spin text-amber-400" />
+                                    <span>Recording Finalizing...</span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-400">Audio file is being processed. It will be available here automatically.</p>
+                                </div>
+                              )}
+
+                              {callRecs.length > 0 ? (
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between text-xs">
+                                    <div className="flex items-center gap-1.5 font-bold text-emerald-300">
+                                      <Disc className="h-3.5 w-3.5 text-emerald-400" />
+                                      <span>{callRecs.length > 1 ? `Recordings (${callRecs.length} segments)` : 'Recording'}</span>
+                                    </div>
+                                    <span className="text-[10px] font-mono text-slate-500">
+                                      {callRecs[0].quality || '48 kHz HD'}
+                                    </span>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    {callRecs.map((rec, rIdx) => (
+                                      <div key={rec.id || rIdx} className="space-y-1">
+                                        {callRecs.length > 1 && (
+                                          <div className="text-[10px] font-semibold text-slate-400 px-1">
+                                            Segment {rIdx + 1} • {formatDuration(rec.durationSeconds)}
+                                          </div>
+                                        )}
+                                        <CallAudioPlayer
+                                          recording={rec}
+                                          onDelete={handleDeleteRecording}
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : callRec ? (
                                 <div className="space-y-1.5">
                                   <div className="flex items-center justify-between text-xs">
                                     <div className="flex items-center gap-1.5 font-bold text-emerald-300">
@@ -1104,7 +1175,7 @@ export default function CallerDetailModal({
                                     onDelete={handleDeleteRecording}
                                   />
                                 </div>
-                              )}
+                              ) : null}
 
                               {/* Individual Call Note (Belongs strictly to THIS call) */}
                               <div className="space-y-2">

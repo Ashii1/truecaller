@@ -31,6 +31,7 @@ import { playDtmfTone, triggerHapticFeedback, playNotificationChime, triggerCall
 import { telecomBridge } from '../services/telephony/telecomBridge';
 import { useI18n } from '../i18n/LanguageContext';
 import { callRecordingService } from '../services/callRecordingService';
+import { callNotesService } from '../services/callNotesService';
 
 interface ActiveCallModalProps {
   session: ActiveCallSession | null;
@@ -136,23 +137,15 @@ export default function ActiveCallModal({
     }
   }, [session, isCallMinimized, Math.floor(duration / 5), isAttended]);
 
-  // Load existing notes for this caller on session start
+  const recordedSegmentsRef = useRef<CallRecordingItem[]>([]);
+
+  // Load existing notes strictly for THIS call session on start
   useEffect(() => {
-    if (!session?.number) return;
-    const cleanKey = session.number.replace(/\D/g, '');
-    try {
-      const raw = localStorage.getItem('vigilshield_call_notes_v1');
-      if (raw) {
-        const obj = JSON.parse(raw);
-        const existing = obj[cleanKey] || session.notes || '';
-        setCallerNote(existing);
-      } else if (session.notes) {
-        setCallerNote(session.notes);
-      }
-    } catch {
-      if (session.notes) setCallerNote(session.notes);
-    }
-  }, [session?.number, session?.notes]);
+    if (!session?.id) return;
+    recordedSegmentsRef.current = [];
+    const existing = callNotesService.getNoteForCall(session.id) || session.notes || '';
+    setCallerNote(existing);
+  }, [session?.id, session?.notes]);
 
   // Call timer increment ONLY when attended!
   useEffect(() => {
@@ -176,22 +169,10 @@ export default function ActiveCallModal({
   }, [isRecording]);
 
   const saveNoteLocally = (text: string) => {
-    if (!session?.number) return;
-    const cleanKey = session.number.replace(/\D/g, '');
-    try {
-      const raw = localStorage.getItem('vigilshield_call_notes_v1') || '{}';
-      const obj = JSON.parse(raw);
-      if (text.trim()) {
-        obj[cleanKey] = text.trim();
-      } else {
-        delete obj[cleanKey];
-      }
-      localStorage.setItem('vigilshield_call_notes_v1', JSON.stringify(obj));
-      setNoteSavedNotice(true);
-      setTimeout(() => setNoteSavedNotice(false), 1600);
-    } catch {
-      // Storage fallback
-    }
+    if (!session?.id) return;
+    callNotesService.saveNoteForCall(session.id, text);
+    setNoteSavedNotice(true);
+    setTimeout(() => setNoteSavedNotice(false), 1600);
   };
 
   const handleNoteChange = (text: string) => {
@@ -290,6 +271,7 @@ export default function ActiveCallModal({
   };
 
   const handleToggleRecording = async () => {
+    if (!session) return;
     if (!isRecording) {
       setIsRecording(true);
       setRecordingWarningPlayed(true);
@@ -306,6 +288,7 @@ export default function ActiveCallModal({
       triggerHapticFeedback(30);
       const savedRec = await callRecordingService.stopRecording();
       if (savedRec) {
+        recordedSegmentsRef.current.push(savedRec);
         setSavedNotice(savedRec.fileName);
         playNotificationChime();
         setTimeout(() => setSavedNotice(null), 4000);
@@ -322,15 +305,20 @@ export default function ActiveCallModal({
     if (isRecording) {
       setIsRecording(false);
       recordingItem = await callRecordingService.stopRecording();
+      if (recordingItem) {
+        recordedSegmentsRef.current.push(recordingItem);
+      }
     }
-    if (callerNote.trim()) {
+    if (callerNote.trim() && session?.id) {
       saveNoteLocally(callerNote);
     }
     if (session?.id) {
       telecomBridge.disconnectCall(session.id, session.number);
     }
     telecomBridge.clearStaleCallNotifications();
-    onEndCall(recordingItem, durationRef.current, callerNote.trim() || undefined);
+
+    const finalRecording = recordingItem || (recordedSegmentsRef.current.length > 0 ? recordedSegmentsRef.current[recordedSegmentsRef.current.length - 1] : null);
+    onEndCall(finalRecording, durationRef.current, callerNote.trim() || undefined);
   };
 
   // Automated customer care / unattended voice message handling

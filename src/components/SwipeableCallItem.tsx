@@ -31,6 +31,7 @@ import { CallGroup } from '../utils/callHistory';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import { playSpamAlertChime, playCallCancelledTone } from '../utils/audioAlerts';
 import { callRecordingService } from '../services/callRecordingService';
+import { callNotesService } from '../services/callNotesService';
 import AudioRecordingPlayer from './AudioRecordingPlayer';
 
 interface SwipeableCallItemProps {
@@ -90,38 +91,76 @@ function SwipeableCallItem({
   const spam = group.calls.some((c) => c.isSpam) || p.isSpam;
   const latest = group.latest;
 
-  const hasRecordedCall =
-    group.calls.some((c) => Boolean(c.recordingUri)) || Boolean(recordingToPlay);
+  const [isFinalizingRecording, setIsFinalizingRecording] = useState(() =>
+    callRecordingService.isCallRecordingFinalizing(latest.id)
+  );
+  const [latestNote, setLatestNote] = useState(() =>
+    callNotesService.getNoteForCall(latest.id) || latest.notes || ''
+  );
 
+  // Synchronize recording strictly for this exact call session
   useEffect(() => {
     let isMounted = true;
-    callRecordingService
-      .getRecordingsForNumber(group.number)
-      .then((items) => {
-        if (isMounted && items.length > 0) {
-          const matched = items.find(
-            (r) =>
-              r.callId === latest.id ||
-              Math.abs(r.timestamp - latest.timestamp) < 300000
-          );
-          setRecordingToPlay(matched || items[0]);
-        }
-      })
-      .catch(() => {});
+
+    const checkRecording = () => {
+      setIsFinalizingRecording(callRecordingService.isCallRecordingFinalizing(latest.id));
+      callRecordingService
+        .getRecordingForCall(latest.id)
+        .then((item) => {
+          if (!isMounted) return;
+          if (item) {
+            setRecordingToPlay(item);
+          } else if (latest.recordingUri) {
+            setRecordingToPlay({
+              id: `rec-${latest.id}`,
+              callId: latest.id,
+              number: group.number,
+              callerName: name,
+              timestamp: latest.timestamp,
+              durationSeconds: latest.durationSeconds || 15,
+              folderPath: 'Internal Storage/Recordings/CallShield/',
+              fileName: `REC_${group.number.replace(/\D/g, '')}_${new Date(latest.timestamp).toISOString().slice(0, 10)}.wav`,
+              fileSizeBytes: 128000,
+              mimeType: 'audio/wav',
+              dataUri: latest.recordingUri,
+              quality: '48 kHz Studio HD',
+            });
+          } else {
+            setRecordingToPlay(null);
+          }
+        })
+        .catch(() => {});
+    };
+
+    checkRecording();
+
+    // Subscribe to recording updates
+    const unsubRec = callRecordingService.subscribe(() => {
+      if (isMounted) checkRecording();
+    });
+
+    // Subscribe to notes updates
+    const unsubNotes = callNotesService.subscribe(() => {
+      if (isMounted) {
+        setLatestNote(callNotesService.getNoteForCall(latest.id) || latest.notes || '');
+      }
+    });
+
     return () => {
       isMounted = false;
+      unsubRec();
+      unsubNotes();
     };
-  }, [group.number, latest.id, latest.timestamp]);
+  }, [latest.id, latest.recordingUri, latest.notes, latest.timestamp, group.number, name]);
+
+  const hasRecordedCall = Boolean(recordingToPlay || latest.recordingUri);
 
   const handleToggleInlinePlayer = useCallback(
     async (e: MouseEvent) => {
       e.stopPropagation();
       if (!showInlineRecording) {
         if (!recordingToPlay) {
-          const found = await callRecordingService.getRecordingForCall(
-            latest.id,
-            group.number
-          );
+          const found = await callRecordingService.getRecordingForCall(latest.id);
           if (found) {
             setRecordingToPlay(found);
           } else if (latest.recordingUri) {
@@ -146,7 +185,7 @@ function SwipeableCallItem({
         setShowInlineRecording(false);
       }
     },
-    [showInlineRecording, recordingToPlay, latest, group.number, name]
+    [showInlineRecording, recordingToPlay, latest.id, latest.recordingUri, latest.durationSeconds, latest.timestamp, group.number, name]
   );
 
   const triggerBlock = useCallback(() => {
@@ -383,6 +422,13 @@ function SwipeableCallItem({
               </span>
             )}
 
+            {isFinalizingRecording && (
+              <span className="inline-flex items-center gap-1 rounded bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.5 text-[8.5px] font-bold text-amber-300 animate-pulse">
+                <Disc className="h-2.5 w-2.5 text-amber-400 animate-spin" />
+                <span>REC Processing...</span>
+              </span>
+            )}
+
             {hasRecordedCall && (
               <button
                 type="button"
@@ -393,6 +439,13 @@ function SwipeableCallItem({
                 <Disc className="h-2.5 w-2.5 text-emerald-400 animate-pulse" />
                 <span>{showInlineRecording ? 'Hide REC' : 'Play REC'}</span>
               </button>
+            )}
+
+            {latestNote && (
+              <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 text-[8.5px] font-bold text-amber-300 max-w-[140px] truncate" title={latestNote}>
+                <span>📝</span>
+                <span className="truncate">{latestNote}</span>
+              </span>
             )}
 
             {group.calls.some((c) => c.usedAiScreener) && (

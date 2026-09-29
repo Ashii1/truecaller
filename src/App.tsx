@@ -29,6 +29,7 @@ import { detectNeighborSpoof, detectPingBackScam, formatPrivateCallNumber } from
 import { triggerCallConnectedHaptic } from './utils/audioAlerts';
 import { telecomBridge } from './services/telephony/telecomBridge';
 import { callRecordingService } from './services/callRecordingService';
+import { callNotesService } from './services/callNotesService';
 import { externalDirectoryService } from './services/externalDirectoryService';
 import { readThemePreferences, persistAndApplyTheme, applyTheme } from './services/theme/themeService';
 
@@ -601,25 +602,39 @@ export default function App(){
           const isScreened = Boolean(prev.usedAiScreener);
           const transcript = prev.screeningTranscript;
           const callLogId = prev.id || `call-${Date.now()}`;
+          const note = callNotesService.getNoteForCall(callLogId) || prev.notes;
           setCalls(existing => {
-            if (existing.some(c => c.id === callLogId)) return existing;
-            return [{
+            const existingIdx = existing.findIndex(c => c.id === callLogId);
+            const entry: CallLogItem = {
               id: callLogId,
               number: prev.number,
               callerName: prev.name || prev.number,
               type: prev.wasIncoming ? 'INCOMING' : 'OUTGOING',
-              timestamp: Date.now(),
+              timestamp: (prev as any).startTime || (Date.now() - (dur * 1000)),
               durationSeconds: dur,
               isSpam: Boolean(prev.isSpam),
               spamCategory: prev.spamCategory,
               riskScore: prev.riskScore || 0,
               riskLevel: prev.riskLevel || 'SAFE',
               reportsCount: 0,
+              notes: note,
               usedAiScreener: isScreened,
               screeningTranscript: transcript,
               screeningDetectedIntent: prev.screeningDetectedIntent,
               screenedAt: isScreened ? Date.now() : undefined,
-            }, ...existing];
+              sim: prev.sim || prev.selectedSim,
+            };
+            if (existingIdx >= 0) {
+              const copy = [...existing];
+              copy[existingIdx] = {
+                ...copy[existingIdx],
+                ...entry,
+                recordingUri: copy[existingIdx].recordingUri,
+                notes: note || copy[existingIdx].notes,
+              };
+              return copy;
+            }
+            return [entry, ...existing];
           });
           return null;
         });
@@ -676,13 +691,9 @@ export default function App(){
    }
  }, []);
  const handleSaveNote = useCallback((callId: string, note: string) => {
-   setCalls(prev => {
-     const target = prev.find(c => c.id === callId);
-     if (!target) return prev;
-     const key = target.number.replace(/\D/g, '');
-     return prev.map(c => c.number.replace(/\D/g, '') === key ? { ...c, notes: note } : c);
-   });
-   showToast(note ? 'Caller note saved' : 'Caller note cleared', 'success');
+   callNotesService.saveNoteForCall(callId, note);
+   setCalls(prev => prev.map(c => c.id === callId ? { ...c, notes: note || undefined } : c));
+   showToast(note ? 'Call note saved' : 'Call note cleared', 'success');
  }, []);
  const handleUpdateCallerName = useCallback((number: string, newName: string) => {
    setCalls(prev => prev.map(c => c.number.replace(/\D/g, '') === number.replace(/\D/g, '') ? { ...c, callerName: newName } : c));
@@ -699,7 +710,8 @@ export default function App(){
     // session with the real call id as soon as the call is registered.
     setActiveTab('dialer');
     if (isPrivate) { showToast(`Calling with caller ID masked (${settings.privateCallPrefix || '*67'})`, 'info'); }
-    const newCallId = result.callId || `call-${Date.now()}`;
+    const newCallId = result.callId || `call-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const callStartTime = Date.now();
     setActiveCallSession({
       id: newCallId,
       number: clean,
@@ -716,8 +728,9 @@ export default function App(){
       isKeypadOpen: false,
       selectedSim: target,
       sim: target,
-      isVerifiedBusiness: p.isVerified
-    });
+      isVerifiedBusiness: p.isVerified,
+      startTime: callStartTime,
+    } as any);
     // In web preview: simulate remote party attending the call after 3.2s
     if (!telecomBridge.isAndroidEnvironment()) {
       setTimeout(() => {
@@ -729,23 +742,33 @@ export default function App(){
         });
       }, 3200);
     }
-    setCalls(prev => [{
-      id: `call-${Date.now()}`,
-      number: clean,
-      callerName: resolved,
-      type: 'OUTGOING',
-      timestamp: Date.now(),
-      durationSeconds: 0,
-      isSpam: p.isSpam,
-      spamCategory: p.spamCategory,
-      riskScore: p.spamScore,
-      reportsCount: p.spamReportsCount,
-      carrier: p.carrier,
-      location: p.location,
-      isVerifiedBusiness: p.isVerified,
-      isContact: !!matched,
-      isPrivate: Boolean(isPrivate)
-    }, ...prev]);
+    setCalls(prev => {
+      const existingIdx = prev.findIndex(c => c.id === newCallId);
+      const callEntry: CallLogItem = {
+        id: newCallId,
+        number: clean,
+        callerName: resolved,
+        type: 'OUTGOING',
+        timestamp: callStartTime,
+        durationSeconds: 0,
+        isSpam: p.isSpam,
+        spamCategory: p.spamCategory,
+        riskScore: p.spamScore,
+        reportsCount: p.spamReportsCount,
+        carrier: p.carrier,
+        location: p.location,
+        isVerifiedBusiness: p.isVerified,
+        isContact: !!matched,
+        isPrivateCall: Boolean(isPrivate),
+        sim: target,
+      };
+      if (existingIdx >= 0) {
+        const copy = [...prev];
+        copy[existingIdx] = { ...copy[existingIdx], ...callEntry };
+        return copy;
+      }
+      return [callEntry, ...prev];
+    });
   }, [selectedSim, rules, whitelist, contacts, settings]);
 
   initiateCallRef.current = handleInitiateCall;
@@ -932,31 +955,52 @@ export default function App(){
     telecomBridge.clearStaleCallNotifications();
     if (activeCallSession) {
       const dur = callDuration || activeCallSession.durationSeconds || 1;
-      const note = callerNotes || activeCallSession.notes;
+      const callLogId = activeCallSession.id || `call-${Date.now()}`;
+      const note = callerNotes || callNotesService.getNoteForCall(callLogId) || activeCallSession.notes;
       const isScreened = Boolean(activeCallSession.usedAiScreener);
       const transcript = activeCallSession.screeningTranscript;
-      const callLogId = activeCallSession.id || `call-${Date.now()}`;
       const isIncoming = Boolean(activeCallSession.wasIncoming);
-      const newCallLog: CallLogItem = {
-        id: callLogId,
-        number: activeCallSession.number,
-        callerName: activeCallSession.name || activeCallSession.number,
-        type: isIncoming ? 'INCOMING' : 'OUTGOING',
-        timestamp: Date.now(),
-        durationSeconds: dur,
-        isSpam: Boolean(activeCallSession.isSpam),
-        spamCategory: activeCallSession.spamCategory,
-        riskScore: activeCallSession.riskScore || 0,
-        riskLevel: activeCallSession.riskLevel || 'SAFE',
-        reportsCount: 0,
-        recordingUri: recordingItem ? recordingItem.dataUri : undefined,
-        notes: note,
-        usedAiScreener: isScreened,
-        screeningTranscript: transcript,
-        screeningDetectedIntent: activeCallSession.screeningDetectedIntent,
-        screenedAt: isScreened ? Date.now() : undefined,
-      };
-      setCalls(p => [newCallLog, ...p]);
+
+      if (note) {
+        callNotesService.saveNoteForCall(callLogId, note);
+      }
+
+      setCalls(p => {
+        const existingIdx = p.findIndex(c => c.id === callLogId);
+        const updatedCall: CallLogItem = {
+          id: callLogId,
+          number: activeCallSession.number,
+          callerName: activeCallSession.name || activeCallSession.number,
+          type: isIncoming ? 'INCOMING' : 'OUTGOING',
+          timestamp: (activeCallSession as any).startTime || (Date.now() - (dur * 1000)),
+          durationSeconds: dur,
+          isSpam: Boolean(activeCallSession.isSpam),
+          spamCategory: activeCallSession.spamCategory,
+          riskScore: activeCallSession.riskScore || 0,
+          riskLevel: activeCallSession.riskLevel || 'SAFE',
+          reportsCount: 0,
+          recordingUri: recordingItem ? recordingItem.dataUri : undefined,
+          notes: note,
+          usedAiScreener: isScreened,
+          screeningTranscript: transcript,
+          screeningDetectedIntent: activeCallSession.screeningDetectedIntent,
+          screenedAt: isScreened ? Date.now() : undefined,
+          sim: activeCallSession.sim || activeCallSession.selectedSim,
+        };
+
+        if (existingIdx >= 0) {
+          const copy = [...p];
+          copy[existingIdx] = {
+            ...copy[existingIdx],
+            ...updatedCall,
+            recordingUri: recordingItem ? recordingItem.dataUri : copy[existingIdx].recordingUri,
+            notes: note || copy[existingIdx].notes,
+          };
+          return copy;
+        }
+        return [updatedCall, ...p];
+      });
+
       if (recordingItem) {
         callRecordingService.saveRecording({
           ...recordingItem,

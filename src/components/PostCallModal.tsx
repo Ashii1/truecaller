@@ -2,6 +2,7 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { ArrowLeft, Check, X, UserPlus, ShieldBan, AlertTriangle, FileText, Clock, Phone, Star, ShieldCheck, HelpCircle, Flag, StickyNote, Copy, Bot, Sparkles, ChevronDown, MessageSquare } from 'lucide-react';
 import { PostCallState, SpamCategory, ContactItem } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
+import { callNotesService } from '../services/callNotesService';
 import CallContextCard from './CallContextCard';
 import { useI18n } from '../i18n/LanguageContext';
 
@@ -26,20 +27,10 @@ export default function PostCallModal({ postCall, onDismiss, onAddContact, onBlo
   const [showTranscript, setShowTranscript] = useState(false);
   const [copiedSummary, setCopiedSummary] = useState(false);
 
-  // Sync in-call notes
+  // Sync in-call notes strictly by call instance ID
   useEffect(() => {
     if (!postCall) return;
-    const cleanKey = postCall.number.replace(/\D/g, '');
-    let existingNote = postCall.notes || '';
-    if (!existingNote) {
-      try {
-        const raw = localStorage.getItem('vigilshield_call_notes_v1');
-        if (raw) {
-          const notesMap = JSON.parse(raw);
-          existingNote = notesMap[cleanKey] || '';
-        }
-      } catch {}
-    }
+    const existingNote = callNotesService.getNoteForCall(postCall.callId) || postCall.notes || '';
     setNoteText(existingNote);
   }, [postCall]);
 
@@ -60,8 +51,12 @@ export default function PostCallModal({ postCall, onDismiss, onAddContact, onBlo
 
   const handleSaveCallNote = (e: FormEvent) => {
     e.preventDefault();
-    onSaveNote(postCall.number, noteText);
-    setSavedSuccessMessage('Call note saved to contact history');
+    const trimmed = noteText.trim();
+    if (postCall.callId) {
+      callNotesService.saveNoteForCall(postCall.callId, trimmed);
+    }
+    onSaveNote(postCall.callId || postCall.number, trimmed);
+    setSavedSuccessMessage('Call note saved to this call record');
     setTimeout(() => { setShowNoteEditor(false); setSavedSuccessMessage(null); }, 1200);
   };
 

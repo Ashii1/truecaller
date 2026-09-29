@@ -254,15 +254,30 @@ class CallRecordingService {
   private micStream: MediaStream | null = null;
   private mediaRecorder: MediaRecorder | null = null;
   private recordedBlobs: Blob[] = [];
+  private finalizingCallIds: Set<string> = new Set();
 
   public isCurrentlyRecording(): boolean {
     return this.isRecording;
+  }
+
+  public getActiveRecordingCallId(): string | null {
+    return this.isRecording ? this.callId : null;
+  }
+
+  /**
+   * Returns true if a recording for this call is currently finalizing/processing.
+   * Requirement 7: Show "🎙 Recording Processing..." rather than "No recording".
+   */
+  public isCallRecordingFinalizing(callId?: string | null): boolean {
+    if (!callId) return false;
+    return this.finalizingCallIds.has(callId);
   }
 
   public getCurrentRecordingInfo() {
     if (!this.isRecording) return null;
     const elapsedSeconds = Math.max(1, Math.floor((Date.now() - this.startTime) / 1000));
     return {
+      callId: this.callId,
       number: this.targetNumber,
       callerName: this.targetName,
       elapsedSeconds,
@@ -272,7 +287,7 @@ class CallRecordingService {
   }
 
   /**
-   * Starts clear call recording session.
+   * Starts clear call recording session bound to an exact CallSessionID.
    */
   public async startRecording(number: string, callerName: string, callId?: string): Promise<boolean> {
     if (this.isRecording) return true;
@@ -330,13 +345,19 @@ class CallRecordingService {
 
   /**
    * Stops the recording session, saves it, and returns the recording item.
+   * Properly finalizes the audio data and guarantees attachment to this exact callId.
    */
   public async stopRecording(): Promise<CallRecordingItem | null> {
     if (!this.isRecording) return null;
 
     this.isRecording = false;
-    const durationSeconds = Math.max(1, Math.round((Date.now() - this.startTime) / 1000));
+    const currentCallId = this.callId;
+    if (currentCallId) {
+      this.finalizingCallIds.add(currentCallId);
+      listeners.forEach((fn) => fn([...memoryCache]));
+    }
 
+    const durationSeconds = Math.max(1, Math.round((Date.now() - this.startTime) / 1000));
     let finalBlob: Blob | null = null;
 
     // Stop MediaRecorder if running
@@ -363,7 +384,7 @@ class CallRecordingService {
       finalBlob = new Blob(this.recordedBlobs, { type: mime });
     }
 
-    // If no mic blobs were recorded (e.g. running in web preview or permission blocked), create clear call audio
+    // If no mic blobs were recorded, synthesize crystal-clear telephonic audio simulation
     if (!finalBlob || finalBlob.size < 100) {
       finalBlob = createClearCallAudio(durationSeconds);
     }
@@ -385,7 +406,7 @@ class CallRecordingService {
 
     const recordingItem: CallRecordingItem = {
       id: `rec-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      callId: this.callId,
+      callId: currentCallId,
       number: this.targetNumber,
       callerName: this.targetName || 'Unknown Caller',
       timestamp: Date.now(),
@@ -399,6 +420,12 @@ class CallRecordingService {
     };
 
     await this.saveRecording(recordingItem);
+
+    if (currentCallId) {
+      this.finalizingCallIds.delete(currentCallId);
+      listeners.forEach((fn) => fn([...memoryCache]));
+    }
+
     return recordingItem;
   }
 
@@ -442,6 +469,56 @@ class CallRecordingService {
     } catch {}
 
     return results.sort((a, b) => b.timestamp - a.timestamp);
+  }
+
+  /**
+   * Retrieves ALL recording segments strictly associated with this exact call instance.
+   * Requirement 17: If multiple recording segments exist for one call, they must all
+   * remain associated with that exact call session, without cross-contaminating other calls.
+   */
+  public async getRecordingsForCall(callId: string): Promise<CallRecordingItem[]> {
+    if (!callId) return [];
+
+    let fromMem = memoryCache.filter((r) => r.callId === callId);
+
+    try {
+      const db = await initIndexedDB();
+      if (db) {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const all: CallRecordingItem[] = await new Promise((resolve) => {
+          const req = store.getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => resolve([]);
+        });
+        const fromIdb = all.filter((r) => r.callId === callId);
+        if (fromIdb.length > 0) {
+          // Merge to ensure audio dataUri is present
+          const merged = [...fromMem];
+          for (const item of fromIdb) {
+            const idx = merged.findIndex((m) => m.id === item.id);
+            if (idx >= 0) {
+              if (!merged[idx].dataUri && item.dataUri) merged[idx] = item;
+            } else {
+              merged.push(item);
+            }
+          }
+          fromMem = merged;
+        }
+      }
+    } catch {}
+
+    return fromMem.sort((a, b) => a.timestamp - b.timestamp);
+  }
+
+  /**
+   * Strictly retrieves the recording belonging to this specific call session ID.
+   * Requirement 2 & 15: Must never fall back to another call's recording for the same number.
+   */
+  public async getRecordingForCall(callId: string): Promise<CallRecordingItem | null> {
+    if (!callId) return null;
+    const recs = await this.getRecordingsForCall(callId);
+    return recs.length > 0 ? recs[0] : null;
   }
 
   public async getRecordingById(id: string): Promise<CallRecordingItem | null> {
@@ -501,25 +578,11 @@ class CallRecordingService {
     }
   }
 
-  public async getRecordingForCall(callId: string, number?: string): Promise<CallRecordingItem | null> {
-    const fromMem = memoryCache.find(
-      (r) => r.callId === callId || (number && normalizePhoneNumber(r.number) === normalizePhoneNumber(number))
-    );
-    if (fromMem && fromMem.dataUri) return fromMem;
-
-    if (number) {
-      const recs = await this.getRecordingsForNumber(number);
-      const match = recs.find((r) => r.callId === callId) || recs[0];
-      if (match) return match;
-    }
-    return fromMem || null;
-  }
-
   public async downloadRecordingToDevice(recording: CallRecordingItem): Promise<boolean> {
     if (typeof document === 'undefined') return false;
     let dataUri = recording.dataUri;
-    if (!dataUri) {
-      const fromDb = await this.getRecordingForCall(recording.callId, recording.number);
+    if (!dataUri && recording.callId) {
+      const fromDb = await this.getRecordingForCall(recording.callId);
       if (fromDb?.dataUri) dataUri = fromDb.dataUri;
     }
     if (!dataUri) {
