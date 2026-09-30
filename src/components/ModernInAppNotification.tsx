@@ -20,13 +20,12 @@ export interface InAppToastPayload {
 interface ModernInAppNotificationProps {
   notification: InAppToastPayload | null;
   onDismiss: () => void;
-  onOpenNotificationPanel: () => void;
+  onOpenNotificationPanel?: () => void;
 }
 
 export default function ModernInAppNotification({
   notification,
   onDismiss,
-  onOpenNotificationPanel,
 }: ModernInAppNotificationProps) {
   const [dragX, setDragX] = useState<number>(0);
   const [isSwipingOut, setIsSwipingOut] = useState<'left' | 'right' | null>(null);
@@ -38,15 +37,13 @@ export default function ModernInAppNotification({
     setIsSwipingOut(null);
   }, [notification?.text]);
 
-  const handleSwipeToPanel = useCallback((direction: 'left' | 'right') => {
-    telecomBridge.vibratePhone(25);
+  const handleSwipeToDismiss = useCallback((direction: 'left' | 'right') => {
+    telecomBridge.vibratePhone(20);
     setIsSwipingOut(direction);
     setTimeout(() => {
       onDismiss();
-      // Moving left or right routes to the notification panel
-      onOpenNotificationPanel();
     }, 180);
-  }, [onDismiss, onOpenNotificationPanel]);
+  }, [onDismiss]);
 
   const onTouchStart = (e: TouchEvent | MouseEvent) => {
     const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
@@ -68,12 +65,12 @@ export default function ModernInAppNotification({
     const start = touchStartRef.current;
     touchStartRef.current = null;
     const elapsed = start ? Date.now() - start.time : 1000;
-    const isQuickFlick = elapsed < 280 && Math.abs(dragX) > 35;
+    const isQuickFlick = elapsed < 280 && Math.abs(dragX) > 30;
 
-    if (dragX > 55 || (dragX > 30 && isQuickFlick)) {
-      handleSwipeToPanel('right');
-    } else if (dragX < -55 || (dragX < -30 && isQuickFlick)) {
-      handleSwipeToPanel('left');
+    if (dragX > 50 || (dragX > 25 && isQuickFlick)) {
+      handleSwipeToDismiss('right');
+    } else if (dragX < -50 || (dragX < -25 && isQuickFlick)) {
+      handleSwipeToDismiss('left');
     } else {
       setDragX(0);
     }
@@ -85,11 +82,15 @@ export default function ModernInAppNotification({
   const isSuccess = notification.type === 'success';
 
   return (
-    <div className="fixed top-2.5 left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[99999] pointer-events-none select-none">
+    <div
+      className="fixed left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[99999] pointer-events-none select-none transition-all duration-300"
+      style={{
+        top: 'max(4.5rem, calc(env(safe-area-inset-top, 0px) + 4rem))',
+      }}
+    >
       <div
         onClick={() => {
           onDismiss();
-          onOpenNotificationPanel();
         }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
@@ -107,25 +108,25 @@ export default function ModernInAppNotification({
           opacity: isSwipingOut ? 0 : Math.max(0.15, 1 - Math.abs(dragX) / 160),
           transition: isDraggingRef.current ? 'none' : 'all 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
-        className={`pointer-events-auto cursor-pointer rounded-full border px-3.5 py-2 shadow-2xl backdrop-blur-2xl transition-all duration-200 animate-in fade-in slide-in-from-top-2 flex items-center justify-between gap-2.5 active:scale-[0.99] ${
+        className={`pointer-events-auto cursor-pointer rounded-2xl border px-3.5 py-2.5 shadow-2xl backdrop-blur-2xl transition-all duration-200 animate-in fade-in slide-in-from-top-3 flex items-center justify-between gap-3 active:scale-[0.99] ${
           isError
-            ? 'border-rose-500/40 bg-[#160b11]/95 text-rose-100 shadow-rose-950/80 ring-1 ring-rose-500/20'
+            ? 'border-rose-500/40 bg-[#160b11]/98 text-rose-100 shadow-rose-950/80 ring-1 ring-rose-500/20'
             : isSuccess
-            ? 'border-emerald-500/40 bg-[#081510]/95 text-emerald-100 shadow-emerald-950/80 ring-1 ring-emerald-500/20'
-            : 'border-slate-700/80 bg-[#090e17]/95 text-slate-100 shadow-black/90 ring-1 ring-white/10'
+            ? 'border-emerald-500/40 bg-[#081510]/98 text-emerald-100 shadow-emerald-950/80 ring-1 ring-emerald-500/20'
+            : 'border-white/15 bg-[#0b111e]/98 text-slate-100 shadow-black/90 ring-1 ring-white/10'
         }`}
-        title="Swipe left or right to move to notification panel"
+        title="Tap or swipe to dismiss"
         role="alert"
       >
         {/* Left Side: Glyph Icon */}
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <div
-            className={`grid h-7 w-7 shrink-0 place-items-center rounded-full font-bold shadow-md ${
+            className={`grid h-7 w-7 shrink-0 place-items-center rounded-xl font-bold shadow-md ${
               isError
-                ? 'bg-rose-500/25 text-rose-300'
+                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
                 : isSuccess
-                ? 'bg-emerald-500/25 text-emerald-300'
-                : 'bg-blue-500/25 text-blue-300'
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
             }`}
           >
             {isError ? (
@@ -133,35 +134,35 @@ export default function ModernInAppNotification({
             ) : isSuccess ? (
               <CheckCircle2 className="h-3.5 w-3.5" />
             ) : (
-              <Bell className="h-3.5 w-3.5" />
+              <Info className="h-3.5 w-3.5" />
             )}
           </div>
 
-          {/* Clean concise message - no clutter */}
+          {/* Clean concise message */}
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold leading-snug truncate text-white">
+            {notification.title && (
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 leading-tight">
+                {notification.title}
+              </p>
+            )}
+            <p className="text-xs font-semibold leading-snug truncate text-white">
               {notification.text}
             </p>
           </div>
         </div>
 
-        {/* Right Side: Swipe indicator hint */}
-        <div className="flex items-center gap-1.5 shrink-0 text-slate-400">
-          <div className="flex items-center text-[10px] font-semibold text-slate-400 bg-white/5 border border-white/10 rounded-full px-2 py-0.5" title="Swipe left or right">
-            <ChevronLeft className="h-2.5 w-2.5 opacity-60" />
-            <span className="text-[9px] tracking-wide uppercase px-0.5">Swipe</span>
-            <ChevronRight className="h-2.5 w-2.5 opacity-60" />
-          </div>
+        {/* Right Side: Close Button with >=36px hitbox */}
+        <div className="flex items-center gap-1 shrink-0 text-slate-400">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               onDismiss();
             }}
-            className="grid h-6 w-6 place-items-center rounded-full text-slate-400 hover:bg-white/10 hover:text-white transition active:scale-90"
+            className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-white/10 hover:text-white transition active:scale-90 cursor-pointer"
             aria-label="Dismiss notification"
           >
-            <X className="h-3 w-3" />
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>

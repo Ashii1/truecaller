@@ -32,6 +32,7 @@ import { formatPhoneNumber } from '../utils/spamEngine';
 import { playSpamAlertChime, playCallCancelledTone } from '../utils/audioAlerts';
 import { callRecordingService } from '../services/callRecordingService';
 import { callNotesService } from '../services/callNotesService';
+import { telecomBridge } from '../services/telephony/telecomBridge';
 import AudioRecordingPlayer from './AudioRecordingPlayer';
 
 interface SwipeableCallItemProps {
@@ -54,6 +55,10 @@ interface SwipeableCallItemProps {
   iconFor: (type: CallDirection) => React.ReactNode;
   timeLabel: (ts: number) => string;
   t: (key: any) => string;
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
+  onLongPressSelect?: (id: string) => void;
 }
 
 const SWIPE_THRESHOLD = 70;
@@ -79,6 +84,10 @@ function SwipeableCallItem({
   iconFor,
   timeLabel,
   t,
+  isSelectionMode = false,
+  isSelected = false,
+  onToggleSelect,
+  onLongPressSelect,
 }: SwipeableCallItemProps) {
   const x = useMotionValue(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -87,6 +96,7 @@ function SwipeableCallItem({
   const [showInlineRecording, setShowInlineRecording] = useState(false);
   const [recordingsToPlay, setRecordingsToPlay] = useState<CallRecordingItem[]>([]);
   const wasDraggedRef = useRef(false);
+  const longPressTimerRef = useRef<any>(null);
 
   // Authoritative item for this exact call session (Requirement 1, 4, 15)
   const item: CallLogItem = call || group?.latest!;
@@ -284,8 +294,27 @@ function SwipeableCallItem({
     }, 80);
   };
 
+  const handlePointerDown = () => {
+    if (isSelectionMode) return;
+    longPressTimerRef.current = setTimeout(() => {
+      telecomBridge.vibratePhone(35);
+      onLongPressSelect?.(callId);
+    }, 450);
+  };
+
+  const handlePointerUpOrCancel = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
   const handleItemClick = () => {
     if (wasDraggedRef.current || Math.abs(x.get()) > 8 || isDragging) {
+      return;
+    }
+    if (isSelectionMode) {
+      onToggleSelect?.(callId);
       return;
     }
     onSelectCall(item);
@@ -301,70 +330,100 @@ function SwipeableCallItem({
       }`}
     >
       {/* Background action layers revealed during gestures */}
-      <div className="absolute inset-0 flex items-center justify-between pointer-events-none">
-        {/* Left background: Swipe right to Block */}
-        <motion.div
-          style={{ opacity: blockOpacity }}
-          className="absolute inset-y-0 left-0 right-1/2 flex items-center bg-gradient-to-r from-rose-950 via-rose-900 to-amber-900/90 px-4 text-white"
-        >
+      {!isSelectionMode && (
+        <div className="absolute inset-0 flex items-center justify-between pointer-events-none">
+          {/* Left background: Swipe right to Block */}
           <motion.div
-            style={{ scale: blockScale }}
-            className="flex items-center gap-2 font-bold"
+            style={{ opacity: blockOpacity }}
+            className="absolute inset-y-0 left-0 right-1/2 flex items-center bg-gradient-to-r from-rose-950 via-rose-900 to-amber-900/90 px-4 text-white"
           >
-            <div className="grid h-8 w-8 place-items-center rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
-              <Ban className="h-4 w-4" />
-            </div>
-            <div className="text-left">
-              <div className="text-xs font-bold text-rose-200 leading-tight">
-                {t('block')}
+            <motion.div
+              style={{ scale: blockScale }}
+              className="flex items-center gap-2 font-bold"
+            >
+              <div className="grid h-8 w-8 place-items-center rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                <Ban className="h-4 w-4" />
               </div>
-              <div className="text-[9px] font-normal text-rose-300/80">
-                Firewall rule
+              <div className="text-left">
+                <div className="text-xs font-bold text-rose-200 leading-tight">
+                  {t('block')}
+                </div>
+                <div className="text-[9px] font-normal text-rose-300/80">
+                  Firewall rule
+                </div>
               </div>
-            </div>
+            </motion.div>
           </motion.div>
-        </motion.div>
 
-        {/* Right background: Swipe left to Delete */}
-        <motion.div
-          style={{ opacity: deleteOpacity }}
-          className="absolute inset-y-0 right-0 left-1/2 flex items-center justify-end bg-gradient-to-l from-red-950 via-rose-900 to-red-900/90 px-4 text-white"
-        >
+          {/* Right background: Swipe left to Delete */}
           <motion.div
-            style={{ scale: deleteScale }}
-            className="flex items-center gap-2 font-bold"
+            style={{ opacity: deleteOpacity }}
+            className="absolute inset-y-0 right-0 left-1/2 flex items-center justify-end bg-gradient-to-l from-red-950 via-rose-900 to-red-900/90 px-4 text-white"
           >
-            <div className="text-right">
-              <div className="text-xs font-bold text-rose-200 leading-tight">
-                {t('delete')}
+            <motion.div
+              style={{ scale: deleteScale }}
+              className="flex items-center gap-2 font-bold"
+            >
+              <div className="text-right">
+                <div className="text-xs font-bold text-rose-200 leading-tight">
+                  {t('delete')}
+                </div>
+                <div className="text-[9px] font-normal text-rose-300/80">
+                  Remove log
+                </div>
               </div>
-              <div className="text-[9px] font-normal text-rose-300/80">
-                Remove log
+              <div className="grid h-8 w-8 place-items-center rounded-full bg-red-500/20 text-red-300 border border-red-500/30">
+                <Trash2 className="h-4 w-4" />
               </div>
-            </div>
-            <div className="grid h-8 w-8 place-items-center rounded-full bg-red-500/20 text-red-300 border border-red-500/30">
-              <Trash2 className="h-4 w-4" />
-            </div>
+            </motion.div>
           </motion.div>
-        </motion.div>
-      </div>
+        </div>
+      )}
 
       {/* Foreground swipeable row */}
       <motion.div
-        drag="x"
+        drag={isSelectionMode ? false : 'x'}
         dragDirectionLock
         dragConstraints={{ left: -140, right: 140 }}
         dragElastic={0.25}
         style={{ x }}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUpOrCancel}
+        onPointerCancel={handlePointerUpOrCancel}
         onDragStart={() => {
           setIsDragging(true);
           wasDraggedRef.current = true;
         }}
         onDragEnd={handleDragEnd}
-        className={`relative z-10 flex items-center bg-[#0d131f] hover:bg-[#121a2b] cursor-grab active:cursor-grabbing select-none transition-colors ${
+        className={`relative z-10 flex items-center bg-[#0d131f] hover:bg-[#121a2b] ${
+          isSelectionMode ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
+        } select-none transition-colors ${
           isCompact ? 'gap-2 px-3 py-2.5' : 'gap-3 px-3.5 py-3'
-        } ${isBlockedFeedback ? 'ring-1 ring-amber-500/40 bg-amber-950/20' : ''}`}
+        } ${isBlockedFeedback ? 'ring-1 ring-amber-500/40 bg-amber-950/20' : ''} ${
+          isSelected ? 'bg-blue-950/35 border-l-2 border-l-blue-500' : ''
+        }`}
       >
+        {/* Selection Checkbox in Selection Mode */}
+        {isSelectionMode && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect?.(callId);
+            }}
+            className={`grid shrink-0 place-items-center rounded-xl border transition-all cursor-pointer ${
+              isCompact ? 'h-7 w-7' : 'h-8 w-8'
+            } ${
+              isSelected
+                ? 'bg-blue-600 border-blue-500 text-white shadow-md ring-2 ring-blue-500/30'
+                : 'border-white/25 bg-white/5 hover:border-white/40 text-transparent'
+            }`}
+            aria-label={isSelected ? 'Deselect call' : 'Select call'}
+          >
+            <Check className={`h-4 w-4 stroke-[3] transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0'}`} />
+          </button>
+        )}
+
         {/* Caller Avatar / Type icon with min 40px hitbox */}
         <button
           type="button"

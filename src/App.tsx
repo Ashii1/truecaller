@@ -879,6 +879,36 @@ export default function App(){
     showToast('Number marked safe', 'success');
   }, []);
 
+  const handleWhitelistCalls = useCallback((callsToWhitelist: CallLogItem[]) => {
+    if (!callsToWhitelist.length) return;
+    const numbersSet = new Set<string>();
+    const newEntries: WhitelistEntry[] = [];
+    callsToWhitelist.forEach(call => {
+      const cleanNum = call.number;
+      if (!numbersSet.has(cleanNum)) {
+        numbersSet.add(cleanNum);
+        newEntries.push({
+          id: `wl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          value: cleanNum,
+          name: call.callerName || 'Trusted Caller',
+          notes: 'Bulk marked safe from Recents',
+          createdAt: Date.now()
+        });
+      }
+    });
+    setWhitelist(p => [...newEntries, ...p]);
+    setCalls(p => p.map(c => numbersSet.has(c.number) ? {
+      ...c,
+      isSpam: false,
+      classification: 'SAFE' as const,
+      riskLevel: 'SAFE' as const,
+      riskScore: 0,
+      userAction: 'MARKED_SAFE' as const,
+      spamReason: undefined,
+    } : c));
+    showToast(`Marked ${numbersSet.size} number${numbersSet.size > 1 ? 's' : ''} as safe`, 'success');
+  }, []);
+
   const handleAddContact = useCallback((contact: Omit<ContactItem, 'id'>) => {
     const n = contact.number.trim(), nm = contact.name.trim();
     if (!n) return;
@@ -898,6 +928,53 @@ export default function App(){
     }));
     showToast('Contact added', 'success');
   }, [contacts]);
+
+  const handleAddContacts = useCallback((itemsToAdd: Array<{ name: string; number: string }>) => {
+    if (!itemsToAdd.length) return;
+    let addedCount = 0;
+    setContacts(prev => {
+      const existingDigits = new Set(prev.map(c => c.number.replace(/\D/g, '')));
+      const newItems: ContactItem[] = [];
+
+      itemsToAdd.forEach(item => {
+        const digits = item.number.replace(/\D/g, '');
+        if (digits && !existingDigits.has(digits)) {
+          existingDigits.add(digits);
+          const newContact: ContactItem = {
+            id: `cnt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            name: item.name || item.number,
+            number: item.number,
+            accountType: 'SIM1',
+            category: 'GENERAL',
+            trusted: true,
+            isFavorite: false,
+          };
+          newItems.push(newContact);
+          telecomBridge.createContact(item.number, item.name || item.number);
+          addedCount++;
+        }
+      });
+
+      if (newItems.length > 0) {
+        setCalls(callPrev => callPrev.map(call => {
+          const cDigits = (call.number || '').replace(/\D/g, '');
+          const match = newItems.find(ni => ni.number.replace(/\D/g, '') === cDigits);
+          if (match) {
+            return { ...call, callerName: match.name, isContact: true };
+          }
+          return call;
+        }));
+      }
+
+      return [...newItems, ...prev];
+    });
+
+    if (addedCount > 0) {
+      showToast(`Added ${addedCount} contact${addedCount > 1 ? 's' : ''}`, 'success');
+    } else {
+      showToast('Selected numbers are already in contacts', 'info');
+    }
+  }, []);
 
   const handleUpdateContact = useCallback((id: string, updates: Partial<ContactItem>) => {
     setContacts(p => {
@@ -1380,7 +1457,27 @@ export default function App(){
        <Navigation activeTab={activeTab} onChangeTab={(tab) => { setNavigationSignal(v => v + 1); navigateToTab(tab); }} spamCallsCount={spamCallsCount} activeRulesCount={activeRulesCount} assistantAlertsCount={3} phoneOnly={phoneOnly}/> 
        <main className={phoneOnly ? "min-h-screen w-full animate-in fade-in duration-200" : "mx-auto w-full max-w-4xl px-3 py-3 pb-28 sm:pb-32 animate-in fade-in duration-200"}>
         {activeTab==='dialer'&&<DialerTab contacts={contacts} recentCalls={calls} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onOpenCallerDetail={handleOpenCallerDetail} onSaveContact={(n,nm)=>handleUpdateCallerName(n,nm)} selectedSim={selectedSim} onChangeSim={setSelectedSim} initialNumber={dialerInitialNumber} density={density}/>} 
-        {activeTab==='recents'&&<RecentsTab calls={calls} rules={rules} whitelist={whitelist} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onSelectCall={openCaller} onBlockNumber={handleBlockNumber} onWhitelistNumber={handleWhitelistNumber} onDeleteCall={handleDeleteCall} onDeleteCalls={handleDeleteCalls} onClearAllCalls={handleClearAllCalls} onSyncDeviceCalls={handleSyncDeviceData} density={density}/>} 
+        {activeTab==='recents'&&<RecentsTab
+          calls={calls}
+          rules={rules}
+          whitelist={whitelist}
+          settings={settings}
+          lookupProfile={handleLookupProfile}
+          onInitiateCall={handleInitiateCall}
+          onSelectCall={openCaller}
+          onBlockNumber={handleBlockNumber}
+          onWhitelistNumber={handleWhitelistNumber}
+          onWhitelistNumbers={handleWhitelistCalls}
+          onDeleteCall={handleDeleteCall}
+          onDeleteCalls={handleDeleteCalls}
+          onClearAllCalls={handleClearAllCalls}
+          onSyncDeviceCalls={handleSyncDeviceData}
+          density={density}
+          contacts={contacts}
+          onAddContact={handleAddContact}
+          onAddContacts={handleAddContacts}
+          showToast={showToast}
+        />} 
         {activeTab==='contacts'&&<ContactsTab contacts={contacts} onInitiateCall={handleInitiateCall} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} onDeleteContact={handleDeleteContact} onToggleFavorite={handleToggleFavorite} recentCalls={calls} density={density} onOpenCallerDetail={handleOpenCallerDetail} privateCallPrefix={settings.privateCallPrefix}/>} 
         {activeTab==='protection'&&<ProtectionTab settings={settings} onUpdateSettings={setSettings} rules={rules} onToggleRule={handleToggleRule} onDeleteRule={handleDeleteRule} onAddRule={handleAddRule} whitelist={whitelist} onRemoveWhitelist={handleRemoveWhitelist} timelineEvents={timelineEvents} onTriggerScreeningDemo={handleTriggerScreeningDemo}/>} 
         {activeTab==='assistant'&&<AssistantTab calls={calls} contacts={contacts} rules={rules} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onAddRule={handleAddRule}/>} 
