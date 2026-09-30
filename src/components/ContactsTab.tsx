@@ -41,7 +41,7 @@ interface ContactsTabProps {
   privateCallPrefix?: string;
 }
 
-type CategoryFilter = 'ALL' | 'FAVORITES' | 'FAMILY' | 'WORK' | 'BUSINESSES' | 'RECENT';
+type CategoryFilter = 'ALL' | 'FAVORITES' | 'FAMILY' | 'WORK' | 'BUSINESSES' | 'RECENT' | 'GENERAL';
 type AccountFilter = 'ALL' | 'GOOGLE_ALL' | 'GOOGLE_PERSONAL' | 'GOOGLE_WORK' | 'SIM1' | 'SIM2' | 'PHONE';
 type AccountChoice = 'GOOGLE_PERSONAL' | 'GOOGLE_WORK' | 'SIM1' | 'SIM2' | 'PHONE';
 
@@ -103,23 +103,6 @@ function ContactsTab({
     return map;
   }, [recentCalls]);
 
-  const counts = useMemo(() => {
-    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    return {
-      ALL: contacts.length,
-      FAVORITES: contacts.filter((c) => c.isFavorite || c.category === 'FAVORITE').length,
-      FAMILY: contacts.filter((c) => c.category === 'FAMILY').length,
-      WORK: contacts.filter((c) => c.category === 'WORK').length,
-      BUSINESSES: contacts.filter((c) => c.category === 'BUSINESS' || Boolean(c.businessCategory) || c.isVerifiedBusiness).length,
-      RECENT: contacts.filter((c) => {
-        const cClean = clean(c.number);
-        const c10 = cClean.length >= 10 ? cClean.slice(-10) : cClean;
-        const lastCall = c.lastCallTimestamp || contactRecentMap[c10] || (cClean ? contactRecentMap[cClean] : 0) || 0;
-        return lastCall > 0 && lastCall > weekAgo;
-      }).length,
-    };
-  }, [contacts, contactRecentMap]);
-
   const resolveAccountType = (c: ContactItem): 'GOOGLE' | 'SIM1' | 'SIM2' | 'PHONE' => {
     if (c.accountType) return c.accountType;
     const note = (c.notes || '').toLowerCase();
@@ -136,6 +119,81 @@ function ContactsTab({
     return lbl.includes('work') || lbl.includes('corp') || lbl.includes('office') || note.includes('work google');
   };
 
+  // Category matching helper predicates
+  const isFavoriteContact = (c: ContactItem) =>
+    Boolean(c.isFavorite) || String(c.category || '').toUpperCase() === 'FAVORITE';
+
+  const isFamilyContact = (c: ContactItem) => {
+    const cat = String(c.category || '').toUpperCase();
+    const note = (c.notes || '').toLowerCase();
+    return (
+      cat === 'FAMILY' ||
+      cat === 'PERSONAL' ||
+      note.includes('family') ||
+      note.includes('personal') ||
+      note.includes('friend') ||
+      note.includes('home')
+    );
+  };
+
+  const isWorkContact = (c: ContactItem) => {
+    const cat = String(c.category || '').toUpperCase();
+    const lbl = (c.accountLabel || '').toLowerCase();
+    const note = (c.notes || '').toLowerCase();
+    return (
+      cat === 'WORK' ||
+      isGoogleWorkAccount(c) ||
+      lbl.includes('work') ||
+      lbl.includes('office') ||
+      note.includes('work')
+    );
+  };
+
+  const isBusinessContact = (c: ContactItem) => {
+    const cat = String(c.category || '').toUpperCase();
+    return cat === 'BUSINESS' || Boolean(c.businessCategory) || Boolean(c.isVerifiedBusiness);
+  };
+
+  const isRecentContact = (c: ContactItem) => {
+    const cClean = clean(c.number);
+    const c10 = cClean.length >= 10 ? cClean.slice(-10) : cClean;
+    const hasRecentMap = Boolean(contactRecentMap[c10] || (cClean && contactRecentMap[cClean]));
+    const hasLastCall = Boolean(c.lastCallTimestamp && c.lastCallTimestamp > 0);
+    const hasTotalCalls = Boolean(c.totalCallsCount && c.totalCallsCount > 0);
+    return hasRecentMap || hasLastCall || hasTotalCalls;
+  };
+
+  const isGeneralContact = (c: ContactItem) => {
+    const cat = String(c.category || '').toUpperCase();
+    return cat === 'GENERAL' || (!isFamilyContact(c) && !isWorkContact(c) && !isBusinessContact(c) && !isFavoriteContact(c));
+  };
+
+  const matchesAccount = (c: ContactItem, accFilter: AccountFilter) => {
+    if (accFilter === 'ALL') return true;
+    const acc = resolveAccountType(c);
+    if (accFilter === 'GOOGLE_ALL') return acc === 'GOOGLE';
+    if (accFilter === 'GOOGLE_PERSONAL') return acc === 'GOOGLE' && !isGoogleWorkAccount(c);
+    if (accFilter === 'GOOGLE_WORK') return acc === 'GOOGLE' && isGoogleWorkAccount(c);
+    if (accFilter === 'SIM1') return acc === 'SIM1';
+    if (accFilter === 'SIM2') return acc === 'SIM2';
+    if (accFilter === 'PHONE') return acc === 'PHONE';
+    return true;
+  };
+
+  // Dynamic counts reflecting active account filter so badges always match visible results
+  const counts = useMemo(() => {
+    const base = contacts.filter((c) => matchesAccount(c, accountFilter));
+    return {
+      ALL: base.length,
+      FAVORITES: base.filter(isFavoriteContact).length,
+      FAMILY: base.filter(isFamilyContact).length,
+      WORK: base.filter(isWorkContact).length,
+      BUSINESSES: base.filter(isBusinessContact).length,
+      RECENT: base.filter(isRecentContact).length,
+      GENERAL: base.filter(isGeneralContact).length,
+    };
+  }, [contacts, accountFilter, contactRecentMap]);
+
   const accountCounts = useMemo(() => {
     return {
       ALL: contacts.length,
@@ -149,42 +207,31 @@ function ContactsTab({
   }, [contacts]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase(),
-      d = clean(query);
-    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const q = query.trim().toLowerCase();
+    const d = clean(query);
 
     return contacts
       .filter((c) => {
         // 1. Account / Storage filter
-        if (accountFilter !== 'ALL') {
-          const acc = resolveAccountType(c);
-          if (accountFilter === 'GOOGLE_ALL' && acc !== 'GOOGLE') return false;
-          if (accountFilter === 'GOOGLE_PERSONAL' && (acc !== 'GOOGLE' || isGoogleWorkAccount(c))) return false;
-          if (accountFilter === 'GOOGLE_WORK' && (acc !== 'GOOGLE' || !isGoogleWorkAccount(c))) return false;
-          if (accountFilter === 'SIM1' && acc !== 'SIM1') return false;
-          if (accountFilter === 'SIM2' && acc !== 'SIM2') return false;
-          if (accountFilter === 'PHONE' && acc !== 'PHONE') return false;
-        }
+        if (!matchesAccount(c, accountFilter)) return false;
 
         // 2. Category filter
-        if (filter === 'FAVORITES' && !c.isFavorite && c.category !== 'FAVORITE') return false;
-        if (filter === 'FAMILY' && c.category !== 'FAMILY') return false;
-        if (filter === 'WORK' && c.category !== 'WORK') return false;
-        if (filter === 'BUSINESSES' && c.category !== 'BUSINESS' && !c.businessCategory && !c.isVerifiedBusiness) return false;
-        if (filter === 'RECENT') {
-          const cClean = clean(c.number);
-          const c10 = cClean.length >= 10 ? cClean.slice(-10) : cClean;
-          const lastCall = c.lastCallTimestamp || contactRecentMap[c10] || (cClean ? contactRecentMap[cClean] : 0) || 0;
-          if (lastCall === 0 || lastCall < weekAgo) return false;
-        }
+        if (filter === 'FAVORITES' && !isFavoriteContact(c)) return false;
+        if (filter === 'FAMILY' && !isFamilyContact(c)) return false;
+        if (filter === 'WORK' && !isWorkContact(c)) return false;
+        if (filter === 'BUSINESSES' && !isBusinessContact(c)) return false;
+        if (filter === 'RECENT' && !isRecentContact(c)) return false;
+        if (filter === 'GENERAL' && !isGeneralContact(c)) return false;
 
         // 3. Search query
         if (!q) return true;
-        return (
-          String(c.name ?? '').toLowerCase().includes(q) ||
-          Boolean(String(c.businessCategory ?? '').toLowerCase().includes(q)) ||
-          (d.length > 0 && clean(c.number).includes(d))
-        );
+        const nameMatch = String(c.name ?? '').toLowerCase().includes(q);
+        const bizMatch = Boolean(String(c.businessCategory ?? '').toLowerCase().includes(q));
+        const numClean = clean(c.number);
+        const numMatch = d.length > 0 && numClean.includes(d);
+        const notesMatch = Boolean(String(c.notes ?? '').toLowerCase().includes(q));
+        const accountMatch = Boolean(String(c.accountLabel ?? '').toLowerCase().includes(q));
+        return nameMatch || bizMatch || numMatch || notesMatch || accountMatch;
       })
       .sort((a, b) => Number(Boolean(b.isFavorite)) - Number(Boolean(a.isFavorite)) || a.name.localeCompare(b.name));
   }, [contacts, query, filter, accountFilter, contactRecentMap]);
@@ -269,12 +316,13 @@ function ContactsTab({
   };
 
   const categoryTabs: FilterTabOption<CategoryFilter>[] = [
-    { id: 'ALL', label: t('filter_all'), icon: Users, count: counts.ALL, badgeVariant: 'default' },
-    { id: 'FAVORITES', label: t('cat_favorites'), icon: Star, count: counts.FAVORITES, badgeVariant: 'favorite' },
-    { id: 'FAMILY', label: t('cat_family'), icon: Heart, count: counts.FAMILY, badgeVariant: 'default' },
-    { id: 'WORK', label: t('cat_work'), icon: Briefcase, count: counts.WORK, badgeVariant: 'default' },
-    { id: 'BUSINESSES', label: t('cat_businesses'), icon: Building2, count: counts.BUSINESSES, badgeVariant: 'default' },
-    { id: 'RECENT', label: t('cat_recent'), icon: Clock, count: counts.RECENT, badgeVariant: 'default' },
+    { id: 'ALL', label: t('filter_all') || 'All', icon: Users, count: counts.ALL, badgeVariant: 'default' },
+    { id: 'FAVORITES', label: t('cat_favorites') || 'Favorites', icon: Star, count: counts.FAVORITES, badgeVariant: 'favorite' },
+    { id: 'FAMILY', label: t('cat_family') || 'Family', icon: Heart, count: counts.FAMILY, badgeVariant: 'default' },
+    { id: 'WORK', label: t('cat_work') || 'Work', icon: Briefcase, count: counts.WORK, badgeVariant: 'default' },
+    { id: 'BUSINESSES', label: t('cat_businesses') || 'Businesses', icon: Building2, count: counts.BUSINESSES, badgeVariant: 'default' },
+    { id: 'RECENT', label: t('cat_recent') || 'Recent', icon: Clock, count: counts.RECENT, badgeVariant: 'default' },
+    { id: 'GENERAL', label: t('cat_general') || 'General', icon: UserRound, count: counts.GENERAL, badgeVariant: 'default' },
   ];
 
   const isCompact = density === 'compact';
@@ -295,15 +343,18 @@ function ContactsTab({
       {/* Header */}
       <header className={`flex items-center justify-between gap-2 transition-all ${isCompact ? 'mb-2' : 'mb-3'}`}>
         <div>
-          <h1 className={`font-bold tracking-tight text-white transition-all ${isCompact ? 'text-lg' : 'text-xl'}`}>{t('contacts_title')}</h1>
+          <h1 className={`font-black tracking-tight text-white transition-all ${isCompact ? 'text-lg' : 'text-xl'}`}>{t('contacts_title')}</h1>
+          <p className="text-[11px] text-slate-400">
+            {filtered.length} {filtered.length === 1 ? 'contact' : 'contacts'} {filter !== 'ALL' ? `· ${filter.toLowerCase()}` : ''}
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Subtle Accounts & Storage Filter Dropdown (Tucked away, clean, not cluttering all the time) */}
+          {/* Storage Accounts Selector */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowAccountMenu((prev) => !prev)}
-              className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition active:scale-95 ${
+              className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition active:scale-95 cursor-pointer ${
                 accountFilter !== 'ALL'
                   ? 'bg-blue-500/20 text-blue-200 border-blue-500/40 ring-1 ring-blue-500/30'
                   : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
@@ -313,7 +364,7 @@ function ContactsTab({
               <Layers className="h-3.5 w-3.5 text-blue-400 shrink-0" />
               <span>
                 {accountFilter === 'ALL'
-                  ? 'Accounts'
+                  ? 'All Storage'
                   : accountFilter === 'GOOGLE_ALL'
                   ? 'All Google'
                   : accountFilter === 'GOOGLE_PERSONAL'
@@ -344,7 +395,7 @@ function ContactsTab({
                     { id: 'ALL' as const, label: 'All Accounts', count: accountCounts.ALL, icon: Users },
                     { id: 'GOOGLE_ALL' as const, label: 'All Google Accounts', count: accountCounts.GOOGLE_ALL, icon: Building2 },
                     { id: 'GOOGLE_PERSONAL' as const, label: 'Google (Personal)', count: accountCounts.GOOGLE_PERSONAL, icon: Building2 },
-                    { id: 'GOOGLE_WORK' as const, label: 'Google (Work / Workspace)', count: accountCounts.GOOGLE_WORK, icon: Briefcase },
+                    { id: 'GOOGLE_WORK' as const, label: 'Google (Work)', count: accountCounts.GOOGLE_WORK, icon: Briefcase },
                     { id: 'SIM1' as const, label: 'SIM 1 Storage', count: accountCounts.SIM1, icon: Smartphone },
                     { id: 'SIM2' as const, label: 'SIM 2 Storage', count: accountCounts.SIM2, icon: Smartphone },
                     { id: 'PHONE' as const, label: 'Device Storage', count: accountCounts.PHONE, icon: Smartphone },
@@ -359,7 +410,7 @@ function ContactsTab({
                           setAccountFilter(acc.id);
                           setShowAccountMenu(false);
                         }}
-                        className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-xs font-semibold transition ${
+                        className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-xs font-semibold transition cursor-pointer ${
                           isSelected
                             ? 'bg-blue-500/20 text-blue-200 border border-blue-500/30 font-bold'
                             : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'
@@ -385,7 +436,7 @@ function ContactsTab({
           <button
             type="button"
             onClick={importDevice}
-            className={`hidden rounded-xl border border-white/10 bg-white/5 font-semibold text-slate-300 sm:block hover:bg-white/10 transition ${isCompact ? 'px-2 py-1 text-[11px]' : 'px-2.5 py-1.5 text-xs'}`}
+            className={`hidden rounded-xl border border-white/10 bg-white/5 font-semibold text-slate-300 sm:block hover:bg-white/10 transition cursor-pointer ${isCompact ? 'px-2 py-1 text-[11px]' : 'px-2.5 py-1.5 text-xs'}`}
           >
             {t('import')}
           </button>
@@ -396,13 +447,8 @@ function ContactsTab({
               setNumber('');
               setCategory('GENERAL');
               setShowAdd(true);
-              if (typeof window !== 'undefined' && window.history) {
-                try {
-                  window.history.pushState({ app: 'callshield', view: 'contact_add' }, '', window.location.href);
-                } catch {}
-              }
             }}
-            className={`flex items-center gap-1 rounded-xl bg-emerald-500 hover:bg-emerald-400 font-bold text-slate-950 shadow-md shadow-emerald-500/20 transition-all ${isCompact ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1.5 text-xs'}`}
+            className={`flex items-center gap-1 rounded-xl bg-emerald-500 hover:bg-emerald-400 font-bold text-slate-950 shadow-md shadow-emerald-500/20 transition-all cursor-pointer ${isCompact ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1.5 text-xs'}`}
           >
             <Plus className={`stroke-[2.5] ${isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'}`} />
             <span>{t('add')}</span>
@@ -431,16 +477,20 @@ function ContactsTab({
         density={density}
       />
 
-      {/* Modern Filter Navigation Bar with full text, scroll chevrons & popover */}
+      {/* Modern Category Filter Navigation Bar - 100% Reliable click response */}
       <ModernFilterBar<CategoryFilter>
         tabs={categoryTabs}
         activeId={filter}
-        onChange={setFilter}
+        onChange={(newFilter) => {
+          setFilter(newFilter);
+        }}
+        accentClass="bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-[0_2px_12px_rgba(59,130,246,0.35)]"
+        activeTextClass="text-white font-bold"
       />
 
-      {/* Active Storage Account Filter Chip */}
+      {/* Active Storage Account Notice & Reset */}
       {accountFilter !== 'ALL' && (
-        <div className="flex items-center justify-between gap-2 px-1 py-1 -mt-1 text-xs">
+        <div className="flex items-center justify-between gap-2 px-1 py-1 -mt-1 mb-2 text-xs">
           <div className="flex items-center gap-1.5 text-slate-400">
             <span>Storage Filter:</span>
             <span className="font-bold text-blue-300">
@@ -449,21 +499,21 @@ function ContactsTab({
                 : accountFilter === 'GOOGLE_PERSONAL'
                 ? 'Google (Personal)'
                 : accountFilter === 'GOOGLE_WORK'
-                ? 'Google (Work / Workspace)'
+                ? 'Google (Work)'
                 : accountFilter === 'SIM1'
                 ? 'SIM 1 Storage'
                 : accountFilter === 'SIM2'
                 ? 'SIM 2 Storage'
                 : 'Device Storage'}
             </span>
-            <span className="text-slate-500">({filtered.length} found)</span>
+            <span className="text-slate-500">({filtered.length} visible)</span>
           </div>
           <button
             type="button"
             onClick={() => setAccountFilter('ALL')}
-            className="flex items-center gap-1 text-[11px] font-semibold text-blue-400 hover:text-blue-300 transition"
+            className="flex items-center gap-1 text-[11px] font-semibold text-blue-400 hover:text-blue-300 transition cursor-pointer"
           >
-            <span>Reset to All</span>
+            <span>Show all</span>
             <X className="h-3 w-3" />
           </button>
         </div>
@@ -474,16 +524,38 @@ function ContactsTab({
         <div className={`border border-white/10 bg-[#0e141c] text-center transition-all ${isCompact ? 'rounded-xl p-6' : 'rounded-2xl p-8'}`}>
           <UserRound className={`mx-auto text-slate-700 ${isCompact ? 'h-6 w-6' : 'h-7 w-7'}`} />
           <p className={`font-semibold text-slate-300 ${isCompact ? 'mt-1.5 text-[11px]' : 'mt-2 text-xs'}`}>
-            {contacts.length ? t('no_matching_contacts') : t('no_contacts_yet')}
+            {contacts.length ? (
+              filter !== 'ALL' || accountFilter !== 'ALL' ? (
+                <>No contacts match active filters ({filter.toLowerCase()})</>
+              ) : (
+                t('no_matching_contacts')
+              )
+            ) : (
+              t('no_contacts_yet')
+            )}
           </p>
-          <p className="mt-0.5 text-[10px] text-slate-600">{t('add_contact_or_import')}</p>
+          <div className="mt-2 flex items-center justify-center gap-2">
+            {(filter !== 'ALL' || accountFilter !== 'ALL' || query) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFilter('ALL');
+                  setAccountFilter('ALL');
+                  setQuery('');
+                }}
+                className="rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-blue-300 hover:bg-white/10 transition cursor-pointer"
+              >
+                Reset all filters
+              </button>
+            )}
+          </div>
         </div>
       ) : (
-        <div className={`overflow-hidden border border-white/10 bg-[#0e141c] transition-all ${isCompact ? 'rounded-xl' : 'rounded-2xl'}`}>
+        <div className={`overflow-hidden border border-white/[0.08] bg-[#0c121e]/90 shadow-sm transition-all ${isCompact ? 'rounded-xl' : 'rounded-2xl'}`}>
           {filtered.map((c) => (
             <div
               key={c.id}
-              className={`flex items-center border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition ${isCompact ? 'gap-2 px-2.5 py-1.5' : 'gap-2.5 px-3 py-2.5'}`}
+              className={`flex items-center border-b border-white/[0.05] last:border-0 hover:bg-[#121a2b] transition ${isCompact ? 'gap-2.5 px-3 py-2.5' : 'gap-3 px-3.5 py-3'}`}
             >
               <button
                 type="button"
@@ -492,17 +564,12 @@ function ContactsTab({
                     onOpenCallerDetail({ number: c.number, name: c.name, contact: c });
                   } else {
                     setSelected(c);
-                    if (typeof window !== 'undefined' && window.history) {
-                      try {
-                        window.history.pushState({ app: 'callshield', view: 'contact_detail', id: c.id }, '', window.location.href);
-                      } catch {}
-                    }
                   }
                 }}
-                className={`grid shrink-0 place-items-center rounded-full bg-gradient-to-br from-slate-700 to-slate-800 font-bold text-white transition-all ${isCompact ? 'h-7.5 w-7.5 text-[10px]' : 'h-9 w-9 text-xs'}`}
+                className={`grid shrink-0 place-items-center rounded-full bg-slate-800 text-slate-200 border border-white/10 font-bold transition-all cursor-pointer ${isCompact ? 'h-9 w-9 text-xs' : 'h-10 w-10 text-sm'}`}
               >
                 {c.isVerifiedBusiness ? (
-                  <Building2 className={isCompact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+                  <Building2 className={isCompact ? 'h-4 w-4 text-blue-400' : 'h-4.5 w-4.5 text-blue-400'} />
                 ) : (
                   c.name.slice(0, 1).toUpperCase()
                 )}
@@ -514,29 +581,21 @@ function ContactsTab({
                     onOpenCallerDetail({ number: c.number, name: c.name, contact: c });
                   } else {
                     setSelected(c);
-                    if (typeof window !== 'undefined' && window.history) {
-                      try {
-                        window.history.pushState({ app: 'callshield', view: 'contact_detail', id: c.id }, '', window.location.href);
-                      } catch {}
-                    }
                   }
                 }}
-                className="min-w-0 flex-1 text-left"
+                className="min-w-0 flex-1 text-left cursor-pointer focus:outline-none"
               >
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className={`truncate font-semibold text-white transition-all ${isCompact ? 'text-xs' : 'text-sm'}`}>{c.name}</span>
-                  {c.isVerifiedBusiness && <ShieldCheck className={`text-blue-400 shrink-0 ${isCompact ? 'h-2.5 w-2.5' : 'h-3 w-3'}`} />}
-                  {c.accountType === 'SIM1' ? (
-                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">SIM 1</span>
-                  ) : c.accountType === 'SIM2' ? (
-                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">SIM 2</span>
-                  ) : c.accountType === 'PHONE' ? (
-                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30">Phone</span>
-                  ) : (
-                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30">Google</span>
+                  <span className={`truncate font-semibold tracking-tight text-white transition-all ${isCompact ? 'text-xs' : 'text-sm'}`}>{c.name}</span>
+                  {c.isVerifiedBusiness && <ShieldCheck className={`text-blue-400 shrink-0 ${isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'}`} />}
+                  <span className="text-[11px] font-medium text-slate-400">
+                    · {c.accountType === 'SIM1' ? 'SIM 1' : c.accountType === 'SIM2' ? 'SIM 2' : c.accountType === 'PHONE' ? 'Device' : 'Google'}
+                  </span>
+                  {c.category && c.category !== 'GENERAL' && (
+                    <span className="text-[11px] font-medium text-slate-400 capitalize">· {c.category.toLowerCase()}</span>
                   )}
                 </div>
-                <div className={`truncate text-slate-500 transition-all ${isCompact ? 'mt-0 text-[10px]' : 'mt-0.5 text-[11px]'}`}>
+                <div className={`truncate text-slate-400 transition-all font-mono tabular-nums ${isCompact ? 'mt-0 text-[10.5px]' : 'mt-0.5 text-[11.5px]'}`}>
                   {c.number}
                   {c.businessCategory ? ` · ${c.businessCategory}` : ''}
                 </div>
@@ -544,18 +603,22 @@ function ContactsTab({
               <button
                 type="button"
                 onClick={() => onToggleFavorite(c.id)}
-                className={`rounded-full text-slate-600 hover:text-amber-400 transition ${isCompact ? 'p-1' : 'p-1.5'}`}
+                className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:text-amber-400 transition cursor-pointer active:scale-95"
                 title={t('favorite')}
+                aria-label={c.isFavorite ? 'Unmark favorite' : 'Mark favorite'}
               >
-                <Star className={`${isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} ${c.isFavorite ? 'fill-current text-amber-400' : ''}`} />
+                <Star className={`h-4 w-4 ${c.isFavorite ? 'fill-amber-400 text-amber-400' : ''}`} />
               </button>
               <button
                 type="button"
                 onClick={() => onInitiateCall(c.number, c.name)}
-                className={`grid shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition ${isCompact ? 'h-7 w-7' : 'h-8 w-8'}`}
-                aria-label={t('nav_phone')}
+                className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 transition cursor-pointer active:scale-95"
+                aria-label={`${t('nav_phone')} ${c.name}`}
+                title={`Call ${c.name}`}
               >
-                <Phone className={`${isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} fill-current`} />
+                <div className="grid h-8 w-8 place-items-center rounded-full bg-emerald-500/15 border border-emerald-500/25">
+                  <Phone className="h-4 w-4 fill-current" />
+                </div>
               </button>
             </div>
           ))}

@@ -61,7 +61,13 @@ export default function IncomingCallOverlay({
 
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [expandedDetails, setExpandedDetails] = useState(false);
-  const [silenced, setSilenced] = useState(false);
+  const [silenced, setSilenced] = useState(() => Boolean(call?.isRingerSilenced));
+
+  // Reset silenced state for each incoming call instance
+  useEffect(() => {
+    setSilenced(Boolean(call?.isRingerSilenced));
+  }, [call?.callId, call?.isRingerSilenced]);
+
   const [isScreeningInternal, setIsScreeningInternal] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const alertControllerRef = useRef<IncomingCallAlertController | null>(null);

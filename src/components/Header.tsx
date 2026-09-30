@@ -299,86 +299,80 @@ function Header({
 
   return (
     <>
-      {/* Top Header Bar with Clean Minimalist Layout */}
+      {/* Top Header Bar with Modern Flagship Layout */}
       <header
         id="app-top-header"
-        className="sticky top-0 z-40 border-b border-white/[0.08] bg-[#0b0f14]/98 backdrop-blur-xl safe-top-header pb-2 transition-all shadow-md shadow-black/20"
+        className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#080c14]/90 backdrop-blur-2xl safe-top-header transition-all"
       >
-        <div className="mx-auto flex h-14 sm:h-16 max-w-4xl items-center justify-between gap-2 px-3.5 sm:px-6">
-          {/* Brand & Live Protection Status */}
-          <div className="flex min-w-0 items-center gap-2.5">
+        <div className="mx-auto flex h-14 max-w-4xl items-center justify-between gap-3 px-4 sm:px-6">
+          {/* Zone 1: Single element Brand Wordmark & Subtle Live Indicator */}
+          <div className="flex items-center gap-2.5">
             <div
-              className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl shadow-md transition-all ${
+              className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl transition-colors ${
                 settings?.masterEnabled !== false
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                  : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+                  : 'bg-rose-500/15 text-rose-400 border border-rose-500/25'
               }`}
               aria-hidden="true"
             >
-              {settings?.masterEnabled !== false ? <ShieldCheck className="h-5 w-5" /> : <ShieldAlert className="h-5 w-5" />}
+              {settings?.masterEnabled !== false ? <ShieldCheck className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}
             </div>
-            <div className="min-w-0">
-              <div className="text-sm font-black leading-tight tracking-tight text-white">{t('app_title')}</div>
-              <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                <span className={`inline-block h-1.5 w-1.5 rounded-full ${settings?.masterEnabled !== false ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+            <div className="flex flex-col">
+              <span className="text-sm font-bold tracking-tight text-white leading-tight">
+                {t('app_title')}
+              </span>
+              <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium">
+                <span className={`inline-block h-1.5 w-1.5 rounded-full ${settings?.masterEnabled !== false ? 'bg-emerald-400' : 'bg-rose-400'}`} />
                 <span>{settings?.masterEnabled !== false ? t('protected') : t('paused')}</span>
-              </div>
+              </span>
             </div>
           </div>
 
-          {/* Header Action Tools */}
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            {/* Notification Panel Button */}
+          {/* Zone 3: Clean Actions with >=44px Hitboxes */}
+          <div className="flex items-center gap-1">
+            {onRequestDefaultDialer && !isDefaultDialer && (
+              <button
+                type="button"
+                onClick={onRequestDefaultDialer}
+                className="hidden sm:flex items-center gap-1.5 rounded-xl bg-blue-600/90 hover:bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition active:scale-95 min-h-[36px]"
+              >
+                <PhoneCall className="h-3.5 w-3.5" />
+                <span>{t('set_as_phone_app')}</span>
+              </button>
+            )}
+
+            {/* Notification Panel Button with 44x44px Hitbox */}
             <button
               id="header-notification-panel-btn"
               type="button"
               onClick={() => setShowNotifications((prev) => !prev)}
-              className={`relative grid h-8 w-8 place-items-center rounded-lg border transition-all ${
+              className={`relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl transition-all cursor-pointer ${
                 showNotifications
-                  ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-400'
-                  : 'border-slate-700/80 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white'
+                  ? 'bg-blue-500/20 text-blue-300'
+                  : 'text-slate-400 hover:text-white hover:bg-white/[0.06] active:scale-95'
               }`}
               aria-label={t('notification_panel_title')}
               title={t('notification_panel_title')}
             >
-              <Bell className="h-3.5 w-3.5" />
-              {(activeCallSession || activeIncomingCall || minimizedCaller) && (
-                <span className="absolute -top-1 -left-1 flex h-2.5 w-2.5" title={activeCallSession ? "Active Call Ongoing" : activeIncomingCall ? "Incoming Call Ringing" : "Caller Profile Minimized"}>
-                  <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${activeIncomingCall ? 'bg-blue-400' : activeCallSession ? 'bg-emerald-400' : 'bg-indigo-400'}`} />
-                  <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${activeIncomingCall ? 'bg-blue-500' : activeCallSession ? 'bg-emerald-500' : 'bg-indigo-500'}`} />
-                </span>
-              )}
-              {activeNotifications.length > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[8px] font-black text-white shadow-sm ring-2 ring-[#0b0f14]">
-                  {activeNotifications.length > 9 ? '9+' : activeNotifications.length}
-                </span>
-              )}
+              <div className="relative grid h-8 w-8 place-items-center rounded-lg border border-white/[0.08] bg-white/[0.04]">
+                <Bell className="h-4 w-4" />
+                {(activeCallSession || activeIncomingCall || minimizedCaller) && (
+                  <span className="absolute -top-1 -left-1 flex h-2.5 w-2.5" title={activeCallSession ? "Active Call Ongoing" : activeIncomingCall ? "Incoming Call Ringing" : "Caller Profile Minimized"}>
+                    <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${activeIncomingCall ? 'bg-blue-400' : activeCallSession ? 'bg-emerald-400' : 'bg-indigo-400'}`} />
+                    <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${activeIncomingCall ? 'bg-blue-500' : activeCallSession ? 'bg-emerald-500' : 'bg-indigo-500'}`} />
+                  </span>
+                )}
+                {activeNotifications.length > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[8.5px] font-bold text-white shadow-sm ring-2 ring-[#080c14]">
+                    {activeNotifications.length > 9 ? '9+' : activeNotifications.length}
+                  </span>
+                )}
+              </div>
             </button>
 
-            {onRequestDefaultDialer && !isDefaultDialer && (
-              <button
-                onClick={onRequestDefaultDialer}
-                className="hidden items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 sm:flex"
-              >
-                <PhoneCall className="h-3.5 w-3.5" /> {t('set_as_phone_app')}
-              </button>
-            )}
-
-            {isDefaultDialer && onToggleShield && (
-              <button
-                onClick={onToggleShield}
-                className={`rounded-lg px-2.5 py-1.5 text-xs font-bold transition ${
-                  settings?.masterEnabled !== false
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                }`}
-              >
-                {settings?.masterEnabled !== false ? t('protected') : t('paused')}
-              </button>
-            )}
-
-            {/* Settings Button */}
+            {/* Settings Button with 44x44px Hitbox */}
             <button
+              type="button"
               onClick={() => {
                 if (onSettingsOpenChange) {
                   onSettingsOpenChange(true);
@@ -386,10 +380,13 @@ function Header({
                   setShowSettings(true);
                 }
               }}
-              className="grid h-8 w-8 place-items-center rounded-lg border border-slate-700/80 bg-slate-900 text-slate-300 transition hover:bg-slate-800 hover:text-white"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.06] transition-all active:scale-95 cursor-pointer"
               aria-label={t('settings_title')}
+              title={t('settings_title')}
             >
-              <Settings className="h-3.5 w-3.5" />
+              <div className="grid h-8 w-8 place-items-center rounded-lg border border-white/[0.08] bg-white/[0.04]">
+                <Settings className="h-4 w-4" />
+              </div>
             </button>
           </div>
         </div>

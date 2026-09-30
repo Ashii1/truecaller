@@ -172,11 +172,11 @@ function AssistantTab({
       </div>
 
       {/* 1. WEEKLY SECURITY DIGEST */}
-      <div className="p-4 sm:p-5 rounded-3xl bg-slate-900/60 border border-slate-800/60 shadow-xl space-y-4">
+      <div className="p-4 sm:p-5 rounded-2xl bg-[#0c121e]/90 border border-white/[0.08] shadow-sm space-y-3.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <TrendingUp className="w-4 h-4 text-emerald-400" />
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+            <h2 className="text-xs font-bold text-white uppercase tracking-wider">
               {t('weekly_digest_title')}
             </h2>
           </div>
@@ -184,45 +184,45 @@ function AssistantTab({
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          <div className="p-3 rounded-2xl bg-slate-800/40 border border-slate-800/60">
+          <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
             <div className="text-[11px] text-slate-400">{t('calls_handled')}</div>
-            <div className="text-xl font-extrabold text-white mt-1">
+            <div className="text-2xl font-bold tracking-tight font-mono tabular-nums text-white mt-1">
               {digestMetrics.totalWeek}
             </div>
-            <div className="text-[10px] text-slate-500 mt-0.5">All incoming & outgoing</div>
+            <div className="text-[10px] text-slate-500 mt-0.5">All calls</div>
           </div>
 
-          <div className="p-3 rounded-2xl bg-slate-800/40 border border-slate-800/60">
+          <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
             <div className="text-[11px] text-slate-400">{t('spam_shielded')}</div>
-            <div className="text-xl font-extrabold text-rose-400 mt-1">
+            <div className="text-2xl font-bold tracking-tight font-mono tabular-nums text-rose-400 mt-1">
               {digestMetrics.blockedWeek}
             </div>
-            <div className="text-[10px] text-emerald-400 mt-0.5">Filtered before ringing</div>
+            <div className="text-[10px] text-emerald-400 mt-0.5">Filtered before ring</div>
           </div>
 
-          <div className="p-3 rounded-2xl bg-slate-800/40 border border-slate-800/60">
+          <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
             <div className="text-[11px] text-slate-400">{t('verified_entities')}</div>
-            <div className="text-xl font-extrabold text-blue-400 mt-1">
+            <div className="text-2xl font-bold tracking-tight font-mono tabular-nums text-blue-400 mt-1">
               {digestMetrics.verifiedWeek}
             </div>
-            <div className="text-[10px] text-slate-500 mt-0.5">Authorized businesses</div>
+            <div className="text-[10px] text-slate-500 mt-0.5">Authorized business</div>
           </div>
 
-          <div className="p-3 rounded-2xl bg-slate-800/40 border border-slate-800/60">
+          <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
             <div className="text-[11px] text-slate-400">{t('contacts_safety')}</div>
-            <div className="text-xl font-extrabold text-emerald-400 mt-1">
+            <div className="text-2xl font-bold tracking-tight font-mono tabular-nums text-emerald-400 mt-1">
               100%
             </div>
-            <div className="text-[10px] text-emerald-400 mt-0.5">Zero infected contacts</div>
+            <div className="text-[10px] text-emerald-400 mt-0.5">Zero infected</div>
           </div>
         </div>
       </div>
 
       {/* 2. INTERACTIVE AI NUMBER INVESTIGATOR */}
-      <div className="p-4 sm:p-5 rounded-3xl bg-slate-900/60 border border-slate-800/60 shadow-xl space-y-4">
+      <div className="p-4 sm:p-5 rounded-2xl bg-[#0c121e]/90 border border-white/[0.08] shadow-sm space-y-3.5">
         <div className="flex items-center space-x-2">
-          <Brain className="w-5 h-5 text-indigo-400" />
-          <h2 className="text-base font-bold text-white">{t('investigator_title')}</h2>
+          <Brain className="w-5 h-5 text-blue-400" />
+          <h2 className="text-base font-bold text-white tracking-tight">{t('investigator_title')}</h2>
         </div>
         <p className="text-xs text-slate-400">
           Enter any phone number to inspect risk score, community flags, and behavioral patterns.
@@ -236,13 +236,14 @@ function AssistantTab({
               value={investigateInput}
               onChange={(e) => setInvestigateInput(e.target.value)}
               placeholder={t('investigate_placeholder')}
-              className="w-full bg-slate-800/70 border border-slate-800/80 rounded-xl pl-9 pr-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl pl-9 pr-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/60 font-mono"
             />
           </div>
           <button
+            type="button"
             onClick={() => handleRunInvestigation(investigateInput)}
             disabled={!investigateInput || isAnalyzing}
-            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 text-white font-bold text-xs transition flex items-center space-x-1.5 shrink-0 shadow-lg shadow-indigo-950/50"
+            className="min-h-[40px] px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-semibold text-xs transition flex items-center space-x-1.5 shrink-0 shadow-sm cursor-pointer active:scale-95"
           >
             {isAnalyzing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
             <span>{t('investigate_btn')}</span>
@@ -274,61 +275,63 @@ function AssistantTab({
 
         {/* Analysis Results Card */}
         {analyzedResult && (
-          <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800/80 space-y-3 animate-in fade-in">
+          <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.08] space-y-3 animate-in fade-in">
             <div className="flex items-start justify-between">
               <div>
-                <div className="text-base font-extrabold text-white">
+                <div className="text-base font-bold text-white tracking-tight">
                   {analyzedResult.profile.name}
                 </div>
-                <div className="text-xs text-slate-400">
+                <div className="text-xs font-mono tabular-nums text-slate-400">
                   {formatPhoneNumber(analyzedResult.number)}
                 </div>
               </div>
 
               <div className="text-right">
-                <span className={`px-2.5 py-1 rounded-full text-xs font-black border ${
+                <span className={`text-xs font-mono tabular-nums font-bold ${
                   analyzedResult.riskScore >= 70
-                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                    ? 'text-rose-400'
                     : analyzedResult.riskScore >= 40
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                    : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                    ? 'text-amber-400'
+                    : 'text-emerald-400'
                 }`}>
-                  Risk Score: {analyzedResult.riskScore}/100
+                  Risk: {analyzedResult.riskScore}/100
                 </span>
-                <div className="text-[11px] text-slate-400 mt-1">{analyzedResult.verdict}</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">{analyzedResult.verdict}</div>
               </div>
             </div>
 
             {/* Behavioral analysis bullets */}
-            <div className="space-y-1.5 pt-1 border-t border-slate-800/80">
-              <div className="text-xs font-bold text-slate-300">Forensic Observations:</div>
+            <div className="space-y-1.5 pt-2 border-t border-white/[0.06]">
+              <div className="text-xs font-semibold text-slate-300">Forensic Observations:</div>
               {analyzedResult.analysis.map((obs, i) => (
                 <div key={i} className="flex items-start space-x-2 text-xs text-slate-300">
-                  <span className="text-indigo-400 font-bold">•</span>
+                  <span className="text-blue-400 font-bold">•</span>
                   <span>{obs}</span>
                 </div>
               ))}
             </div>
 
-            {/* Decision Explanation (Why was this blocked / classified?) */}
-            <div className="p-3 rounded-xl bg-slate-800/50 border border-slate-800/80 text-xs space-y-1">
-              <div className="font-bold text-indigo-300 flex items-center space-x-1.5">
+            {/* Decision Explanation */}
+            <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] text-xs space-y-1">
+              <div className="font-semibold text-blue-300 flex items-center space-x-1.5">
                 <HelpCircle className="w-3.5 h-3.5" />
                 <span>AI Decision Explanation</span>
               </div>
-              <p className="text-slate-300">{analyzedResult.recommendation}</p>
+              <p className="text-slate-300 leading-relaxed">{analyzedResult.recommendation}</p>
             </div>
 
             {/* Actions */}
             <div className="flex items-center space-x-2 pt-1">
               <button
+                type="button"
                 onClick={() => onInitiateCall(analyzedResult.number, analyzedResult.profile.name)}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow"
+                className="min-h-[40px] px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-sm transition active:scale-95 cursor-pointer"
               >
                 Call Number
               </button>
               {analyzedResult.riskScore >= 40 && (
                 <button
+                  type="button"
                   onClick={() => {
                     onAddRule({
                       value: analyzedResult.number,
@@ -342,7 +345,7 @@ function AssistantTab({
                     setRuleAddedNotice(`Added block rule for ${analyzedResult.number}`);
                     setTimeout(() => setRuleAddedNotice(null), 3000);
                   }}
-                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow"
+                  className="min-h-[40px] px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs shadow-sm transition active:scale-95 cursor-pointer"
                 >
                   Block This Number
                 </button>
@@ -354,7 +357,7 @@ function AssistantTab({
 
       {/* 3. SMART FOLLOW-UPS & REMINDERS */}
       {reminders.length > 0 && (
-        <div className="p-4 sm:p-5 rounded-3xl bg-slate-900/60 border border-slate-800/60 shadow-xl space-y-3">
+        <div className="p-4 sm:p-5 rounded-2xl bg-[#0c121e]/90 border border-white/[0.08] shadow-sm space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <Clock className="w-4 h-4 text-amber-400" />

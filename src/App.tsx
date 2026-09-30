@@ -596,6 +596,21 @@ export default function App(){
         if (dataRef.current.phoneOnly) {
           telecomBridge.finishAppSurface();
         }
+
+        // Finalize any active recording during telephony disconnect (Requirement 6 & 7)
+        if (callRecordingService.isCurrentlyRecording()) {
+          const activeRecCallId = callRecordingService.getActiveRecordingCallId();
+          callRecordingService.stopRecording().then((recItem) => {
+            if (recItem && activeRecCallId) {
+              setCalls((existing) =>
+                existing.map((c) =>
+                  c.id === activeRecCallId ? { ...c, recordingUri: recItem.dataUri } : c
+                )
+              );
+            }
+          });
+        }
+
         setActiveCallSession((prev) => {
           if (!prev) return null;
           const dur = prev.durationSeconds || 1;
@@ -642,7 +657,30 @@ export default function App(){
         if (telecomBridge.isAndroidEnvironment()) {
           try {
             const fresh = telecomBridge.fetchDeviceCallLogs(100);
-            if (fresh?.length) setCalls(fresh);
+            if (fresh?.length) {
+              setCalls((prev) => {
+                const prevMap = new Map(prev.map((c) => [c.id, c]));
+                return fresh.map((f) => {
+                  const match =
+                    prevMap.get(f.id) ||
+                    prev.find(
+                      (p) =>
+                        p.number.replace(/\D/g, '') === f.number.replace(/\D/g, '') &&
+                        Math.abs(p.timestamp - f.timestamp) < 5000
+                    );
+                  if (match) {
+                    return {
+                      ...f,
+                      recordingUri: f.recordingUri || match.recordingUri,
+                      notes: f.notes || match.notes,
+                      usedAiScreener: f.usedAiScreener ?? match.usedAiScreener,
+                      screeningTranscript: f.screeningTranscript || match.screeningTranscript,
+                    };
+                  }
+                  return f;
+                });
+              });
+            }
           } catch (e) {
             console.warn(e);
           }

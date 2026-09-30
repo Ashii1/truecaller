@@ -185,13 +185,13 @@ function ProtectionTab({
   return (
     <div className="max-w-2xl mx-auto px-3 py-2 space-y-4">
       {/* 1. SMART CALL FIREWALL STATUS HERO */}
-      <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-850 to-indigo-950/40 border border-slate-700/80 shadow-xl relative overflow-hidden">
+      <div className="p-4 sm:p-5 rounded-2xl bg-[#0c121e]/90 border border-white/[0.08] shadow-sm relative overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center space-x-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-md ${
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm ${
               settings.masterEnabled
-                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-emerald-950/40'
-                : 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
             }`}>
               {settings.masterEnabled ? (
                 <ShieldCheck className="w-5 h-5" />
@@ -202,15 +202,13 @@ function ProtectionTab({
 
             <div>
               <div className="flex items-center space-x-2">
-                <h2 className="text-xl font-extrabold text-white tracking-tight">
+                <h2 className="text-lg font-bold text-white tracking-tight">
                   {t('protection_firewall_title')}
                 </h2>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                  settings.masterEnabled 
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' 
-                    : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                <span className={`text-xs font-semibold ${
+                  settings.masterEnabled ? 'text-emerald-400' : 'text-rose-400'
                 }`}>
-                  {settings.masterEnabled ? t('status') + ': ' + t('safe') : t('status') + ': ' + t('protection_paused')}
+                  {settings.masterEnabled ? '· ' + t('safe') : '· ' + t('protection_paused')}
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
@@ -222,11 +220,12 @@ function ProtectionTab({
           {/* Master Enable/Disable Button */}
           <button
             id="btn-toggle-firewall"
+            type="button"
             onClick={() => onUpdateSettings({ ...settings, masterEnabled: !settings.masterEnabled })}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition shadow-lg flex items-center space-x-2 self-start sm:self-auto ${
+            className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-semibold transition active:scale-95 cursor-pointer self-start sm:self-auto ${
               settings.masterEnabled
-                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/40'
+                ? 'bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 border border-white/[0.08]'
+                : 'bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-md shadow-emerald-950/40'
             }`}
           >
             <span>{settings.masterEnabled ? t('protection_turn_off') : t('protection_turn_on')}</span>
@@ -234,13 +233,13 @@ function ProtectionTab({
         </div>
 
         {/* Protection Level Selector (Low - Balanced - Strict) */}
-        <div className="mt-5 pt-4 border-t border-slate-800 space-y-2">
+        <div className="mt-4 pt-3.5 border-t border-white/[0.06] space-y-2">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-bold text-slate-300 flex items-center space-x-1.5">
-              <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="font-semibold text-slate-300 flex items-center space-x-1.5">
+              <Sliders className="w-3.5 h-3.5 text-blue-400" />
               <span>{t('protection_level')}</span>
             </span>
-            <span className="font-semibold text-indigo-300">
+            <span className="font-semibold text-blue-400">
               {settings.sensitivity === 'AGGRESSIVE' ? t('protection_level_strict') : settings.sensitivity === 'STRICT' ? t('protection_level_balanced') : t('protection_level_low')}
             </span>
           </div>
@@ -255,15 +254,16 @@ function ProtectionTab({
               return (
                 <button
                   key={lvl.id}
+                  type="button"
                   onClick={() => handleSetSensitivity(lvl.id)}
-                  className={`p-2.5 rounded-2xl border text-left transition ${
+                  className={`p-2.5 rounded-xl border text-left transition cursor-pointer active:scale-95 ${
                     isSelected
-                      ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-md shadow-indigo-950/40 ring-1 ring-indigo-400/30'
-                      : 'bg-slate-800/60 border-slate-700/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                      ? 'bg-blue-600/20 border-blue-500/50 text-white shadow-sm ring-1 ring-blue-500/30'
+                      : 'bg-white/[0.03] border-white/[0.06] text-slate-400 hover:bg-white/[0.06] hover:text-slate-200'
                   }`}
                 >
-                  <div className="text-xs font-bold">{lvl.title}</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5 truncate">{lvl.desc}</div>
+                  <div className="text-xs font-semibold">{lvl.title}</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5 truncate">{lvl.desc}</div>
                 </button>
               );
             })}
@@ -496,7 +496,7 @@ function ProtectionTab({
         </div>
 
         {/* Sub-tabs: Numbers, Patterns, Private Callers, Spam */}
-        <div className="flex items-center space-x-1.5 overflow-x-auto pb-1">
+        <div className="flex items-center gap-1 overflow-x-auto p-1 rounded-xl bg-white/[0.03] border border-white/[0.06]">
           {[
             { id: 'PATTERNS', label: t('subtab_patterns') },
             { id: 'NUMBERS', label: t('subtab_numbers') },
@@ -505,11 +505,12 @@ function ProtectionTab({
           ].map((tab) => (
             <button
               key={tab.id}
+              type="button"
               onClick={() => setActiveSubTab(tab.id as BlockSubTab)}
-              className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer active:scale-95 ${
                 activeSubTab === tab.id
-                  ? 'bg-slate-750 text-white border border-slate-600 shadow'
-                  : 'bg-slate-850 text-slate-400 hover:text-slate-200 border border-slate-800'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
               }`}
             >
               {tab.label}
@@ -520,52 +521,56 @@ function ProtectionTab({
         {/* Rules List */}
         <div className="space-y-2">
           {filteredRules.length === 0 ? (
-            <div className="text-center py-8 bg-slate-850 rounded-2xl border border-slate-800 text-xs text-slate-400">
+            <div className="text-center py-8 bg-[#0c121e]/80 rounded-2xl border border-white/[0.08] text-xs text-slate-400">
               No rules in this category. Click "Create Block Rule" to add one.
             </div>
           ) : (
             filteredRules.map((r) => (
               <div
                 key={r.id}
-                className="p-3 sm:p-3.5 rounded-2xl bg-slate-850 border border-slate-750 hover:border-slate-700 transition flex items-center justify-between"
+                className="p-3.5 rounded-xl bg-[#0c121e]/90 border border-white/[0.08] hover:border-white/20 transition flex items-center justify-between"
               >
                 <div className="space-y-1 min-w-0 pr-2">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm font-bold text-white truncate">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-semibold text-white tracking-tight truncate">
                       {r.label || r.value}
                     </span>
-                    <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300">
-                      {r.matchType}
+                    <span className="text-[11px] font-medium text-slate-400">
+                      · {r.matchType}
                     </span>
                     {r.visualPattern && (
-                      <span className="font-mono text-xs text-slate-400 bg-slate-800 px-1.5 rounded">
+                      <span className="font-mono tabular-nums text-xs text-slate-400 bg-white/[0.05] px-1.5 py-0.5 rounded">
                         {r.visualPattern}
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center space-x-3 text-xs text-slate-400">
-                    <span>Pattern: <strong className="text-slate-300">{r.value}</strong></span>
-                    <span>•</span>
-                    <span>Hits: <strong className="text-emerald-400">{r.hitCount || 0} calls dropped</strong></span>
+                  <div className="flex items-center gap-2 text-xs text-slate-400">
+                    <span>Pattern: <strong className="font-mono text-slate-300">{r.value}</strong></span>
+                    <span className="text-slate-600">·</span>
+                    <span className="font-mono tabular-nums text-emerald-400 font-semibold">{r.hitCount || 0} calls dropped</span>
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-2 shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
                   <button
+                    type="button"
                     onClick={() => onToggleRule(r.id)}
-                    className="p-1 text-slate-400 hover:text-white transition"
+                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-400 hover:text-white transition cursor-pointer active:scale-95"
                     title={r.enabled ? 'Disable rule' : 'Enable rule'}
+                    aria-label={r.enabled ? 'Disable rule' : 'Enable rule'}
                   >
                     {r.enabled ? (
-                      <ToggleRight className="w-6 h-6 text-indigo-400" />
+                      <ToggleRight className="w-6 h-6 text-blue-400" />
                     ) : (
                       <ToggleLeft className="w-6 h-6 text-slate-600" />
                     )}
                   </button>
                   <button
+                    type="button"
                     onClick={() => onDeleteRule(r.id)}
-                    className="p-1 text-slate-500 hover:text-rose-400 transition"
+                    className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer active:scale-95"
                     title="Delete rule"
+                    aria-label="Delete rule"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

@@ -188,12 +188,17 @@ export default function CallerDetailModal({
   useEffect(() => {
     if (!isOpen) {
       resetModalState();
+    } else if (call?.id) {
+      setExpandedCallId(call.id);
     }
-  }, [isOpen, resetModalState]);
+  }, [isOpen, call?.id, resetModalState]);
 
   useEffect(() => {
     resetModalState();
-  }, [number, resetModalState]);
+    if (call?.id) {
+      setExpandedCallId(call.id);
+    }
+  }, [number, call?.id, resetModalState]);
 
   // Load recordings and call-specific notes for this caller
   useEffect(() => {

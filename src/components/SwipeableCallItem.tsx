@@ -35,7 +35,8 @@ import { callNotesService } from '../services/callNotesService';
 import AudioRecordingPlayer from './AudioRecordingPlayer';
 
 interface SwipeableCallItemProps {
-  group: CallGroup;
+  call?: CallLogItem;
+  group?: CallGroup;
   profile: CallShieldDirectoryProfile;
   settings: ShieldSettings;
   density?: DisplayDensity;
@@ -47,7 +48,8 @@ interface SwipeableCallItemProps {
     sim?: 'SIM 1 (Personal)' | 'SIM 2 (Work)',
     isPrivate?: boolean
   ) => void;
-  onDeleteCalls: (ids: string[]) => void;
+  onDeleteCall?: (id: string) => void;
+  onDeleteCalls?: (ids: string[]) => void;
   onBlockNumber: (number: string, label: string) => void;
   iconFor: (type: CallDirection) => React.ReactNode;
   timeLabel: (ts: number) => string;
@@ -56,13 +58,22 @@ interface SwipeableCallItemProps {
 
 const SWIPE_THRESHOLD = 70;
 
+const formatDuration = (s?: number) => {
+  if (!s || s <= 0) return '00:00';
+  const mins = Math.floor(s / 60);
+  const secs = s % 60;
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
+
 function SwipeableCallItem({
+  call,
   group,
   profile,
   settings,
   isCompact,
   onSelectCall,
   onInitiateCall,
+  onDeleteCall,
   onDeleteCalls,
   onBlockNumber,
   iconFor,
@@ -74,8 +85,16 @@ function SwipeableCallItem({
   const [isBlockedFeedback, setIsBlockedFeedback] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
   const [showInlineRecording, setShowInlineRecording] = useState(false);
-  const [recordingToPlay, setRecordingToPlay] = useState<CallRecordingItem | null>(null);
+  const [recordingsToPlay, setRecordingsToPlay] = useState<CallRecordingItem[]>([]);
   const wasDraggedRef = useRef(false);
+
+  // Authoritative item for this exact call session (Requirement 1, 4, 15)
+  const item: CallLogItem = call || group?.latest!;
+  const callId = item.id;
+  const targetNumber = item.number || group?.number || '';
+  const timestamp = item.timestamp;
+  const durationSeconds = item.durationSeconds || 0;
+  const callType = item.type;
 
   // Derived transforms for responsive swipe visual indicators
   const blockOpacity = useTransform(x, [0, 25, SWIPE_THRESHOLD], [0, 0.65, 1]);
@@ -85,51 +104,54 @@ function SwipeableCallItem({
 
   const p = profile;
   const name =
-    group.name && group.name !== group.number && !/^unknown caller$/i.test(group.name)
+    item.callerName && item.callerName !== targetNumber && !/^unknown caller$/i.test(item.callerName)
+      ? item.callerName
+      : group?.name && group.name !== targetNumber && !/^unknown caller$/i.test(group.name)
       ? group.name
-      : p.name || group.number || t('unknown_caller');
-  const spam = group.calls.some((c) => c.isSpam) || p.isSpam;
-  const latest = group.latest;
+      : p.name || targetNumber || t('unknown_caller');
+  const isSpam = item.isSpam || (group ? group.calls.some((c) => c.isSpam) : false) || p.isSpam;
 
   const [isFinalizingRecording, setIsFinalizingRecording] = useState(() =>
-    callRecordingService.isCallRecordingFinalizing(latest.id)
+    callRecordingService.isCallRecordingFinalizing(callId)
   );
   const [latestNote, setLatestNote] = useState(() =>
-    callNotesService.getNoteForCall(latest.id) || latest.notes || ''
+    callNotesService.getNoteForCall(callId) || item.notes || ''
   );
 
-  // Synchronize recording strictly for this exact call session
+  // Synchronize recording strictly for this exact call session (Requirement 2 & 15)
   useEffect(() => {
     let isMounted = true;
 
-    const checkRecording = () => {
-      setIsFinalizingRecording(callRecordingService.isCallRecordingFinalizing(latest.id));
-      callRecordingService
-        .getRecordingForCall(latest.id)
-        .then((item) => {
-          if (!isMounted) return;
-          if (item) {
-            setRecordingToPlay(item);
-          } else if (latest.recordingUri) {
-            setRecordingToPlay({
-              id: `rec-${latest.id}`,
-              callId: latest.id,
-              number: group.number,
+    const checkRecording = async () => {
+      setIsFinalizingRecording(callRecordingService.isCallRecordingFinalizing(callId));
+      try {
+        const items = await callRecordingService.getRecordingsForCall(callId);
+        if (!isMounted) return;
+        if (items && items.length > 0) {
+          setRecordingsToPlay(items);
+        } else if (item.recordingUri) {
+          setRecordingsToPlay([
+            {
+              id: `rec-${callId}`,
+              callId: callId,
+              number: targetNumber,
               callerName: name,
-              timestamp: latest.timestamp,
-              durationSeconds: latest.durationSeconds || 15,
+              timestamp,
+              durationSeconds: durationSeconds || 15,
               folderPath: 'Internal Storage/Recordings/CallShield/',
-              fileName: `REC_${group.number.replace(/\D/g, '')}_${new Date(latest.timestamp).toISOString().slice(0, 10)}.wav`,
+              fileName: `REC_${targetNumber.replace(/\D/g, '')}_${new Date(timestamp).toISOString().slice(0, 10)}.wav`,
               fileSizeBytes: 128000,
               mimeType: 'audio/wav',
-              dataUri: latest.recordingUri,
+              dataUri: item.recordingUri,
               quality: '48 kHz Studio HD',
-            });
-          } else {
-            setRecordingToPlay(null);
-          }
-        })
-        .catch(() => {});
+            },
+          ]);
+        } else {
+          setRecordingsToPlay([]);
+        }
+      } catch {
+        if (isMounted) setRecordingsToPlay([]);
+      }
     };
 
     checkRecording();
@@ -139,10 +161,10 @@ function SwipeableCallItem({
       if (isMounted) checkRecording();
     });
 
-    // Subscribe to notes updates
+    // Subscribe to notes updates strictly for this call session
     const unsubNotes = callNotesService.subscribe(() => {
       if (isMounted) {
-        setLatestNote(callNotesService.getNoteForCall(latest.id) || latest.notes || '');
+        setLatestNote(callNotesService.getNoteForCall(callId) || item.notes || '');
       }
     });
 
@@ -151,33 +173,35 @@ function SwipeableCallItem({
       unsubRec();
       unsubNotes();
     };
-  }, [latest.id, latest.recordingUri, latest.notes, latest.timestamp, group.number, name]);
+  }, [callId, item.recordingUri, item.notes, timestamp, durationSeconds, targetNumber, name]);
 
-  const hasRecordedCall = Boolean(recordingToPlay || latest.recordingUri);
+  const hasRecordedCall = recordingsToPlay.length > 0 || Boolean(item.recordingUri);
 
   const handleToggleInlinePlayer = useCallback(
     async (e: MouseEvent) => {
       e.stopPropagation();
       if (!showInlineRecording) {
-        if (!recordingToPlay) {
-          const found = await callRecordingService.getRecordingForCall(latest.id);
-          if (found) {
-            setRecordingToPlay(found);
-          } else if (latest.recordingUri) {
-            setRecordingToPlay({
-              id: `rec-${latest.id}`,
-              callId: latest.id,
-              number: group.number,
-              callerName: name,
-              timestamp: latest.timestamp,
-              durationSeconds: latest.durationSeconds || 15,
-              folderPath: 'Internal Storage/Recordings/CallShield/',
-              fileName: `REC_${group.number.replace(/\D/g, '')}_${new Date(latest.timestamp).toISOString().slice(0, 10)}.wav`,
-              fileSizeBytes: 128000,
-              mimeType: 'audio/wav',
-              dataUri: latest.recordingUri,
-              quality: '48 kHz Studio HD',
-            });
+        if (recordingsToPlay.length === 0) {
+          const found = await callRecordingService.getRecordingsForCall(callId);
+          if (found && found.length > 0) {
+            setRecordingsToPlay(found);
+          } else if (item.recordingUri) {
+            setRecordingsToPlay([
+              {
+                id: `rec-${callId}`,
+                callId: callId,
+                number: targetNumber,
+                callerName: name,
+                timestamp,
+                durationSeconds: durationSeconds || 15,
+                folderPath: 'Internal Storage/Recordings/CallShield/',
+                fileName: `REC_${targetNumber.replace(/\D/g, '')}_${new Date(timestamp).toISOString().slice(0, 10)}.wav`,
+                fileSizeBytes: 128000,
+                mimeType: 'audio/wav',
+                dataUri: item.recordingUri,
+                quality: '48 kHz Studio HD',
+              },
+            ]);
           }
         }
         setShowInlineRecording(true);
@@ -185,7 +209,7 @@ function SwipeableCallItem({
         setShowInlineRecording(false);
       }
     },
-    [showInlineRecording, recordingToPlay, latest.id, latest.recordingUri, latest.durationSeconds, latest.timestamp, group.number, name]
+    [showInlineRecording, recordingsToPlay, callId, item.recordingUri, targetNumber, name, timestamp, durationSeconds]
   );
 
   const triggerBlock = useCallback(() => {
@@ -202,14 +226,14 @@ function SwipeableCallItem({
       }
     }
 
-    onBlockNumber(group.number, name);
+    onBlockNumber(targetNumber, name);
     setIsBlockedFeedback(true);
     setTimeout(() => {
       setIsBlockedFeedback(false);
     }, 2000);
 
     animate(x, 0, { type: 'spring', stiffness: 450, damping: 32 });
-  }, [group.number, name, onBlockNumber, x]);
+  }, [targetNumber, name, onBlockNumber, x]);
 
   const triggerDelete = useCallback(() => {
     try {
@@ -227,9 +251,13 @@ function SwipeableCallItem({
 
     setIsExiting(true);
     animate(x, -380, { duration: 0.22, ease: 'easeOut' }).then(() => {
-      onDeleteCalls(group.calls.map((c) => c.id));
+      if (onDeleteCall) {
+        onDeleteCall(callId);
+      } else if (onDeleteCalls) {
+        onDeleteCalls(group ? group.calls.map((c) => c.id) : [callId]);
+      }
     });
-  }, [group.calls, onDeleteCalls, x]);
+  }, [callId, group, onDeleteCall, onDeleteCalls, x]);
 
   const handleDragEnd = (
     _event: MouseEvent | TouchEvent | PointerEvent,
@@ -260,12 +288,14 @@ function SwipeableCallItem({
     if (wasDraggedRef.current || Math.abs(x.get()) > 8 || isDragging) {
       return;
     }
-    onSelectCall(latest);
+    onSelectCall(item);
   };
+
+  const isMissed = callType === 'MISSED';
 
   return (
     <div
-      id={`call-group-${group.key.replace(/[^a-zA-Z0-9_-]/g, '_')}`}
+      id={`call-session-${callId.replace(/[^a-zA-Z0-9_-]/g, '_')}`}
       className={`relative overflow-hidden border-b border-white/5 last:border-0 transition-colors ${
         isExiting ? 'opacity-0 scale-y-0 transition-all duration-200' : ''
       }`}
@@ -331,30 +361,30 @@ function SwipeableCallItem({
           wasDraggedRef.current = true;
         }}
         onDragEnd={handleDragEnd}
-        className={`relative z-10 flex items-center bg-[#0e141c] hover:bg-white/[0.02] cursor-grab active:cursor-grabbing select-none transition-colors ${
-          isCompact ? 'gap-2 px-2.5 py-1.5' : 'gap-2.5 px-3 py-2.5'
+        className={`relative z-10 flex items-center bg-[#0d131f] hover:bg-[#121a2b] cursor-grab active:cursor-grabbing select-none transition-colors ${
+          isCompact ? 'gap-2 px-3 py-2.5' : 'gap-3 px-3.5 py-3'
         } ${isBlockedFeedback ? 'ring-1 ring-amber-500/40 bg-amber-950/20' : ''}`}
       >
-        {/* Caller Avatar / Type icon */}
+        {/* Caller Avatar / Type icon with min 40px hitbox */}
         <button
           type="button"
           onClick={handleItemClick}
-          className={`grid shrink-0 place-items-center rounded-full transition-all ${
-            isCompact ? 'h-7.5 w-7.5 text-xs' : 'h-9 w-9'
+          className={`grid shrink-0 place-items-center rounded-full transition-all cursor-pointer ${
+            isCompact ? 'h-9 w-9 text-xs' : 'h-10 w-10 text-sm'
           } ${
             isBlockedFeedback
               ? 'bg-amber-400/20 text-amber-300 ring-1 ring-amber-400/30'
-              : group.missedCount
-              ? 'bg-amber-400/10 text-amber-400'
-              : spam
-              ? 'bg-rose-400/10 text-rose-400'
-              : 'bg-white/5 text-slate-400'
+              : isMissed
+              ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
+              : isSpam
+              ? 'bg-rose-500/15 text-rose-400 border border-rose-500/20'
+              : 'bg-white/[0.06] text-slate-300 border border-white/[0.08]'
           }`}
         >
           {isBlockedFeedback ? (
             <Ban className="h-4 w-4 text-amber-300" />
           ) : (
-            iconFor(latest.type)
+            iconFor(callType)
           )}
         </button>
 
@@ -371,15 +401,18 @@ function SwipeableCallItem({
           }}
           className="min-w-0 flex-1 text-left cursor-pointer focus:outline-none"
         >
-          <div className="flex flex-wrap items-center gap-1.5">
+          {/* Caller Title & Semantic Indicators (Zero-Pill Discipline) */}
+          <div className="flex items-center gap-1.5 flex-wrap">
             <span
-              className={`truncate font-semibold transition-all ${
+              className={`truncate font-semibold tracking-tight transition-colors ${
                 isCompact ? 'text-xs' : 'text-sm'
               } ${
                 isBlockedFeedback
                   ? 'text-amber-300'
-                  : group.missedCount
-                  ? 'text-amber-200'
+                  : isMissed
+                  ? 'text-amber-300 font-bold'
+                  : isSpam
+                  ? 'text-rose-300 font-bold'
                   : 'text-white'
               }`}
             >
@@ -387,129 +420,107 @@ function SwipeableCallItem({
             </span>
 
             {isBlockedFeedback ? (
-              <span className="inline-flex items-center gap-1 rounded bg-amber-500/25 border border-amber-500/40 px-1.5 py-0.5 text-[8.5px] font-bold text-amber-300 animate-pulse">
-                <Check className="h-2.5 w-2.5 text-amber-400" />
-                Blocked in Rules
+              <span className="text-[11px] font-bold text-amber-400">· Blocked</span>
+            ) : isSpam ? (
+              <span className="flex items-center gap-0.5 text-[11px] font-semibold text-rose-400">
+                <ShieldAlert className="h-3 w-3 shrink-0" />
+                <span>{t('spam_badge')}</span>
               </span>
-            ) : spam ? (
-              <span className="inline-flex items-center gap-1 rounded bg-rose-500/20 px-1.5 py-0.5 text-[8.5px] font-bold text-rose-300">
-                <ShieldAlert className="h-2.5 w-2.5 text-rose-400" />
-                {t('spam_badge')}
+            ) : item.isVerifiedBusiness || p.isVerified ? (
+              <span className="flex items-center gap-0.5 text-[11px] font-medium text-blue-400">
+                <ShieldCheck className="h-3 w-3 shrink-0" />
+                <span>{t('verified_badge')}</span>
               </span>
-            ) : latest.isVerifiedBusiness || p.isVerified ? (
-              <span className="inline-flex items-center gap-1 rounded bg-blue-500/20 px-1.5 py-0.5 text-[8.5px] font-bold text-blue-300">
-                <ShieldCheck className="h-2.5 w-2.5 text-blue-400" />
-                {t('verified_badge')}
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[8.5px] font-bold text-emerald-300">
-                <ShieldCheck className="h-2.5 w-2.5 text-emerald-400" />
-                {t('safe_badge')}
+            ) : null}
+
+            {item.isNeighborSpoof && (
+              <span className="flex items-center gap-0.5 text-[10.5px] font-medium text-amber-400">
+                <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+                <span>Neighbor Spoof</span>
               </span>
             )}
 
-            {group.calls.some((c) => c.isNeighborSpoof) && (
-              <span className="inline-flex items-center gap-1 rounded bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.5 text-[8.5px] font-bold text-amber-300">
-                <AlertTriangle className="h-2.5 w-2.5 text-amber-400" />
-                Neighbor Spoof
-              </span>
-            )}
-
-            {group.calls.some((c) => c.isPingBackScam) && (
-              <span className="inline-flex items-center gap-1 rounded bg-rose-500/20 border border-rose-500/30 px-1.5 py-0.5 text-[8.5px] font-bold text-rose-300">
-                <ShieldAlert className="h-2.5 w-2.5 text-rose-400" />
-                1-Ring Trap
+            {item.isPingBackScam && (
+              <span className="flex items-center gap-0.5 text-[10.5px] font-medium text-rose-400">
+                <ShieldAlert className="h-2.5 w-2.5 shrink-0" />
+                <span>1-Ring Trap</span>
               </span>
             )}
 
             {isFinalizingRecording && (
-              <span className="inline-flex items-center gap-1 rounded bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.5 text-[8.5px] font-bold text-amber-300 animate-pulse">
-                <Disc className="h-2.5 w-2.5 text-amber-400 animate-spin" />
-                <span>REC Processing...</span>
-              </span>
-            )}
-
-            {hasRecordedCall && (
-              <button
-                type="button"
-                onClick={handleToggleInlinePlayer}
-                className="inline-flex items-center gap-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/35 px-1.5 py-0.5 text-[8.5px] font-bold text-emerald-300 active:scale-95 transition"
-                title="Play recorded call audio"
-              >
-                <Disc className="h-2.5 w-2.5 text-emerald-400 animate-pulse" />
-                <span>{showInlineRecording ? 'Hide REC' : 'Play REC'}</span>
-              </button>
+              <span className="text-[10px] text-amber-400 font-medium animate-pulse">· Saving REC...</span>
             )}
 
             {latestNote && (
-              <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 text-[8.5px] font-bold text-amber-300 max-w-[140px] truncate" title={latestNote}>
-                <span>📝</span>
-                <span className="truncate">{latestNote}</span>
+              <span className="text-[11px] text-slate-400 italic max-w-[140px] truncate" title={latestNote}>
+                · "{latestNote}"
               </span>
             )}
 
-            {group.calls.some((c) => c.usedAiScreener) && (
-              <span className="inline-flex items-center gap-1 rounded bg-indigo-500/20 border border-indigo-500/30 px-1.5 py-0.5 text-[8.5px] font-bold text-indigo-300">
-                <Bot className="h-2.5 w-2.5 text-indigo-400" />
-                AI Screened
+            {item.usedAiScreener && (
+              <span className="flex items-center gap-0.5 text-[10.5px] font-medium text-indigo-400">
+                <Bot className="h-2.5 w-2.5 shrink-0" />
+                <span>Screened</span>
               </span>
             )}
           </div>
 
+          {/* Call Metadata Subtitle: Phone number · Location · Direction & Exact Duration · Time */}
           <div
             className={`flex flex-wrap items-center text-slate-400 transition-all ${
-              isCompact ? 'mt-0 text-[10px] gap-x-1' : 'mt-0.5 text-[11px] gap-x-1.5'
+              isCompact ? 'mt-0 text-[10.5px] gap-x-1.5' : 'mt-0.5 text-[11.5px] gap-x-2'
             }`}
           >
-            <span className="font-mono">{formatPhoneNumber(group.number)}</span>
-            <span>·</span>
+            <span className="font-mono tabular-nums">{formatPhoneNumber(targetNumber)}</span>
+            <span className="text-slate-600">·</span>
             <span>{p.location || 'India'}</span>
-            <span>·</span>
-            <span>
-              {group.totalCount} {group.totalCount === 1 ? t('call') : t('calls')}
-            </span>
-            <span>·</span>
-            <span>{timeLabel(latest.timestamp)}</span>
+            <span className="text-slate-600">·</span>
+            {callType === 'MISSED' ? (
+              <span className="font-semibold text-amber-400">{t('missed') || 'Missed'}</span>
+            ) : callType === 'BLOCKED_CANCELLED' ? (
+              <span className="font-semibold text-rose-400">{t('blocked') || 'Blocked'}</span>
+            ) : (
+              <span className="text-slate-300">
+                {callType === 'OUTGOING' ? 'Outgoing' : 'Incoming'}
+                {durationSeconds > 0 && ` · ${formatDuration(durationSeconds)}`}
+              </span>
+            )}
+            <span className="text-slate-600">·</span>
+            <span className="font-mono tabular-nums text-slate-300">{timeLabel(timestamp)}</span>
+            {item.sim && (
+              <>
+                <span className="text-slate-600">·</span>
+                <span className="text-sky-300 font-medium text-[10.5px]">{item.sim.includes('1') ? 'SIM 1' : 'SIM 2'}</span>
+              </>
+            )}
           </div>
 
-          {latest.usedAiScreener &&
-            latest.screeningSummaryBullets &&
-            latest.screeningSummaryBullets.length > 0 && (
+          {item.usedAiScreener &&
+            item.screeningSummaryBullets &&
+            item.screeningSummaryBullets.length > 0 && (
               <div
                 className={`flex items-center gap-1.5 text-indigo-300 ${
                   isCompact ? 'mt-0.5 text-[10px]' : 'mt-1 text-[11px]'
                 }`}
               >
                 <Sparkles className="h-2.5 w-2.5 shrink-0 text-indigo-400" />
-                <span className="truncate">{latest.screeningSummaryBullets[0]}</span>
+                <span className="truncate">{item.screeningSummaryBullets[0]}</span>
               </div>
             )}
-
-          {group.missedCount > 0 && (
-            <div
-              className={`font-semibold text-amber-400 ${
-                isCompact ? 'mt-0 text-[9.5px]' : 'mt-0.5 text-[10px]'
-              }`}
-            >
-              {group.missedCount} {t('missed')}
-            </div>
-          )}
         </div>
 
-        {/* Action buttons: Recording Playback, Phone and Privacy call */}
+        {/* Action buttons: Recording Playback, Phone Call with >=44px Hitboxes */}
         {hasRecordedCall && (
           <button
             type="button"
             onClick={handleToggleInlinePlayer}
-            className={`grid shrink-0 place-items-center rounded-full active:scale-95 transition ${
-              showInlineRecording
-                ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-950/50'
-                : 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30'
-            } ${isCompact ? 'h-7 w-7' : 'h-8 w-8'}`}
+            className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl active:scale-95 transition cursor-pointer text-emerald-400 hover:bg-emerald-500/15`}
             aria-label={showInlineRecording ? 'Hide recording player' : 'Play call recording'}
-            title={`Play call recording (${timeLabel(latest.timestamp)})`}
+            title={`Play call recording (${timeLabel(timestamp)})`}
           >
-            <Disc className={`animate-pulse ${isCompact ? 'h-3.5 w-3.5' : 'h-4 w-4'}`} />
+            <div className={`grid h-8 w-8 place-items-center rounded-full ${showInlineRecording ? 'bg-emerald-500 text-slate-950 font-bold' : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'}`}>
+              <Disc className={`animate-pulse h-4 w-4`} />
+            </div>
           </button>
         )}
 
@@ -517,30 +528,30 @@ function SwipeableCallItem({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            onInitiateCall(group.number, name);
+            onInitiateCall(targetNumber, name);
           }}
-          className={`grid shrink-0 place-items-center rounded-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 active:scale-95 transition ${
-            isCompact ? 'h-7 w-7' : 'h-8 w-8'
-          }`}
+          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 active:scale-95 transition cursor-pointer"
           aria-label={t('nav_phone')}
-          title="Call"
+          title={`Call ${name || targetNumber}`}
         >
-          <Phone className={`fill-current ${isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'}`} />
+          <div className="grid h-8 w-8 place-items-center rounded-full bg-emerald-500/15 border border-emerald-500/25">
+            <Phone className="h-4 w-4 fill-current" />
+          </div>
         </button>
 
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            onInitiateCall(group.number, name, undefined, true);
+            onInitiateCall(targetNumber, name, undefined, true);
           }}
-          className={`grid shrink-0 place-items-center rounded-full bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 active:scale-95 transition ${
-            isCompact ? 'h-7 w-7' : 'h-8 w-8'
-          }`}
+          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 active:scale-95 transition cursor-pointer"
           aria-label="Call Privately (*67 Masked)"
           title={`Call Privately (${settings?.privateCallPrefix || '*67'} Masked)`}
         >
-          <EyeOff className={isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+          <div className="grid h-8 w-8 place-items-center rounded-full bg-indigo-500/15 border border-indigo-500/25">
+            <EyeOff className="h-4 w-4" />
+          </div>
         </button>
 
         {/* Desktop hover actions: quick delete and block buttons */}
@@ -569,35 +580,49 @@ function SwipeableCallItem({
         </button>
       </motion.div>
 
-      {/* Inline Call Recording Player at this particular call timestamp */}
+      {/* Inline Call Recording Player at this particular call timestamp (Requirement 4 & 17) */}
       <AnimatePresence>
-        {showInlineRecording && recordingToPlay && (
+        {showInlineRecording && recordingsToPlay.length > 0 && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.18 }}
-            className="overflow-hidden border-t border-emerald-500/20 bg-slate-950/90 px-3 py-2.5 rounded-b-2xl"
+            className="overflow-hidden border-t border-emerald-500/20 bg-slate-950/90 px-3 py-2.5 rounded-b-2xl space-y-2.5"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-2 flex items-center justify-between text-[11px] text-emerald-400 font-medium">
+            <div className="flex items-center justify-between text-[11px] text-emerald-400 font-medium">
               <span className="flex items-center gap-1 font-semibold">
                 <Disc className="h-3 w-3 animate-spin text-emerald-400" />
-                Call Recording ({timeLabel(latest.timestamp)})
+                {recordingsToPlay.length > 1
+                  ? `Call Recordings (${recordingsToPlay.length} segments) — ${timeLabel(timestamp)}`
+                  : `Call Recording (${timeLabel(timestamp)})`}
               </span>
               <span className="text-[10px] text-slate-400">
-                {recordingToPlay.quality || '48 kHz Studio Lossless'}
+                {recordingsToPlay[0]?.quality || '48 kHz Studio Lossless'}
               </span>
             </div>
-            <AudioRecordingPlayer
-              recording={recordingToPlay}
-              compact={true}
-              onDelete={(id) => {
-                callRecordingService.deleteRecording(id);
-                setRecordingToPlay(null);
-                setShowInlineRecording(false);
-              }}
-            />
+
+            {recordingsToPlay.map((rec, rIdx) => (
+              <div key={rec.id} className="space-y-1">
+                {recordingsToPlay.length > 1 && (
+                  <div className="text-[10px] font-semibold text-slate-400">
+                    Segment {rIdx + 1} • {formatDuration(rec.durationSeconds)}
+                  </div>
+                )}
+                <AudioRecordingPlayer
+                  recording={rec}
+                  compact={true}
+                  onDelete={(id) => {
+                    callRecordingService.deleteRecording(id);
+                    setRecordingsToPlay((prev) => prev.filter((r) => r.id !== id));
+                    if (recordingsToPlay.length <= 1) {
+                      setShowInlineRecording(false);
+                    }
+                  }}
+                />
+              </div>
+            ))}
           </motion.div>
         )}
       </AnimatePresence>
@@ -606,3 +631,4 @@ function SwipeableCallItem({
 }
 
 export default memo(SwipeableCallItem);
+

@@ -16,9 +16,10 @@ import {
   X,
 } from 'lucide-react';
 import { CallLogItem, CallDirection, BlockRule, WhitelistEntry, ShieldSettings, CallShieldDirectoryProfile, DisplayDensity } from '../types';
-import { groupCallsByNumber, CallGroup } from '../utils/callHistory';
 import { useI18n } from '../i18n/LanguageContext';
 import { formatTimeAmPm } from '../utils/timeFormat';
+import { callRecordingService } from '../services/callRecordingService';
+import { callNotesService } from '../services/callNotesService';
 import ModernFilterBar, { FilterTabOption } from './ModernFilterBar';
 import SwipeableCallItem from './SwipeableCallItem';
 import GlobalSearchAutocomplete, { AutocompleteItem } from './common/GlobalSearchAutocomplete';
@@ -97,7 +98,11 @@ function RecentsTab({
     c.type === 'BLOCKED_CANCELLED' || c.isSpam || c.userAction === 'BLOCKED' || c.classification === 'SPAM';
 
   const isRecordedCall = (c: CallLogItem) =>
-    Boolean(c.recordingUri) || (typeof c.notes === 'string' && c.notes.trim().length > 0) || Boolean(c.usedAiScreener);
+    Boolean(c.recordingUri) ||
+    (typeof c.notes === 'string' && c.notes.trim().length > 0) ||
+    Boolean(c.usedAiScreener) ||
+    Boolean(callNotesService.getNoteForCall(c.id)) ||
+    callRecordingService.isCallRecordingFinalizing(c.id);
 
   const matchSim = (call: CallLogItem, targetSim: 'SIM 1' | 'SIM 2') => {
     const simStr = (call.sim || call.carrier || '').toLowerCase();
@@ -148,16 +153,20 @@ function RecentsTab({
     });
   }, [calls, query, filter, simFilter]);
 
-  const groups = useMemo<CallGroup[]>(() => groupCallsByNumber(filtered), [filtered]);
-  const days = useMemo<Record<string, CallGroup[]>>(
+  // Authoritative Chronological Sort: ONE CALL = ONE COMPLETE HISTORY RECORD (Requirement 1, 4, 5)
+  const sortedCalls = useMemo(() => {
+    return [...filtered].sort((a, b) => b.timestamp - a.timestamp);
+  }, [filtered]);
+
+  const days = useMemo<Record<string, CallLogItem[]>>(
     () =>
-      groups.reduce<Record<string, CallGroup[]>>((m, g) => {
-        const key = dayLabel(g.latest.timestamp);
+      sortedCalls.reduce<Record<string, CallLogItem[]>>((m, c) => {
+        const key = dayLabel(c.timestamp);
         if (!m[key]) m[key] = [];
-        m[key].push(g);
+        m[key].push(c);
         return m;
       }, {}),
-    [groups, t],
+    [sortedCalls, t],
   );
   const dayEntries = useMemo(() => Object.entries(days), [days]);
 
@@ -194,26 +203,26 @@ function RecentsTab({
   return (
     <div className={`mx-auto w-full max-w-2xl select-none transition-all ${isCompact ? 'px-2 pb-6 pt-1 sm:px-3' : 'px-3 pb-8 pt-2 sm:px-4'}`}>
       {/* Header */}
-      <header className={`flex items-center justify-between gap-2 transition-all ${isCompact ? 'mb-2' : 'mb-3'}`}>
+      <header className={`flex items-center justify-between gap-2 transition-all ${isCompact ? 'mb-2.5' : 'mb-3.5'}`}>
         <div>
           <h1 className={`font-bold tracking-tight text-white transition-all ${isCompact ? 'text-lg' : 'text-xl'}`}>{t('recents_title')}</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {/* Subtle SIM Filter Dropdown (Tucked away, uncluttered) */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowSimMenu((prev) => !prev)}
-              className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition active:scale-95 ${
+              className={`flex min-h-[36px] items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition active:scale-95 cursor-pointer ${
                 simFilter !== 'ALL'
-                  ? 'bg-sky-500/20 text-sky-200 border-sky-500/40 ring-1 ring-sky-500/30'
-                  : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                  ? 'bg-blue-500/20 text-blue-200 border-blue-500/40 ring-1 ring-blue-500/30'
+                  : 'bg-white/[0.05] text-slate-300 border-white/[0.08] hover:bg-white/[0.08]'
               }`}
               title="Filter calls by SIM Line"
             >
-              <Smartphone className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+              <Smartphone className="h-3.5 w-3.5 text-blue-400 shrink-0" />
               <span>{simFilter === 'ALL' ? 'SIM' : simFilter}</span>
-              <span className="rounded-full bg-white/10 px-1.5 py-0.2 text-[10px] font-bold text-slate-300">
+              <span className="text-[10px] font-mono tabular-nums font-bold text-slate-400">
                 {simFilter === 'ALL' ? simCounts.ALL : simFilter === 'SIM 1' ? simCounts.SIM1 : simCounts.SIM2}
               </span>
               <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform ${showSimMenu ? 'rotate-180' : ''}`} />
@@ -223,8 +232,8 @@ function RecentsTab({
             {showSimMenu && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowSimMenu(false)} />
-                <div className="absolute right-0 top-full mt-1.5 z-50 w-48 rounded-2xl border border-white/15 bg-[#0e141c] p-1.5 shadow-2xl shadow-black/80 backdrop-blur-xl">
-                  <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <div className="absolute right-0 top-full mt-1.5 z-50 w-52 rounded-2xl border border-white/10 bg-[#0e1422] p-1.5 shadow-2xl shadow-black/80 backdrop-blur-2xl">
+                  <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                     Filter by Cellular SIM
                   </div>
                   {[
@@ -241,16 +250,14 @@ function RecentsTab({
                           setSimFilter(s.id);
                           setShowSimMenu(false);
                         }}
-                        className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-xs font-semibold transition ${
+                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition cursor-pointer ${
                           isSelected
-                            ? 'bg-sky-500/20 text-sky-200 border border-sky-500/30 font-bold'
+                            ? 'bg-blue-500/20 text-blue-200 border border-blue-500/30 font-bold'
                             : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'
                         }`}
                       >
                         <span>{s.label}</span>
-                        <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
-                          isSelected ? 'bg-sky-500/30 text-sky-200' : 'bg-slate-800 text-slate-400'
-                        }`}>
+                        <span className="font-mono tabular-nums text-[10px] text-slate-400">
                           {s.count}
                         </span>
                       </button>
@@ -265,21 +272,21 @@ function RecentsTab({
             <button
               type="button"
               onClick={onSyncDeviceCalls}
-              className={`rounded-xl border border-white/10 bg-white/5 text-slate-400 hover:bg-blue-500/15 hover:text-blue-300 active:scale-95 transition ${isCompact ? 'p-1.5' : 'p-2'}`}
+              className="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-slate-400 hover:bg-blue-500/15 hover:text-blue-300 active:scale-95 transition cursor-pointer"
               title={t('sync_device_calls')}
               aria-label={t('sync_device_calls')}
             >
-              <RefreshCw className={isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+              <RefreshCw className="h-3.5 w-3.5" />
             </button>
           )}
           {calls.length > 0 && (
             <button
               type="button"
               onClick={onClearAllCalls}
-              className={`rounded-xl border border-white/10 bg-white/5 text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 active:scale-95 transition ${isCompact ? 'p-1.5' : 'p-2'}`}
+              className="flex min-h-[36px] min-w-[36px] items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 active:scale-95 transition cursor-pointer"
               title={t('clear_all')}
             >
-              <Trash2 className={isCompact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+              <Trash2 className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
@@ -307,32 +314,33 @@ function RecentsTab({
         onChange={setFilter}
       />
 
-      {/* Call History List */}
-      {groups.length === 0 ? (
-        <div className={`border border-white/10 bg-[#0e141c] text-center transition-all ${isCompact ? 'rounded-xl p-6' : 'rounded-2xl p-8'}`}>
-          <Phone className={`mx-auto text-slate-700 ${isCompact ? 'h-6 w-6' : 'h-7 w-7'}`} />
+      {/* Call History List: Authoritative 1 Call = 1 History Entry */}
+      {sortedCalls.length === 0 ? (
+        <div className={`border border-white/[0.08] bg-[#0c121e]/80 text-center transition-all ${isCompact ? 'rounded-xl p-6' : 'rounded-2xl p-8'}`}>
+          <Phone className={`mx-auto text-slate-600 ${isCompact ? 'h-6 w-6' : 'h-7 w-7'}`} />
           <p className={`font-semibold text-slate-300 ${isCompact ? 'mt-1.5 text-[11px]' : 'mt-2 text-xs'}`}>
             {calls.length ? t('no_calls_match') : t('no_call_history')}
           </p>
-          <p className="mt-0.5 text-[10px] text-slate-600">{t('recent_calls_appear_here')}</p>
+          <p className="mt-0.5 text-[10px] text-slate-500">{t('recent_calls_appear_here')}</p>
         </div>
       ) : (
-        <div className={isCompact ? 'space-y-3' : 'space-y-4'}>
-          {dayEntries.map(([day, dayGroups]) => (
+        <div className={isCompact ? 'space-y-3.5' : 'space-y-4.5'}>
+          {dayEntries.map(([day, dayCalls]) => (
             <section key={day}>
-              <h2 className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-[.18em] text-slate-600">{day}</h2>
-              <div className={`overflow-hidden border border-white/10 bg-[#0e141c] transition-all ${isCompact ? 'rounded-xl' : 'rounded-2xl'}`}>
+              <h2 className="mb-2 px-1 text-xs font-semibold tracking-tight text-slate-400">{day}</h2>
+              <div className={`overflow-hidden border border-white/[0.08] bg-[#0c121e]/90 shadow-sm transition-all ${isCompact ? 'rounded-xl' : 'rounded-2xl'}`}>
                 <AnimatePresence initial={false}>
-                  {dayGroups.map((g) => (
+                  {dayCalls.map((call) => (
                     <SwipeableCallItem
-                      key={g.key}
-                      group={g}
-                      profile={lookupProfile(g.number)}
+                      key={call.id}
+                      call={call}
+                      profile={lookupProfile(call.number)}
                       settings={settings}
                       density={density}
                       isCompact={isCompact}
                       onSelectCall={onSelectCall}
                       onInitiateCall={onInitiateCall}
+                      onDeleteCall={onDeleteCall}
                       onDeleteCalls={handleDeleteCalls}
                       onBlockNumber={onBlockNumber}
                       iconFor={iconFor}
@@ -351,3 +359,4 @@ function RecentsTab({
 }
 
 export default memo(RecentsTab);
+

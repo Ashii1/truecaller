@@ -22,8 +22,8 @@ export default function ModernFilterBar<T extends string>({
   tabs,
   activeId,
   onChange,
-  accentClass = 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-[0_2px_14px_rgba(16,185,129,0.35)]',
-  activeTextClass = 'text-slate-950 font-bold',
+  accentClass = 'bg-blue-600 text-white shadow-sm',
+  activeTextClass = 'text-white font-semibold',
 }: ModernFilterBarProps<T>) {
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const tabRefs = useRef<Map<T, HTMLButtonElement>>(new Map());
@@ -91,38 +91,37 @@ export default function ModernFilterBar<T extends string>({
     if (!scrollContainerRef.current) return;
     const offset = direction === 'left' ? -160 : 160;
     scrollContainerRef.current.scrollBy({ left: offset, behavior: 'smooth' });
-    triggerHapticFeedback(15);
+    try {
+      triggerHapticFeedback(15);
+    } catch {}
   };
 
   const handleSelect = (id: T) => {
-    triggerHapticFeedback(20);
     onChange(id);
+    try {
+      triggerHapticFeedback(20);
+    } catch {}
     setShowQuickMenu(false);
   };
 
   return (
-    <div className="relative mb-3.5 select-none">
-      {/* Container with rounded capsule design */}
-      <div className="flex items-center rounded-2xl border border-white/10 bg-[#0e141c]/95 p-1 backdrop-blur-md shadow-lg shadow-black/25">
+    <div className="relative mb-3 select-none">
+      {/* Container with rounded modern bar design */}
+      <div className="flex items-center rounded-xl border border-white/[0.08] bg-[#0c121e]/90 p-1 backdrop-blur-md shadow-sm">
         
-        {/* Left Arrow Navigation / Edge Fade */}
+        {/* Left Arrow Navigation (Never overlaps tabs) */}
         {canScrollLeft && (
           <button
             type="button"
             onClick={() => scrollNudge('left')}
-            className="absolute left-1 z-20 flex h-7 w-7 items-center justify-center rounded-xl bg-slate-900/90 border border-white/15 text-slate-300 shadow-md backdrop-blur-md hover:bg-slate-800 hover:text-white transition-all active:scale-95"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/5 border border-white/10 text-slate-300 shadow-sm hover:bg-white/10 hover:text-white transition-all active:scale-95 mr-1"
             aria-label="Scroll filters left"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
         )}
 
-        {/* Left gradient mask indicator */}
-        {canScrollLeft && (
-          <div className="pointer-events-none absolute left-0 top-0 bottom-0 z-10 w-10 bg-gradient-to-r from-[#0e141c] to-transparent rounded-l-2xl" />
-        )}
-
-        {/* Scrollable Chip Strip - full text, no truncation, no scrollbar */}
+        {/* Scrollable Chip Strip - full text, no truncation, responsive */}
         <div
           ref={scrollContainerRef}
           className="no-scrollbar flex flex-1 items-center gap-1.5 overflow-x-auto px-1 py-0.5 scroll-smooth"
@@ -141,7 +140,7 @@ export default function ModernFilterBar<T extends string>({
                 }}
                 type="button"
                 onClick={() => handleSelect(tab.id)}
-                className={`group relative flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all duration-200 active:scale-[0.97] ${
+                className={`group relative flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all duration-200 active:scale-[0.97] cursor-pointer ${
                   active
                     ? `${accentClass} ${activeTextClass}`
                     : 'text-slate-300 hover:bg-white/[0.08] hover:text-white border border-transparent'
@@ -191,17 +190,12 @@ export default function ModernFilterBar<T extends string>({
           })}
         </div>
 
-        {/* Right gradient mask indicator */}
-        {canScrollRight && (
-          <div className="pointer-events-none absolute right-10 top-0 bottom-0 z-10 w-10 bg-gradient-to-l from-[#0e141c] to-transparent" />
-        )}
-
-        {/* Right Arrow Navigation */}
+        {/* Right Arrow Navigation (Never overlaps tabs) */}
         {canScrollRight && (
           <button
             type="button"
             onClick={() => scrollNudge('right')}
-            className="absolute right-10 z-20 flex h-7 w-7 items-center justify-center rounded-xl bg-slate-900/90 border border-white/15 text-slate-300 shadow-md backdrop-blur-md hover:bg-slate-800 hover:text-white transition-all active:scale-95"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/5 border border-white/10 text-slate-300 shadow-sm hover:bg-white/10 hover:text-white transition-all active:scale-95 ml-1"
             aria-label="Scroll filters right"
           >
             <ChevronRight className="h-4 w-4" />
