@@ -712,7 +712,7 @@ export default function SettingsPage({
                   <div>
                     <span className="block text-sm font-bold text-white">Full Keypad & Dialing Settings</span>
                     <span className="mt-0.5 block text-xs text-slate-400">
-                      Configure speed dial, auto-paste, private prefixes and test key sounds inline
+                      Configure speed dial, auto-paste, DTMF audio and test key sounds inline
                     </span>
                   </div>
                 </div>

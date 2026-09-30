@@ -24,7 +24,7 @@ interface DialerTabProps {
   recentCalls: CallLogItem[];
   settings: ShieldSettings;
   lookupProfile: (num: string) => CallShieldDirectoryProfile;
-  onInitiateCall: (number: string, name?: string, sim?: 'SIM 1 (Personal)' | 'SIM 2 (Work)', isPrivate?: boolean) => void;
+  onInitiateCall: (number: string, name?: string, sim?: 'SIM 1 (Personal)' | 'SIM 2 (Work)') => void;
   onOpenCallerDetail: (item: CallLogItem | CallShieldDirectoryProfile) => void;
   onSaveContact: (number: string, name?: string) => void;
   selectedSim: 'SIM 1 (Personal)' | 'SIM 2 (Work)';
@@ -203,10 +203,10 @@ const DialerTab = memo(function DialerTab({
     }
   };
 
-  const call = (isPrivate = false) => {
+  const call = () => {
     if (value.trim()) {
       fireKeypadHaptic(35);
-      onInitiateCall(value.trim(), matchedContact?.name || profile?.name || undefined, selectedSim, isPrivate);
+      onInitiateCall(value.trim(), matchedContact?.name || profile?.name || undefined, selectedSim);
     } else if (recentCalls && recentCalls.length > 0) {
       // Native phone dialer feature: recall last dialed/received number when dialer is blank
       const lastCall = recentCalls[0];

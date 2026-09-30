@@ -29,7 +29,7 @@ import GlobalSearchAutocomplete, { AutocompleteItem } from './common/GlobalSearc
 
 interface ContactsTabProps {
   contacts: ContactItem[];
-  onInitiateCall: (number: string, name?: string, sim?: any, isPrivate?: boolean) => void;
+  onInitiateCall: (number: string, name?: string, sim?: any) => void;
   onAddContact: (contact: Omit<ContactItem, 'id'>) => void;
   onUpdateContact: (id: string, updates: Partial<ContactItem>) => void;
   onDeleteContact: (id: string) => void;

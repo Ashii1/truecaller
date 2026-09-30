@@ -35,7 +35,7 @@ interface RecentsTabProps {
   whitelist: WhitelistEntry[];
   settings: ShieldSettings;
   lookupProfile: (num: string) => CallShieldDirectoryProfile;
-  onInitiateCall: (number: string, name?: string, sim?: 'SIM 1 (Personal)' | 'SIM 2 (Work)', isPrivate?: boolean) => void;
+  onInitiateCall: (number: string, name?: string, sim?: 'SIM 1 (Personal)' | 'SIM 2 (Work)') => void;
   onSelectCall: (call: CallLogItem) => void;
   onBlockNumber: (number: string, label: string) => void;
   onWhitelistNumber: (number: string, name: string) => void;

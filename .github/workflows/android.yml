@@ -36,13 +36,15 @@ jobs:
           KEY_ALIAS: ${{ secrets.VIGILSHIELD_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.VIGILSHIELD_KEY_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
-            echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/vigilshield-release.jks"
-            test -s "$RUNNER_TEMP/vigilshield-release.jks"
-            echo "Using protected production signing key from secrets."
-          elif [ -f "release-keystore.jks" ]; then
+          if [ -f "release-keystore.jks" ]; then
             echo "Using persistent release-keystore.jks (matches installed app certificate)."
             cp "release-keystore.jks" "$RUNNER_TEMP/vigilshield-release.jks"
+            KEYSTORE_PASSWORD="vigilshield123"
+            KEY_ALIAS="vigilshield-key"
+            KEY_PASSWORD="vigilshield123"
+          elif [ -f "app/release-keystore.jks" ]; then
+            echo "Using persistent app/release-keystore.jks (matches installed app certificate)."
+            cp "app/release-keystore.jks" "$RUNNER_TEMP/vigilshield-release.jks"
             KEYSTORE_PASSWORD="vigilshield123"
             KEY_ALIAS="vigilshield-key"
             KEY_PASSWORD="vigilshield123"
@@ -52,6 +54,10 @@ jobs:
             KEYSTORE_PASSWORD="vigilshield123"
             KEY_ALIAS="vigilshield-key"
             KEY_PASSWORD="vigilshield123"
+          elif [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/vigilshield-release.jks"
+            test -s "$RUNNER_TEMP/vigilshield-release.jks"
+            echo "Using protected production signing key from secrets."
           elif [ -f "keystore_base64.txt" ]; then
             echo "Decoding persistent keystore_base64.txt (matches installed app certificate)."
             base64 -d keystore_base64.txt > "$RUNNER_TEMP/vigilshield-release.jks"

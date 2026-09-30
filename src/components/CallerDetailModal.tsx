@@ -68,8 +68,7 @@ interface CallerDetailModalProps {
   onInitiateCall?: (
     number: string,
     name?: string,
-    sim?: 'SIM 1 (Personal)' | 'SIM 2 (Work)',
-    isPrivate?: boolean
+    sim?: 'SIM 1 (Personal)' | 'SIM 2 (Work)'
   ) => void;
   onSaveNote?: (callId: string, note: string) => void;
   onSaveCallNote?: (callId: string, note: string) => void;

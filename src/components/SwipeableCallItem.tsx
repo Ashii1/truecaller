@@ -45,8 +45,7 @@ interface SwipeableCallItemProps {
   onInitiateCall: (
     number: string,
     name?: string,
-    sim?: 'SIM 1 (Personal)' | 'SIM 2 (Work)',
-    isPrivate?: boolean
+    sim?: 'SIM 1 (Personal)' | 'SIM 2 (Work)'
   ) => void;
   onDeleteCall?: (id: string) => void;
   onDeleteCalls?: (ids: string[]) => void;

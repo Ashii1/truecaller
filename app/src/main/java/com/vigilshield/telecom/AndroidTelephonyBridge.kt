@@ -47,7 +47,7 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
     @JavascriptInterface fun requestDefaultDialerRole(): Boolean { if (Build.VERSION.SDK_INT < 29) return false; val manager = activity.getSystemService(RoleManager::class.java); if (!manager.isRoleAvailable(RoleManager.ROLE_DIALER)) return false; if (manager.isRoleHeld(RoleManager.ROLE_DIALER)) return true; activity.startActivityForResult(manager.createRequestRoleIntent(RoleManager.ROLE_DIALER), 7001); return true }
     @JavascriptInterface fun requestCallScreeningRole(): Boolean { if (Build.VERSION.SDK_INT < 29) return false; val manager = activity.getSystemService(RoleManager::class.java); if (!manager.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING)) return false; if (manager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)) return true; activity.startActivityForResult(manager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING), 7003); return true }
     @JavascriptInterface fun requestDevicePermissions(): Boolean {
-        val requested = mutableListOf(Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE, Manifest.permission.ANSWER_PHONE_CALLS, Manifest.permission.READ_CALL_LOG)
+        val requested = mutableListOf(Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE, Manifest.permission.ANSWER_PHONE_CALLS, Manifest.permission.READ_CALL_LOG, Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= 33) requested += Manifest.permission.POST_NOTIFICATIONS
         val missing = requested.filter { ContextCompat.checkSelfPermission(activity, it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isEmpty()) return true
@@ -113,6 +113,7 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
             .put("callPhonePermission", hasPermission(Manifest.permission.CALL_PHONE))
             .put("phoneStatePermission", hasPermission(Manifest.permission.READ_PHONE_STATE))
             .put("answerCallsPermission", hasPermission(Manifest.permission.ANSWER_PHONE_CALLS))
+            .put("recordAudioPermission", hasPermission(Manifest.permission.RECORD_AUDIO))
             .put("notificationsPermission", Build.VERSION.SDK_INT < 33 || hasPermission(Manifest.permission.POST_NOTIFICATIONS))
             .put("ringerMode", audio.ringerMode)
             .put("sim1Available", accounts.isNotEmpty())

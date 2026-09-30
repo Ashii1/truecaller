@@ -25,7 +25,7 @@ import ThemeCustomizerModal from './components/ThemeCustomizerModal';
 import { BlockRule, WhitelistEntry, ShieldSettings, CallLogItem, IncomingCallState, ActiveCallSession, SecurityTimelineEvent, CallShieldDirectoryProfile, ContactItem, SpamCategory, TabId, CallRecordingItem, DisplayDensity, ScreeningTranscriptEntry } from './types';
 import { INITIAL_SETTINGS } from './data/defaultData';
 import { lookupCallShieldDirectory } from './utils/spamEngine';
-import { detectNeighborSpoof, detectPingBackScam, formatPrivateCallNumber } from './utils/spoofEngine';
+import { detectNeighborSpoof, detectPingBackScam } from './utils/spoofEngine';
 import { triggerCallConnectedHaptic } from './utils/audioAlerts';
 import { telecomBridge } from './services/telephony/telecomBridge';
 import { callRecordingService } from './services/callRecordingService';
@@ -123,7 +123,7 @@ export default function App(){
  }, []);
 
  const lastBackPressTimeRef = useRef<number>(0);
- const initiateCallRef = useRef<(number: string, name?: string, sim?: Sim, isPrivate?: boolean) => void>(() => {});
+ const initiateCallRef = useRef<(number: string, name?: string, sim?: Sim) => void>(() => {});
  const dataRef = useRef({ rules, whitelist, contacts, settings, autoCancelEnabled, calls, selectedSim, phoneOnly, isDeviceLocked, activeIncomingCall });
  dataRef.current = { rules, whitelist, contacts, settings, autoCancelEnabled, calls, selectedSim, phoneOnly, isDeviceLocked, activeIncomingCall };
  const stateRef = useRef({
@@ -738,22 +738,20 @@ export default function App(){
    setContacts(prev => prev.map(c => c.number.replace(/\D/g, '') === number.replace(/\D/g, '') ? { ...c, name: newName } : c));
  }, []);
  const handleClearAllCalls = useCallback(() => { if (window.confirm('Clear your entire call log history?')) setCalls([]); }, []);
-  const handleInitiateCall = useCallback((number: string, name?: string, sim?: Sim, isPrivate?: boolean) => {
+  const handleInitiateCall = useCallback((number: string, name?: string, sim?: Sim) => {
     const clean = number.trim(), digits = clean.replace(/[^\d+*#]/g, ''), target = sim || selectedSim, p = lookupCallShieldDirectory(clean, rules, whitelist), matched = contacts.find(c => c.number.replace(/\D/g, '') === clean.replace(/\D/g, '')), resolved = name || matched?.name || p.name || clean;
-    const dialedNumber = isPrivate ? formatPrivateCallNumber(digits, settings.privateCallPrefix || '*67') : digits;
-    const result = telecomBridge.placeRealCall(dialedNumber, target);
+    const result = telecomBridge.placeRealCall(digits, target);
     if (!result.success) { showToast(result.message, 'error'); return; }
     // A call started from Contacts/Recents must immediately replace the underlying
     // list with the CallShield in-call surface. Native Telecom state will refine this
     // session with the real call id as soon as the call is registered.
     setActiveTab('dialer');
-    if (isPrivate) { showToast(`Calling with caller ID masked (${settings.privateCallPrefix || '*67'})`, 'info'); }
     const newCallId = result.callId || `call-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const callStartTime = Date.now();
     setActiveCallSession({
       id: newCallId,
       number: clean,
-      name: isPrivate ? `${resolved} (Private)` : resolved,
+      name: resolved,
       isSpam: p.isSpam,
       spamCategory: p.spamCategory,
       riskScore: p.spamScore,
@@ -797,7 +795,7 @@ export default function App(){
         location: p.location,
         isVerifiedBusiness: p.isVerified,
         isContact: !!matched,
-        isPrivateCall: Boolean(isPrivate),
+        isPrivateCall: false,
         sim: target,
       };
       if (existingIdx >= 0) {
@@ -807,7 +805,7 @@ export default function App(){
       }
       return [callEntry, ...prev];
     });
-  }, [selectedSim, rules, whitelist, contacts, settings]);
+  }, [selectedSim, rules, whitelist, contacts]);
 
   initiateCallRef.current = handleInitiateCall;
 
@@ -1485,7 +1483,7 @@ export default function App(){
      </>
    )}
 
-  <CallerDetailModal call={selectedCall} calls={calls} contacts={contacts} profile={selectedProfile} isOpen={isCallerModalOpen} onClose={() => { setIsCallerModalOpen(false); setSelectedCall(null); setSelectedProfile(null); }} onBlockNumber={handleBlockNumber} onUnblockNumber={handleUnblockNumber} onMarkSafe={handleWhitelistNumber} onInitiateCall={(number, name, sim, isPrivate) => { setIsCallerModalOpen(false); handleInitiateCall(number, name, sim, isPrivate); }} onOpenReportModal={handleOpenFastReport} onOpenDisputeModal={handleOpenDispute} onUpdateCallerName={handleUpdateCallerName} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} onDeleteContact={handleDeleteContact} onSaveNote={handleSaveNote}/>
+  <CallerDetailModal call={selectedCall} calls={calls} contacts={contacts} profile={selectedProfile} isOpen={isCallerModalOpen} onClose={() => { setIsCallerModalOpen(false); setSelectedCall(null); setSelectedProfile(null); }} onBlockNumber={handleBlockNumber} onUnblockNumber={handleUnblockNumber} onMarkSafe={handleWhitelistNumber} onInitiateCall={(number, name, sim) => { setIsCallerModalOpen(false); handleInitiateCall(number, name, sim); }} onOpenReportModal={handleOpenFastReport} onOpenDisputeModal={handleOpenDispute} onUpdateCallerName={handleUpdateCallerName} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} onDeleteContact={handleDeleteContact} onSaveNote={handleSaveNote}/>
   {activeIncomingCall && (
     <IncomingCallOverlay
       call={activeIncomingCall}

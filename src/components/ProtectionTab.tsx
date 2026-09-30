@@ -351,7 +351,7 @@ function ProtectionTab({
                 AI Screener & Advanced Spoof Shields
               </h3>
               <p className="text-xs text-indigo-200/80">
-                Automated voice assistant, Wangiri ping-back protection, and masked private callbacks.
+                Automated voice assistant and Wangiri ping-back protection.
               </p>
             </div>
           </div>

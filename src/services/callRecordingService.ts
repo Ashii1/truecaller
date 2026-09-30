@@ -172,68 +172,38 @@ function writeString(view: DataView, offset: number, string: string) {
 }
 
 /**
- * Generates pristine, crystal-clear telephone vocal dialogue audio simulation.
- * Uses 16 kHz Wideband HD Telephony Voice standard (G.722 compatible).
- * Produces crisp human voice formant synthesis with clear audible volume.
+ * Generates a clean, realistic standard telephone call recording audio track
+ * when hardware microphone input was not accessible or denied.
+ * Produces an authentic telephone line tone and soft acoustic atmosphere,
+ * never harsh random synthetic hums or oscillating drones.
  */
 function createClearCallAudio(durationSeconds: number, sampleRate = 16000): Blob {
   const totalSamples = Math.max(sampleRate * 2, Math.floor(durationSeconds * sampleRate));
   const left = new Float32Array(totalSamples);
   const right = new Float32Array(totalSamples);
 
-  // Conversational cadence: Party A speaks ~3.2s, 0.7s pause, Party B speaks ~3.6s, 0.7s pause
-  const cyclePeriod = 8.2;
-
+  // Soft call connection beep at t=0.2s for 0.3s (gentle 425Hz European/International tone)
   for (let i = 0; i < totalSamples; i++) {
     const t = i / sampleRate;
-    const cyclePos = t % cyclePeriod;
+    let sample = 0;
 
-    let sampleL = 0;
-    let sampleR = 0;
-
-    // Party A (Local Caller/Agent - Left/Center)
-    if (cyclePos >= 0 && cyclePos < 3.4) {
-      const phraseT = cyclePos;
-      // Syllable rate ~ 3.8 Hz with natural envelope modulation
-      const syllableEnv = Math.max(0, Math.sin(phraseT * 3.8 * Math.PI));
-      const phraseEnv = Math.sin((phraseT / 3.4) * Math.PI);
-      const amp = syllableEnv * phraseEnv * 0.72;
-
-      // Male vocal formant synthesis (F0: ~135Hz, F1: 520Hz, F2: 1450Hz, F3: 2400Hz)
-      const f0 = 135 + Math.sin(phraseT * 2.2) * 8;
-      const voiceF0 = Math.sin(2 * Math.PI * f0 * t) * 0.42;
-      const voiceF1 = Math.sin(2 * Math.PI * 520 * t) * 0.32;
-      const voiceF2 = Math.sin(2 * Math.PI * 1450 * t) * 0.20;
-      const voiceF3 = Math.sin(2 * Math.PI * 2400 * t) * 0.09;
-
-      const voice = (voiceF0 + voiceF1 + voiceF2 + voiceF3) * amp;
-      sampleL += voice * 0.88;
-      sampleR += voice * 0.65;
+    // Start tone: 425Hz call recording confirmation beep
+    if (t >= 0.2 && t <= 0.5) {
+      const toneEnv = Math.sin(((t - 0.2) / 0.3) * Math.PI);
+      sample += Math.sin(2 * Math.PI * 425 * t) * 0.15 * toneEnv;
     }
 
-    // Party B (Remote Caller - Right/Center)
-    if (cyclePos >= 4.1 && cyclePos < 7.5) {
-      const phraseT = cyclePos - 4.1;
-      const syllableEnv = Math.max(0, Math.sin(phraseT * 4.2 * Math.PI));
-      const phraseEnv = Math.sin((phraseT / 3.4) * Math.PI);
-      const amp = syllableEnv * phraseEnv * 0.70;
-
-      // Female vocal formant synthesis (F0: ~210Hz, F1: 680Hz, F2: 1850Hz, F3: 2750Hz)
-      const f0 = 210 + Math.sin(phraseT * 2.8) * 12;
-      const voiceF0 = Math.sin(2 * Math.PI * f0 * t) * 0.40;
-      const voiceF1 = Math.sin(2 * Math.PI * 680 * t) * 0.30;
-      const voiceF2 = Math.sin(2 * Math.PI * 1850 * t) * 0.18;
-      const voiceF3 = Math.sin(2 * Math.PI * 2750 * t) * 0.08;
-
-      const voice = (voiceF0 + voiceF1 + voiceF2 + voiceF3) * amp;
-      sampleL += voice * 0.65;
-      sampleR += voice * 0.90;
+    // Periodic soft recording privacy reminder pip every 15s (standard telecom compliance pip)
+    if (t > 1.0 && (t % 15.0) < 0.12) {
+      const pipT = (t % 15.0);
+      const pipEnv = Math.sin((pipT / 0.12) * Math.PI);
+      sample += Math.sin(2 * Math.PI * 1000 * t) * 0.08 * pipEnv;
     }
 
-    // Soft comfort atmosphere / room warmth (imperceptible warmth, no hiss)
-    const roomTone = (Math.sin(2 * Math.PI * 180 * t) * 0.001) + (Math.sin(2 * Math.PI * 360 * t) * 0.0005);
-    left[i] = Math.max(-0.95, Math.min(0.95, sampleL + roomTone));
-    right[i] = Math.max(-0.95, Math.min(0.95, sampleR + roomTone));
+    // Natural low-level background room warmth (very subtle, clean)
+    const softWarmth = (Math.sin(2 * Math.PI * 120 * t) * 0.0003);
+    left[i] = Math.max(-0.95, Math.min(0.95, sample + softWarmth));
+    right[i] = Math.max(-0.95, Math.min(0.95, sample + softWarmth));
   }
 
   return encodeWAV(left, right, sampleRate);
@@ -301,14 +271,19 @@ class CallRecordingService {
     // Attempt to access user microphone with noise cancellation and echo suppression
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       try {
-        this.micStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            channelCount: 1, // Single mono mic channel is cleanest for voice calls
-          },
-        });
+        try {
+          this.micStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              channelCount: 1,
+            },
+          });
+        } catch {
+          // Fallback to simple audio request if advanced constraints fail
+          this.micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
 
         // Determine optimal supported audio format
         let mimeType = 'audio/webm;codecs=opus';
@@ -330,7 +305,7 @@ class CallRecordingService {
             }
           };
 
-          this.mediaRecorder.start(250); // Capture chunks every 250ms
+          this.mediaRecorder.start(100); // Capture chunks every 100ms
         }
       } catch (err) {
         console.info('[CallRecording] Native mic not available or denied; fallback active:', err);
@@ -362,6 +337,11 @@ class CallRecordingService {
 
     // Stop MediaRecorder if running
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+      try {
+        if (typeof this.mediaRecorder.requestData === 'function') {
+          this.mediaRecorder.requestData();
+        }
+      } catch {}
       await new Promise<void>((resolve) => {
         if (!this.mediaRecorder) return resolve();
         this.mediaRecorder.onstop = () => resolve();

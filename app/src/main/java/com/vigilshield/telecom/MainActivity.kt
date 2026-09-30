@@ -111,7 +111,17 @@ class MainActivity : AppCompatActivity() {
             override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: android.webkit.WebResourceError?) { if (request?.isForMainFrame != false) showError("The CallShield screen could not load.\n\n${error?.description ?: "Unknown WebView error"}") }
             @Suppress("DEPRECATION") override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) { showError("The CallShield screen could not load.\n\n${description ?: "WebView error $errorCode"}") }
         }
-        webView.webChromeClient = object : WebChromeClient() { override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean { if (consoleMessage.messageLevel() == ConsoleMessage.MessageLevel.ERROR) lastConsoleError = "${consoleMessage.message()} (line ${consoleMessage.lineNumber()})"; return true } }
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+                if (consoleMessage.messageLevel() == ConsoleMessage.MessageLevel.ERROR) lastConsoleError = "${consoleMessage.message()} (line ${consoleMessage.lineNumber()})";
+                return true
+            }
+            override fun onPermissionRequest(request: android.webkit.PermissionRequest?) {
+                runOnUiThread {
+                    request?.grant(request.resources)
+                }
+            }
+        }
         webView.loadUrl(APP_ASSET_URL)
         // Default Phone role is requested only from an explicit user action in the UI.
         // Do not interrupt widget/phone-surface launches with a system role dialog.
@@ -507,7 +517,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestPermissionsIfNeeded() {
-        val permissions = mutableListOf(Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE, Manifest.permission.ANSWER_PHONE_CALLS, Manifest.permission.READ_CALL_LOG)
+        val permissions = mutableListOf(Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE, Manifest.permission.ANSWER_PHONE_CALLS, Manifest.permission.READ_CALL_LOG, Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= 33) permissions += Manifest.permission.POST_NOTIFICATIONS
         val missing = permissions.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isNotEmpty()) ActivityCompat.requestPermissions(this, missing.toTypedArray(), PERMISSION_REQ)

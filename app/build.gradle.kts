@@ -3,10 +3,10 @@ import org.gradle.api.tasks.Exec
 
 // Versioning: Set strictly above previous builds so Android package manager performs
 // a clean in-place update over the existing installed app without requiring uninstallation.
-val baseVersionCode = 2000
+val baseVersionCode = 3000
 val ciRunNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
 val finalVersionCode = baseVersionCode + ciRunNumber
-val finalVersionName = "1.5.6"
+val finalVersionName = "1.5.7"
 println(">> VigilShield build config: versionCode=$finalVersionCode, versionName=$finalVersionName")
 
 val envKeystorePath = System.getenv("VIGILSHIELD_KEYSTORE_FILE")
@@ -16,9 +16,9 @@ val envKeyPassword = System.getenv("VIGILSHIELD_KEY_PASSWORD")
 
 // Locate persistent release keystore from environment, repository root, or android folder
 val releaseKeystoreFile = envKeystorePath?.takeIf { it.isNotBlank() }?.let { file(it) }
-    ?: file("../release-keystore.jks").takeIf { it.exists() }
+    ?: rootProject.file("release-keystore.jks").takeIf { it.exists() }
     ?: file("release-keystore.jks").takeIf { it.exists() }
-    ?: file("../android/release-keystore.jks").takeIf { it.exists() }
+    ?: rootProject.file("android/release-keystore.jks").takeIf { it.exists() }
 
 val releaseStorePassword = envKeystorePassword?.takeIf { it.isNotBlank() } ?: "vigilshield123"
 val releaseKeyAlias = envKeyAlias?.takeIf { it.isNotBlank() } ?: "vigilshield-key"
@@ -47,6 +47,9 @@ android {
                 storePassword = releaseStorePassword
                 keyAlias = releaseKeyAlias
                 keyPassword = releaseKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
             }
         }
     }
