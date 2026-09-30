@@ -355,7 +355,10 @@ export default function SettingsPage({
   if (subView === 'keypad') {
     return (
       <div className="min-h-screen bg-[#070b12] text-white pb-28 animate-in fade-in duration-200">
-        <header className="sticky top-0 z-30 border-b border-white/10 bg-[#070b12]/95 backdrop-blur-xl px-4 py-3 sm:px-6">
+        <header
+          className="sticky top-0 z-30 border-b border-white/10 bg-[#070b12]/95 backdrop-blur-xl px-4 py-3.5 sm:px-6 safe-top-header transition-all"
+          style={{ paddingTop: 'max(0.85rem, calc(env(safe-area-inset-top, 0px) + 0.65rem))' }}
+        >
           <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <button
@@ -519,38 +522,6 @@ export default function SettingsPage({
                 <br />• <strong>Press Call on empty dialer:</strong> Recalls last dialed number
               </p>
             </div>
-
-            {/* Private caller prefix */}
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-white">Private Call Carrier Prefix</div>
-                  <div className="text-xs text-slate-400 mt-0.5">
-                    Prefix dialed when tapping the &quot;Private Call&quot; quick-dial option
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-800">
-                {['*67', '#31#', '*31#'].map((prefix) => {
-                  const isSelected = (settings?.privateCallPrefix || '*67') === prefix;
-                  return (
-                    <button
-                      key={prefix}
-                      type="button"
-                      onClick={() => updateShieldSetting('privateCallPrefix', prefix)}
-                      className={`p-2.5 rounded-xl border text-center transition font-mono text-xs font-bold ${
-                        isSelected
-                          ? 'border-blue-500 bg-blue-500/20 text-blue-300'
-                          : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {prefix}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
           </section>
         </main>
       </div>
@@ -565,8 +536,11 @@ export default function SettingsPage({
 
   return (
     <div className="min-h-screen bg-[#070b12] text-white pb-28 animate-in fade-in duration-200">
-      {/* Sticky Top Header */}
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#070b12]/95 backdrop-blur-xl px-4 py-3 sm:px-6">
+      {/* Sticky Top Header with safe area clearance */}
+      <header
+        className="sticky top-0 z-30 border-b border-white/10 bg-[#070b12]/95 backdrop-blur-xl px-4 py-3.5 sm:px-6 safe-top-header transition-all"
+        style={{ paddingTop: 'max(0.85rem, calc(env(safe-area-inset-top, 0px) + 0.65rem))' }}
+      >
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <button

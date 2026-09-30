@@ -1,11 +1,8 @@
 import { useState, useRef, useEffect, useCallback, type TouchEvent, type MouseEvent } from 'react';
 import {
-  Bell,
   CheckCircle2,
   AlertTriangle,
   Info,
-  ChevronLeft,
-  ChevronRight,
   X,
 } from 'lucide-react';
 import { telecomBridge } from '../services/telephony/telecomBridge';
@@ -115,7 +112,7 @@ export default function ModernInAppNotification({
             ? 'border-emerald-500/40 bg-[#081510]/98 text-emerald-100 shadow-emerald-950/80 ring-1 ring-emerald-500/20'
             : 'border-white/15 bg-[#0b111e]/98 text-slate-100 shadow-black/90 ring-1 ring-white/10'
         }`}
-        title="Tap or swipe to dismiss"
+        title="Tap to dismiss"
         role="alert"
       >
         {/* Left Side: Glyph Icon */}

@@ -403,8 +403,8 @@ export default function CallerDetailModal({
   };
 
   // Call Back action
-  const handleCall = (isPrivate = false) => {
-    onInitiateCall?.(number, primaryDisplayName, undefined, isPrivate);
+  const handleCall = () => {
+    onInitiateCall?.(number, primaryDisplayName, undefined);
   };
 
   // Block / Unblock handler
@@ -668,7 +668,7 @@ export default function CallerDetailModal({
               {/* Primary Call Button */}
               <button
                 type="button"
-                onClick={() => handleCall(false)}
+                onClick={() => handleCall()}
                 className="flex-1 min-w-[90px] flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 py-3 px-3 text-white font-bold text-xs shadow-lg shadow-emerald-950/60 transition active:scale-95 cursor-pointer"
                 title={t('call_action_label')}
               >
@@ -728,17 +728,6 @@ export default function CallerDetailModal({
                     <div
                       className="absolute right-0 top-12 z-50 w-52 rounded-2xl border border-slate-800 bg-[#0e1422] p-1.5 shadow-2xl animate-in fade-in zoom-in-95 duration-100"
                     >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsMoreMenuOpen(false);
-                          handleCall(true);
-                        }}
-                        className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs font-medium text-slate-200 hover:bg-slate-800/80 transition cursor-pointer text-left"
-                      >
-                        <Phone className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
-                        <span>{t('call_private_label')}</span>
-                      </button>
 
                       <button
                         type="button"
@@ -1272,7 +1261,7 @@ export default function CallerDetailModal({
                               <div className="pt-2 flex items-center justify-between gap-2 border-t border-slate-800/80">
                                 <button
                                   type="button"
-                                  onClick={() => handleCall(false)}
+                                  onClick={() => handleCall()}
                                   className="flex items-center gap-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 px-3.5 py-1.5 text-xs font-bold text-emerald-300 transition active:scale-95 cursor-pointer"
                                 >
                                   <Phone className="h-3 w-3 fill-current" />

@@ -7,7 +7,6 @@ import {
   ChevronDown,
   Clock,
   Edit2,
-  EyeOff,
   Heart,
   Layers,
   Phone,
@@ -38,7 +37,6 @@ interface ContactsTabProps {
   recentCalls: CallLogItem[];
   density?: DisplayDensity;
   onOpenCallerDetail?: (item: any) => void;
-  privateCallPrefix?: string;
 }
 
 type CategoryFilter = 'ALL' | 'FAVORITES' | 'FAMILY' | 'WORK' | 'BUSINESSES' | 'RECENT' | 'GENERAL';
@@ -57,7 +55,6 @@ function ContactsTab({
   density = 'comfortable',
   onOpenCallerDetail,
   recentCalls,
-  privateCallPrefix = '*67',
 }: ContactsTabProps) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
@@ -648,28 +645,19 @@ function ContactsTab({
                 <span className="text-xs font-semibold text-slate-300">Back</span>
               </button>
             </div>
-            <div className="mt-6 grid grid-cols-4 gap-2">
+            <div className="mt-6 grid grid-cols-3 gap-3">
               <button
                 type="button"
                 onClick={() => onInitiateCall(selected.number, selected.name)}
-                className="flex flex-col items-center gap-1.5 rounded-2xl bg-emerald-500/10 p-3 text-emerald-400 hover:bg-emerald-500/20 transition"
+                className="flex flex-col items-center gap-1.5 rounded-2xl bg-emerald-500/10 p-3 text-emerald-400 hover:bg-emerald-500/20 transition cursor-pointer"
               >
                 <Phone className="h-5 w-5" />
                 <span className="text-xs font-semibold">{t('call')}</span>
               </button>
               <button
                 type="button"
-                onClick={() => onInitiateCall(selected.number, selected.name, undefined, true)}
-                className="flex flex-col items-center gap-1.5 rounded-2xl bg-indigo-500/10 p-3 text-indigo-300 hover:bg-indigo-500/20 transition"
-                title={`Call with ${privateCallPrefix} caller ID masking`}
-              >
-                <EyeOff className="h-5 w-5 text-indigo-400" />
-                <span className="text-xs font-semibold">Private</span>
-              </button>
-              <button
-                type="button"
                 onClick={() => onToggleFavorite(selected.id)}
-                className="flex flex-col items-center gap-1.5 rounded-2xl bg-white/5 p-3 text-amber-400 hover:bg-white/10 transition"
+                className="flex flex-col items-center gap-1.5 rounded-2xl bg-white/5 p-3 text-amber-400 hover:bg-white/10 transition cursor-pointer"
               >
                 <Star className="h-5 w-5" />
                 <span className="text-xs font-semibold">{t('favorite')}</span>

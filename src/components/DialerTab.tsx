@@ -2,7 +2,6 @@ import { memo, useEffect, useMemo, useRef, useState, type ClipboardEvent as Reac
 import {
   Check,
   Delete,
-  EyeOff,
   Layers,
   Phone,
   ShieldAlert,
@@ -537,22 +536,6 @@ const DialerTab = memo(function DialerTab({
               />
             )}
           </div>
-        </div>
-
-        {/* Masked / Private Call Quick Action Pill */}
-        <div className={`flex items-center justify-center transition-all ${isCompact ? 'mt-2' : 'mt-3'}`}>
-          <button
-            type="button"
-            onClick={() => call(true)}
-            disabled={!value.trim()}
-            className={`inline-flex items-center gap-1.5 rounded-full border border-indigo-500/40 bg-indigo-950/60 font-semibold text-indigo-200 transition hover:bg-indigo-900/80 active:scale-95 disabled:pointer-events-none disabled:opacity-30 shadow-sm ${
-              isCompact ? 'px-3 py-1 text-[10px]' : 'px-4 py-1.5 text-[11px]'
-            }`}
-            title={`Dial with ${settings?.privateCallPrefix || '*67'} Caller ID Masking`}
-          >
-            <EyeOff className="h-3.5 w-3.5 text-indigo-400" />
-            <span>{t('private_call_masked')}</span>
-          </button>
         </div>
 
         {/* Protection Footer Badge */}

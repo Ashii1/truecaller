@@ -23,7 +23,6 @@ import {
   UserX,
   PhoneOff,
   Bot,
-  EyeOff,
   Radio
 } from 'lucide-react';
 import { 
@@ -437,34 +436,6 @@ function ProtectionTab({
             <p className="text-[11px] leading-relaxed text-slate-400">
               Detects suspicious 1-ring dropped calls from unknown or high-rate international lines. Automatically mutes ringers and flags calls with "1-Ring Callback Scam" alert.
             </p>
-          </div>
-
-          {/* Feature 4: 1-Tap Private / Masked Callback */}
-          <div className="rounded-2xl border border-white/5 bg-[#121822] p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <EyeOff className="w-4 h-4 text-blue-400" />
-                <span className="text-xs font-bold text-white">1-Tap Private / Masked Callback</span>
-              </div>
-              <span className="rounded bg-blue-500/20 px-2 py-0.5 text-[9px] font-bold text-blue-300">
-                Active
-              </span>
-            </div>
-            <p className="text-[11px] leading-relaxed text-slate-400">
-              Suppresses your caller ID when returning calls to unknown callers, online sellers, or delivery drivers.
-            </p>
-            <div className="pt-1 flex items-center gap-2">
-              <label className="text-[10px] font-semibold text-slate-400 shrink-0">Carrier Code:</label>
-              <select
-                value={settings.privateCallPrefix || '*67'}
-                onChange={(e) => onUpdateSettings({ ...settings, privateCallPrefix: e.target.value })}
-                className="rounded-xl border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-white focus:border-indigo-500 focus:outline-none"
-              >
-                <option value="*67">*67 (North America)</option>
-                <option value="#31#">#31# (Worldwide GSM / India)</option>
-                <option value="141">141 (United Kingdom)</option>
-              </select>
-            </div>
           </div>
         </div>
       </div>

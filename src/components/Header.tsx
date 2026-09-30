@@ -328,8 +328,8 @@ function Header({
             </div>
           </div>
 
-          {/* Zone 3: Clean Actions with >=44px Hitboxes */}
-          <div className="flex items-center gap-1">
+          {/* Zone 3: Clean Actions with >=44px Hitboxes & Proper Spacing */}
+          <div className="flex items-center gap-2 sm:gap-2.5">
             {onRequestDefaultDialer && !isDefaultDialer && (
               <button
                 type="button"
@@ -374,6 +374,7 @@ function Header({
             <button
               type="button"
               onClick={() => {
+                setShowNotifications(false);
                 if (onSettingsOpenChange) {
                   onSettingsOpenChange(true);
                 } else {
@@ -491,7 +492,10 @@ function Header({
       {showNotifications && createPortal(
         <div
           id="oneui-notification-panel-overlay"
-          className="fixed inset-0 z-[9990] bg-black/60 backdrop-blur-sm p-2 safe-top-panel sm:p-4 sm:pt-16 animate-in fade-in duration-150"
+          className="fixed inset-0 z-[9990] bg-black/70 backdrop-blur-md p-3 sm:p-5 overflow-y-auto animate-in fade-in duration-150"
+          style={{
+            paddingTop: 'max(4.75rem, calc(env(safe-area-inset-top, 0px) + 4.25rem))',
+          }}
           onClick={() => setShowNotifications(false)}
         >
           <div

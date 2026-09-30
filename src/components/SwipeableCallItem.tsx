@@ -12,7 +12,6 @@ import {
   Bot,
   Check,
   Disc,
-  EyeOff,
   Phone,
   ShieldAlert,
   ShieldCheck,
@@ -595,21 +594,6 @@ function SwipeableCallItem({
         >
           <div className="grid h-8 w-8 place-items-center rounded-full bg-emerald-500/15 border border-emerald-500/25">
             <Phone className="h-4 w-4 fill-current" />
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onInitiateCall(targetNumber, name, undefined, true);
-          }}
-          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 active:scale-95 transition cursor-pointer"
-          aria-label="Call Privately (*67 Masked)"
-          title={`Call Privately (${settings?.privateCallPrefix || '*67'} Masked)`}
-        >
-          <div className="grid h-8 w-8 place-items-center rounded-full bg-indigo-500/15 border border-indigo-500/25">
-            <EyeOff className="h-4 w-4" />
           </div>
         </button>
 
