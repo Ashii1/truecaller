@@ -7,6 +7,7 @@
 import { CallLogItem } from '../types';
 import { resolveFromPublicDirectory, PUBLIC_DIRECTORY_DATABASE, isGenericOrPhoneNumber } from '../utils/publicDirectory';
 import { normalizePhoneNumber, resolveNumberMetadata } from '../utils/spamEngine';
+import { directoryLookupService } from './directoryLookupService';
 
 export interface ExternalCallerResult {
   number: string;
@@ -193,16 +194,37 @@ class ExternalDirectoryService {
     }
 
     const hit = this.memoryCache.get(cleanKey) || this.memoryCache.get(norm);
-    if (!hit) return null;
-
-    if (Date.now() - hit.cachedAt > CACHE_TTL_MS) {
-      this.memoryCache.delete(cleanKey);
-      this.memoryCache.delete(norm);
-      this.persistCache();
-      return null;
+    if (hit) {
+      if (Date.now() - hit.cachedAt > CACHE_TTL_MS) {
+        this.memoryCache.delete(cleanKey);
+        this.memoryCache.delete(norm);
+        this.persistCache();
+      } else if (hit.callerName && !isGenericOrPhoneNumber(hit.callerName, phoneNumber)) {
+        return hit;
+      }
     }
 
-    return hit;
+    // Check directoryLookupService persistent cache
+    const dirHit = directoryLookupService.getCached(phoneNumber);
+    if (dirHit && dirHit.name && !isGenericOrPhoneNumber(dirHit.name, phoneNumber)) {
+      return {
+        number: phoneNumber,
+        normalizedNumber: norm,
+        callerName: dirHit.name,
+        carrier: dirHit.carrier,
+        location: dirHit.location,
+        lineType: dirHit.isBusiness ? 'Landline' : 'Mobile',
+        isSpam: dirHit.isSpam,
+        spamCategory: dirHit.spamCategory,
+        spamScore: dirHit.spamScore,
+        isVerified: dirHit.isVerified,
+        confidence: dirHit.confidence,
+        source: dirHit.source,
+        cachedAt: dirHit.timestamp,
+      };
+    }
+
+    return null;
   }
 
   /**
@@ -424,9 +446,9 @@ class ExternalDirectoryService {
       }
 
       // 4. Fallback to public crowd-sourced directory resolution
-      if (!liveResult) {
+      if (!liveResult || !liveResult.callerName || isGenericOrPhoneNumber(liveResult.callerName, phoneNumber)) {
         const publicRecord = resolveFromPublicDirectory(phoneNumber, meta.location, meta.carrier);
-        if (publicRecord) {
+        if (publicRecord && !isGenericOrPhoneNumber(publicRecord.name, phoneNumber)) {
           liveResult = {
             number: phoneNumber,
             normalizedNumber: norm,
@@ -442,30 +464,61 @@ class ExternalDirectoryService {
             source: 'Public Directory Registry (Community Verified)',
             cachedAt: Date.now(),
           };
-        } else {
-          liveResult = {
-            number: phoneNumber,
-            normalizedNumber: norm,
-            callerName: undefined,
-            carrier: meta.carrier,
-            location: meta.location,
-            lineType: 'Mobile',
-            isSpam: false,
-            spamCategory: 'SAFE',
-            spamScore: 0,
-            isVerified: false,
-            confidence: 'LOW',
-            source: 'Unlisted Number',
-            cachedAt: Date.now(),
-          };
         }
       }
 
-      // 5. Store in persistent cache
+      // 5. Fallback to DirectoryLookupService (Public Directory APIs: OpenCorporates, Telecom Whitepages, /api/lookup)
+      // When local database lookups return 'Unknown' or unlisted
+      if (!liveResult || !liveResult.callerName || isGenericOrPhoneNumber(liveResult.callerName, phoneNumber)) {
+        try {
+          const dirLookup = await directoryLookupService.lookup(phoneNumber);
+          if (dirLookup && dirLookup.name && !isGenericOrPhoneNumber(dirLookup.name, phoneNumber)) {
+            liveResult = {
+              number: phoneNumber,
+              normalizedNumber: norm,
+              callerName: dirLookup.name,
+              carrier: dirLookup.carrier || meta.carrier,
+              location: dirLookup.location || meta.location,
+              lineType: dirLookup.isBusiness ? 'Landline' : 'Mobile',
+              isSpam: dirLookup.isSpam,
+              spamCategory: dirLookup.spamCategory,
+              spamScore: dirLookup.spamScore,
+              isVerified: dirLookup.isVerified,
+              confidence: dirLookup.confidence,
+              source: dirLookup.source,
+              cachedAt: Date.now(),
+            };
+          }
+        } catch (e) {
+          console.warn('DirectoryLookupService fallback error:', e);
+        }
+      }
+
+      // 6. Ensure safe fallback if still unresolved
+      if (!liveResult) {
+        const pub = resolveFromPublicDirectory(phoneNumber, meta.location, meta.carrier);
+        liveResult = {
+          number: phoneNumber,
+          normalizedNumber: norm,
+          callerName: pub?.name || undefined,
+          carrier: meta.carrier,
+          location: meta.location,
+          lineType: 'Mobile',
+          isSpam: false,
+          spamCategory: 'SAFE',
+          spamScore: 0,
+          isVerified: false,
+          confidence: 'LOW',
+          source: 'Unlisted Number',
+          cachedAt: Date.now(),
+        };
+      }
+
+      // 7. Store in persistent cache
       this.setCachedCaller(phoneNumber, liveResult);
 
-      // 6. Cache into the local 'calls' list to improve display accuracy
-      if (liveResult.callerName) {
+      // 8. Cache into the local 'calls' list to improve display accuracy
+      if (liveResult.callerName && !isGenericOrPhoneNumber(liveResult.callerName, phoneNumber)) {
         this.cacheResultInLocalCalls(phoneNumber, liveResult.callerName, {
           carrier: liveResult.carrier,
           location: liveResult.location,
@@ -505,28 +558,43 @@ class ExternalDirectoryService {
       const syncedCalls = calls.map((c) => {
         const isGeneric = isGenericOrPhoneNumber(c.callerName, c.number);
         const publicRecord = resolveFromPublicDirectory(c.number, c.location, c.carrier);
+        const dirCached = isGeneric ? directoryLookupService.getCached(c.number) : null;
 
-        if (publicRecord) {
-          const shouldUpdateName = isGeneric && !isGenericOrPhoneNumber(publicRecord.name, c.number);
-          const shouldUpdateSpam = publicRecord.isSpam && !c.isSpam;
-          const hasDuplicateLocation = c.location && (c.location.includes('India, India') || c.location.includes('Tamil Nadu, India, India'));
+        const resolvedName =
+          publicRecord && !isGenericOrPhoneNumber(publicRecord.name, c.number)
+            ? publicRecord.name
+            : dirCached && !isGenericOrPhoneNumber(dirCached.name, c.number)
+            ? dirCached.name
+            : null;
 
-          if (shouldUpdateName || shouldUpdateSpam || hasDuplicateLocation) {
-            hasModifications = true;
-            return {
-              ...c,
-              callerName: shouldUpdateName ? publicRecord.name : c.callerName,
-              carrier: publicRecord.carrier || c.carrier,
-              location: hasDuplicateLocation
-                ? (c.location || '').replace(/,\s*India,\s*India/g, ', India').replace(/India,\s*India/g, 'India')
-                : (publicRecord.location || c.location),
-              isSpam: publicRecord.isSpam ? true : c.isSpam,
-              riskScore: publicRecord.spamScore > 0 ? publicRecord.spamScore : c.riskScore,
-              classification: publicRecord.spamCategory === 'SCAM' ? 'SCAM' : publicRecord.isSpam ? 'SPAM' : c.classification,
-              spamCategory: publicRecord.spamCategory || c.spamCategory,
-              isVerifiedBusiness: publicRecord.isVerified || c.isVerifiedBusiness,
-            };
-          }
+        const shouldUpdateName = isGeneric && Boolean(resolvedName);
+        const shouldUpdateSpam = Boolean((publicRecord?.isSpam || dirCached?.isSpam) && !c.isSpam);
+        const hasDuplicateLocation = Boolean(c.location && (c.location.includes('India, India') || c.location.includes('Tamil Nadu, India, India')));
+
+        if (shouldUpdateName || shouldUpdateSpam || hasDuplicateLocation) {
+          hasModifications = true;
+          const isSpam = (publicRecord?.isSpam || dirCached?.isSpam) ? true : c.isSpam;
+          const spamScore = (publicRecord?.spamScore ?? dirCached?.spamScore ?? 0) > 0
+            ? (publicRecord?.spamScore ?? dirCached?.spamScore ?? 0)
+            : c.riskScore;
+          const spamCategory = publicRecord?.spamCategory || dirCached?.spamCategory || c.spamCategory;
+          const isVerified = Boolean((publicRecord?.isVerified || dirCached?.isVerified) || c.isVerifiedBusiness);
+          const carrier = publicRecord?.carrier || dirCached?.carrier || c.carrier;
+          const location = hasDuplicateLocation
+            ? (c.location || '').replace(/,\s*India,\s*India/g, ', India').replace(/India,\s*India/g, 'India')
+            : (publicRecord?.location || dirCached?.location || c.location);
+
+          return {
+            ...c,
+            callerName: shouldUpdateName && resolvedName ? resolvedName : c.callerName,
+            carrier,
+            location,
+            isSpam,
+            riskScore: spamScore,
+            classification: isSpam ? (spamCategory === 'SCAM' ? 'SCAM' : 'SPAM') : c.classification,
+            spamCategory,
+            isVerifiedBusiness: isVerified,
+          };
         }
 
         return c;

@@ -16,5 +16,6 @@
     "noEmit": true,
     "types": ["vite-plugin-pwa/client"]
   },
-  "exclude": ["src/main.tsx"]
+  "include": ["src/**/*", "server.ts"],
+  "exclude": ["node_modules", "dist", "build", "app", "android", "ios", "src/main.tsx"]
 }
