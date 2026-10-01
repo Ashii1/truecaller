@@ -14,6 +14,7 @@ import {
 import { ContactItem, CallLogItem, CallShieldDirectoryProfile, ShieldSettings, DisplayDensity } from '../types';
 import { smartDialerSearch } from '../utils/t9Search';
 import { formatPhoneNumber } from '../utils/spamEngine';
+import { isGenericOrPhoneNumber } from '../utils/publicDirectory';
 import { useI18n } from '../i18n/LanguageContext';
 import { playDtmfTone } from '../utils/dtmfTones';
 import { triggerHapticFeedback } from '../utils/audioAlerts';
@@ -80,6 +81,20 @@ const DialerTab = memo(function DialerTab({
   useEffect(() => {
     if (initialNumber) setValue(initialNumber);
   }, [initialNumber]);
+
+  useEffect(() => {
+    const handleBack = (e: any) => {
+      if (showSimPicker) {
+        setShowSimPicker(false);
+        e.detail?.handled?.();
+      } else if (value.trim().length > 0) {
+        setValue('');
+        e.detail?.handled?.();
+      }
+    };
+    window.addEventListener('callshield_back_request', handleBack);
+    return () => window.removeEventListener('callshield_back_request', handleBack);
+  }, [showSimPicker, value]);
 
   const handlePaste = (e: ReactClipboardEvent) => {
     const text = e.clipboardData?.getData('text');
@@ -284,18 +299,26 @@ const DialerTab = memo(function DialerTab({
                 <span className="truncate max-w-[110px]">{c.name}</span>
               </button>
             ))}
-            {results.matchingRecents.slice(0, 2).map((r) => (
-              <button
-                type="button"
-                key={r.id}
-                onClick={() => setValue(r.number)}
-                className={`shrink-0 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/15 hover:text-white transition active:scale-95 ${
-                  isCompact ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1 text-xs'
-                }`}
-              >
-                {r.callerName || formatPhoneNumber(r.number)}
-              </button>
-            ))}
+            {results.matchingRecents.slice(0, 2).map((r) => {
+              const prof = lookupProfile(r.number);
+              const displayName = !isGenericOrPhoneNumber(r.callerName, r.number)
+                ? r.callerName
+                : !isGenericOrPhoneNumber(prof?.name, r.number)
+                ? prof.name
+                : formatPhoneNumber(r.number);
+              return (
+                <button
+                  type="button"
+                  key={r.id}
+                  onClick={() => setValue(r.number)}
+                  className={`shrink-0 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/15 hover:text-white transition active:scale-95 ${
+                    isCompact ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1 text-xs'
+                  }`}
+                >
+                  {displayName}
+                </button>
+              );
+            })}
             {results.possibleCaller && (
               <button
                 type="button"
@@ -385,14 +408,14 @@ const DialerTab = memo(function DialerTab({
         </div>
 
         {/* Dynamic Caller Identification or Contact Quick Add (Only if relevant; NO duplicate formatted number) */}
-        {(matchedContact || ((profile?.isSpam || profile?.isVerified) && profile?.name && profile.name !== value) || digits.length >= 3) ? (
+        {(matchedContact || (profile?.name && !isGenericOrPhoneNumber(profile.name, value)) || digits.length >= 3) ? (
           <div className="flex items-center justify-center overflow-hidden transition-all text-xs mt-0.5">
             {matchedContact ? (
               <div className="flex items-center justify-center gap-1 font-bold text-emerald-400 truncate text-[11px]">
                 <User className="h-3 w-3 shrink-0" />
                 <span className="truncate">{matchedContact.name}</span>
               </div>
-            ) : (profile?.isSpam || profile?.isVerified) && profile?.name && profile.name !== value ? (
+            ) : profile?.name && !isGenericOrPhoneNumber(profile.name, value) ? (
               <div className="flex items-center justify-center gap-1.5 truncate text-[11px]">
                 <span className={`font-bold truncate max-w-[170px] ${profile.isSpam ? 'text-rose-400' : 'text-slate-200'}`}>
                   {profile.name}
@@ -401,9 +424,13 @@ const DialerTab = memo(function DialerTab({
                   <span className="shrink-0 rounded-full bg-rose-500/20 px-1.5 py-0.2 text-[8.5px] font-black uppercase text-rose-300">
                     {t('spam_badge')}
                   </span>
-                ) : (
+                ) : profile.isVerified ? (
                   <span className="shrink-0 rounded-full bg-emerald-500/20 px-1.5 py-0.2 text-[8.5px] font-black uppercase text-emerald-300">
                     {t('safe_badge')}
+                  </span>
+                ) : (
+                  <span className="shrink-0 rounded-full bg-slate-700/60 px-1.5 py-0.2 text-[8.5px] font-semibold text-slate-300">
+                    Directory
                   </span>
                 )}
               </div>

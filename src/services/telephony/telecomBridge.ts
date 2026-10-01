@@ -1,4 +1,5 @@
 import { CallLogItem, ContactItem } from '../../types';
+import { resolveFromPublicDirectory, isGenericOrPhoneNumber } from '../../utils/publicDirectory';
 
 export interface PhoneAccountInfo { id:string; label:string; carrierName:string; slotIndex:number; displayName:string; isDefault:boolean; }
 export interface TelephonyDiagnosticsData {
@@ -153,7 +154,60 @@ class TelecomBridgeService {
   public clearStaleCallNotifications(){if(!this.native()||!window.AndroidTelecomBridge!.clearStaleCallNotifications)return false;try{return window.AndroidTelecomBridge!.clearStaleCallNotifications();}catch{return false;}}
   public setMuted(v:boolean){return this.native()?window.AndroidTelecomBridge!.setMuted(v):false;} public setSpeakerRoute(v:boolean){return this.native()?window.AndroidTelecomBridge!.setSpeakerRoute(v):false;}
   public sendDtmfTone(id:string,d:string){return this.native()?window.AndroidTelecomBridge!.sendDtmfTone(id,d):false;} public holdCall(id:string){return this.native()?window.AndroidTelecomBridge!.holdCall(id):false;} public unholdCall(id:string){return this.native()?window.AndroidTelecomBridge!.unholdCall(id):false;} public swapCalls(){return this.native()?window.AndroidTelecomBridge!.swapCalls():false;} public mergeCalls(){return this.native()?window.AndroidTelecomBridge!.mergeCalls():false;}
-  public fetchDeviceCallLogs(limit=100):CallLogItem[]{if(!this.native())return[];try{const a=JSON.parse(window.AndroidTelecomBridge!.fetchRealCallLogs(limit));return Array.isArray(a)?a.map((x:any)=>({...x,id:String(x.id),number:x.number||'',callerName:x.callerName||x.number||'Unknown caller',timestamp:Number(x.timestamp)||Date.now(),durationSeconds:Number(x.durationSeconds)||0,isSpam:!!x.isSpam,riskScore:Number(x.riskScore)||0,reportsCount:Number(x.reportsCount)||0,isContact:!!x.isContact,isVerifiedBusiness:!!x.isVerifiedBusiness,rawSource:'device_os' as const,identificationSource:x.identificationSource||'Android CallLog'})):[];}catch{return[];}}
+  public fetchDeviceCallLogs(limit=100):CallLogItem[]{
+    if(!this.native())return[];
+    try{
+      const a=JSON.parse(window.AndroidTelecomBridge!.fetchRealCallLogs(limit));
+      return Array.isArray(a)?a.map((x:any)=>{
+        const num = x.number || '';
+        let callerName = x.callerName || '';
+        let isSpam = !!x.isSpam;
+        let isVerifiedBusiness = !!x.isVerifiedBusiness;
+        let riskScore = Number(x.riskScore) || 0;
+        let spamCategory = x.spamCategory;
+        let carrier = x.carrier;
+        let location = x.location;
+        let idSource = x.identificationSource || 'Android CallLog';
+
+        if (isGenericOrPhoneNumber(callerName, num)) {
+          const pub = resolveFromPublicDirectory(num);
+          if (pub && !isGenericOrPhoneNumber(pub.name, num)) {
+            callerName = pub.name;
+            if (pub.isSpam && !isSpam) {
+              isSpam = true;
+              riskScore = pub.spamScore;
+              spamCategory = pub.spamCategory;
+            }
+            if (pub.isVerified) {
+              isVerifiedBusiness = true;
+            }
+            if (!carrier) carrier = pub.carrier;
+            if (!location) location = pub.location;
+            idSource = 'Public Telecom Directory';
+          }
+        }
+
+        return {
+          ...x,
+          id: String(x.id),
+          number: num,
+          callerName,
+          timestamp: Number(x.timestamp) || Date.now(),
+          durationSeconds: Number(x.durationSeconds) || 0,
+          isSpam,
+          riskScore,
+          reportsCount: Number(x.reportsCount) || 0,
+          isContact: !!x.isContact,
+          isVerifiedBusiness,
+          spamCategory,
+          carrier,
+          location,
+          rawSource: 'device_os' as const,
+          identificationSource: idSource,
+        };
+      }):[];
+    }catch{return[];}
+  }
   public fetchDeviceContacts(limit=200):ContactItem[]{
     if(!this.native())return[];
     try{

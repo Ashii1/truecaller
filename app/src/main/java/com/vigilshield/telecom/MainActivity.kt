@@ -134,24 +134,18 @@ class MainActivity : AppCompatActivity() {
         // Do not interrupt widget/phone-surface launches with a system role dialog.
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK) {
-            handleSystemBackNavigation()
-            return true
-        }
-        return super.onKeyDown(keyCode, event)
-    }
-
-    private var isDispatchingBack = false
+    private var lastBackPressDispatchedAt = 0L
 
     private fun handleSystemBackNavigation() {
         if (!uiReportedReady || loadingView.visibility == View.VISIBLE) {
-            finish()
+            moveTaskToBack(true)
             return
         }
-        if (isDispatchingBack) return
-        isDispatchingBack = true
-        mainHandler.postDelayed({ isDispatchingBack = false }, 350)
+        val now = System.currentTimeMillis()
+        if (now - lastBackPressDispatchedAt < 400L) {
+            return
+        }
+        lastBackPressDispatchedAt = now
 
         val js = """
             (function() {
@@ -169,11 +163,11 @@ class MainActivity : AppCompatActivity() {
         """.trimIndent()
 
         webView.evaluateJavascript(js) { result ->
-            isDispatchingBack = false
             val handled = result == "true"
             if (!handled) {
                 // If not handled by JS (user double-pressed back on root dialer screen to exit):
-                finish()
+                // Move task to background without killing telephony services
+                moveTaskToBack(true)
             }
         }
     }

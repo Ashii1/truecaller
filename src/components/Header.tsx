@@ -45,6 +45,7 @@ import AboutAppModal from './AboutAppModal';
 import PrivacyTermsModal from './PrivacyTermsModal';
 import { useI18n } from '../i18n/LanguageContext';
 import { formatPhoneNumber } from '../utils/spamEngine';
+import { resolveFromPublicDirectory, isGenericOrPhoneNumber } from '../utils/publicDirectory';
 import { formatTimeAmPm } from '../utils/timeFormat';
 import { DEFAULT_RECORDINGS_FOLDER } from '../services/callRecordingService';
 
@@ -454,7 +455,9 @@ function Header({
               </span>
               <div className="flex items-center gap-2 min-w-0 truncate">
                 <span className="text-xs font-black text-blue-300 truncate">
-                  {activeIncomingCall.callerName || formatPhoneNumber(activeIncomingCall.number)}
+                  {!isGenericOrPhoneNumber(activeIncomingCall.callerName, activeIncomingCall.number)
+                    ? activeIncomingCall.callerName
+                    : resolveFromPublicDirectory(activeIncomingCall.number)?.name || formatPhoneNumber(activeIncomingCall.number)}
                 </span>
                 <span className="text-[10px] text-slate-300 font-mono hidden sm:inline">
                   {formatPhoneNumber(activeIncomingCall.number)}
@@ -718,7 +721,9 @@ function Header({
                   <div className="mt-2 flex items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <h4 className="text-xs font-bold text-white truncate">
-                        {minimizedCaller.callerName || minimizedCaller.number}
+                        {!isGenericOrPhoneNumber(minimizedCaller.callerName, minimizedCaller.number)
+                          ? minimizedCaller.callerName
+                          : resolveFromPublicDirectory(minimizedCaller.number)?.name || formatPhoneNumber(minimizedCaller.number)}
                       </h4>
                       <span className="font-mono text-[11px] text-slate-300">
                         {formatPhoneNumber(minimizedCaller.number)}
@@ -749,17 +754,22 @@ function Header({
                   <p className="mt-2 text-xs font-semibold text-slate-300">{t('notification_panel_empty')}</p>
                 </div>
               ) : (
-                activeNotifications.map((call) => (
-                  <div key={call.id} className="flex items-start justify-between gap-3 p-3 transition hover:bg-white/[0.03]">
-                    <div className="flex items-start gap-2.5 min-w-0">
-                      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-rose-500/15 text-rose-400 mt-0.5">
-                        <ShieldAlert className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-xs font-bold text-white truncate">
-                            {call.callerName || formatPhoneNumber(call.number)}
-                          </span>
+                activeNotifications.map((call) => {
+                  const resolvedDirName = resolveFromPublicDirectory(call.number)?.name;
+                  const displayCallerName = !isGenericOrPhoneNumber(call.callerName, call.number)
+                    ? call.callerName
+                    : resolvedDirName || formatPhoneNumber(call.number);
+                  return (
+                    <div key={call.id} className="flex items-start justify-between gap-3 p-3 transition hover:bg-white/[0.03]">
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-rose-500/15 text-rose-400 mt-0.5">
+                          <ShieldAlert className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-bold text-white truncate">
+                              {displayCallerName}
+                            </span>
                           <span className="rounded bg-rose-500/20 px-1 py-0.2 text-[9px] font-extrabold text-rose-300">
                             {call.spamCategory || 'SPAM'}
                           </span>
@@ -796,8 +806,9 @@ function Header({
                       </button>
                     </div>
                   </div>
-                ))
-              )}
+                );
+              })
+            )}
             </div>
           </div>
         </div>,

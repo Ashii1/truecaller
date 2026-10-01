@@ -5,7 +5,7 @@
  */
 
 import { CallLogItem } from '../types';
-import { resolveFromPublicDirectory, PUBLIC_DIRECTORY_DATABASE } from '../utils/publicDirectory';
+import { resolveFromPublicDirectory, PUBLIC_DIRECTORY_DATABASE, isGenericOrPhoneNumber } from '../utils/publicDirectory';
 import { normalizePhoneNumber, resolveNumberMetadata } from '../utils/spamEngine';
 
 export interface ExternalCallerResult {
@@ -25,7 +25,7 @@ export interface ExternalCallerResult {
 }
 
 const LOCAL_STORAGE_CACHE_KEY = 'vigilshield_external_directory_cache';
-const CALLS_STORAGE_KEY = 'vigilshield_calls';
+const CALLS_STORAGE_KEY = 'callshield_calls';
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
 
 class ExternalDirectoryService {
@@ -334,13 +334,12 @@ class ExternalDirectoryService {
       });
 
       if (hasModifications) {
-        localStorage.setItem(CALLS_STORAGE_KEY, JSON.stringify(updatedCalls));
+        localStorage.setItem('callshield_calls', JSON.stringify(updatedCalls));
+        localStorage.setItem('vigilshield_calls', JSON.stringify(updatedCalls));
 
-        // Dispatch a custom event so React components (like App.tsx) can re-render immediately
-        const event = new CustomEvent('vigilshield_calls_updated', {
-          detail: updatedCalls,
-        });
-        window.dispatchEvent(event);
+        // Dispatch events so React components (like App.tsx) re-render immediately
+        window.dispatchEvent(new CustomEvent('callshield_calls_updated', { detail: updatedCalls }));
+        window.dispatchEvent(new CustomEvent('vigilshield_calls_updated', { detail: updatedCalls }));
         return true;
       }
     } catch (e) {
@@ -496,81 +495,48 @@ class ExternalDirectoryService {
   public async batchEnrichLocalCalls(): Promise<void> {
     if (typeof window === 'undefined') return;
     try {
-      const raw = localStorage.getItem(CALLS_STORAGE_KEY);
+      const raw = localStorage.getItem('callshield_calls') || localStorage.getItem('vigilshield_calls');
       if (!raw) return;
 
       const calls: CallLogItem[] = JSON.parse(raw);
       let hasModifications = false;
 
-      // 1. Immediate sync for numbers in curated database or duplicate location text
+      // 1. Comprehensive public directory enrichment for all calls
       const syncedCalls = calls.map((c) => {
-        const digits = (c.number || '').replace(/\D/g, '');
-        const clean10 = digits.length >= 10 ? digits.slice(-10) : digits;
-        const norm = normalizePhoneNumber(c.number || '');
+        const isGeneric = isGenericOrPhoneNumber(c.callerName, c.number);
+        const publicRecord = resolveFromPublicDirectory(c.number, c.location, c.carrier);
 
-        const curated =
-          PUBLIC_DIRECTORY_DATABASE[clean10] ||
-          PUBLIC_DIRECTORY_DATABASE[digits] ||
-          PUBLIC_DIRECTORY_DATABASE[c.number] ||
-          PUBLIC_DIRECTORY_DATABASE[norm];
+        if (publicRecord) {
+          const shouldUpdateName = isGeneric && !isGenericOrPhoneNumber(publicRecord.name, c.number);
+          const shouldUpdateSpam = publicRecord.isSpam && !c.isSpam;
+          const hasDuplicateLocation = c.location && (c.location.includes('India, India') || c.location.includes('Tamil Nadu, India, India'));
 
-        if (curated) {
-          if (
-            c.callerName !== curated.name ||
-            c.isSpam !== curated.isSpam ||
-            c.location !== curated.location ||
-            c.carrier !== curated.carrier
-          ) {
+          if (shouldUpdateName || shouldUpdateSpam || hasDuplicateLocation) {
             hasModifications = true;
             return {
               ...c,
-              callerName: curated.name,
-              carrier: curated.carrier,
-              location: curated.location,
-              isSpam: curated.isSpam,
-              riskScore: curated.spamScore,
-              classification: curated.spamCategory === 'SCAM' ? 'SCAM' : curated.isSpam ? 'SPAM' : c.classification,
-              spamCategory: curated.spamCategory,
-              isVerifiedBusiness: curated.isVerified,
+              callerName: shouldUpdateName ? publicRecord.name : c.callerName,
+              carrier: publicRecord.carrier || c.carrier,
+              location: hasDuplicateLocation
+                ? (c.location || '').replace(/,\s*India,\s*India/g, ', India').replace(/India,\s*India/g, 'India')
+                : (publicRecord.location || c.location),
+              isSpam: publicRecord.isSpam ? true : c.isSpam,
+              riskScore: publicRecord.spamScore > 0 ? publicRecord.spamScore : c.riskScore,
+              classification: publicRecord.spamCategory === 'SCAM' ? 'SCAM' : publicRecord.isSpam ? 'SPAM' : c.classification,
+              spamCategory: publicRecord.spamCategory || c.spamCategory,
+              isVerifiedBusiness: publicRecord.isVerified || c.isVerifiedBusiness,
             };
           }
-        }
-
-        if (c.location && (c.location.includes('India, India') || c.location.includes('Tamil Nadu, India, India'))) {
-          hasModifications = true;
-          return {
-            ...c,
-            location: c.location.replace(/,\s*India,\s*India/g, ', India').replace(/India,\s*India/g, 'India'),
-          };
         }
 
         return c;
       });
 
       if (hasModifications) {
-        localStorage.setItem(CALLS_STORAGE_KEY, JSON.stringify(syncedCalls));
+        localStorage.setItem('callshield_calls', JSON.stringify(syncedCalls));
+        localStorage.setItem('vigilshield_calls', JSON.stringify(syncedCalls));
+        window.dispatchEvent(new CustomEvent('callshield_calls_updated', { detail: syncedCalls }));
         window.dispatchEvent(new CustomEvent('vigilshield_calls_updated', { detail: syncedCalls }));
-      }
-
-      // 2. Background query for missing or unknown numbers
-      const uniqueNumbers = Array.from(
-        new Set(
-          syncedCalls
-            .filter((c) => {
-              const digits = c.number.replace(/\D/g, '');
-              return (
-                !c.callerName ||
-                c.callerName === c.number ||
-                c.callerName.replace(/\D/g, '') === digits ||
-                String(c.callerName ?? '').toLowerCase().includes('unknown')
-              );
-            })
-            .map((c) => c.number)
-        )
-      );
-
-      for (const num of uniqueNumbers.slice(0, 10)) {
-        await this.fetchLiveCallerName(num);
       }
     } catch (e) {
       console.warn('Batch call enrichment error:', e);

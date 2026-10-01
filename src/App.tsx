@@ -141,6 +141,8 @@ export default function App(){
    isSettingsOpen,
    isNotificationsOpen,
    isThemeOpen,
+   isAboutOpen,
+   isPrivacyTermsOpen,
  });
  stateRef.current = {
    activeTab,
@@ -157,52 +159,20 @@ export default function App(){
    isSettingsOpen,
    isNotificationsOpen,
    isThemeOpen,
+   isAboutOpen,
+   isPrivacyTermsOpen,
  };
 
+ const lastActionTimeRef = useRef<number>(0);
+
  const handleAppBack = (): boolean => {
-   const current = stateRef.current;
-   if (current.isSettingsOpen) {
-     setIsSettingsOpen(false);
-     return true;
-   }
-   if (current.isNotificationsOpen) {
-     setIsNotificationsOpen(false);
-     return true;
-   }
-   if (current.isThemeOpen) {
-     setIsThemeOpen(false);
-     return true;
-   }
-   if (current.isCallerModalOpen) {
-     setIsCallerModalOpen(false);
-     return true;
-   }
-   if (current.isFastReportOpen) {
-     setIsFastReportOpen(false);
-     return true;
-   }
-   if (current.isDisputeOpen) {
-     setIsDisputeOpen(false);
-     return true;
-   }
-   if (current.isDataSourcesModalOpen) {
-     setIsDataSourcesModalOpen(false);
-     return true;
-   }
-   if (current.isDiagnosticsModalOpen) {
-     setIsDiagnosticsModalOpen(false);
-     return true;
-   }
-   if (current.isPermissionCenterOpen) {
-     setIsPermissionCenterOpen(false);
-     return true;
-   }
-   if (current.isInstallModalOpen) {
-     setIsInstallModalOpen(false);
+   const now = Date.now();
+   // Guard against duplicate event bursts within 300ms from the exact same user gesture/key
+   if (now - lastActionTimeRef.current < 300) {
      return true;
    }
 
-   // Check if subview in ContactsTab or other components is open
+   // 1. Check if any subview in open components (Settings subView, Contacts edit/detail, Recents selection, Dialer input/picker) wants to handle back
    let subviewHandled = false;
    if (typeof window !== 'undefined') {
      const evt = new CustomEvent('callshield_back_request', {
@@ -215,18 +185,86 @@ export default function App(){
      window.dispatchEvent(evt);
    }
    if (subviewHandled) {
+     lastActionTimeRef.current = now;
+     return true;
+   }
+
+   // 2. Modals and overlays
+   const current = stateRef.current;
+   if (current.isCallerModalOpen) {
+     setIsCallerModalOpen(false);
+     setSelectedCall(null);
+     setSelectedProfile(null);
+     lastActionTimeRef.current = now;
+     return true;
+   }
+   if (current.isSettingsOpen) {
+     setIsSettingsOpen(false);
+     lastActionTimeRef.current = now;
+     return true;
+   }
+   if (current.isNotificationsOpen) {
+     setIsNotificationsOpen(false);
+     lastActionTimeRef.current = now;
+     return true;
+   }
+   if (current.isThemeOpen) {
+     setIsThemeOpen(false);
+     lastActionTimeRef.current = now;
+     return true;
+   }
+   if (current.isAboutOpen) {
+     setIsAboutOpen(false);
+     lastActionTimeRef.current = now;
+     return true;
+   }
+   if (current.isPrivacyTermsOpen) {
+     setIsPrivacyTermsOpen(false);
+     lastActionTimeRef.current = now;
+     return true;
+   }
+   if (current.isFastReportOpen) {
+     setIsFastReportOpen(false);
+     lastActionTimeRef.current = now;
+     return true;
+   }
+   if (current.isDisputeOpen) {
+     setIsDisputeOpen(false);
+     lastActionTimeRef.current = now;
+     return true;
+   }
+   if (current.isDataSourcesModalOpen) {
+     setIsDataSourcesModalOpen(false);
+     lastActionTimeRef.current = now;
+     return true;
+   }
+   if (current.isDiagnosticsModalOpen) {
+     setIsDiagnosticsModalOpen(false);
+     lastActionTimeRef.current = now;
+     return true;
+   }
+   if (current.isPermissionCenterOpen) {
+     setIsPermissionCenterOpen(false);
+     lastActionTimeRef.current = now;
+     return true;
+   }
+   if (current.isInstallModalOpen) {
+     setIsInstallModalOpen(false);
+     lastActionTimeRef.current = now;
      return true;
    }
    if (current.activeCallSession && !current.isOngoingCallMinimized) {
      setIsOngoingCallMinimized(true);
+     lastActionTimeRef.current = now;
      return true;
    }
    if (current.activeIncomingCall && current.activeIncomingCall.viewMode === 'fullscreen' && !isDeviceLocked) {
      setActiveIncomingCall(prev => prev ? { ...prev, viewMode: 'popup' } : null);
+     lastActionTimeRef.current = now;
      return true;
    }
 
-   // Return to previous tab/page the user was using!
+   // 3. Tab history navigation (return to previous tab if user navigated between tabs)
    if (tabHistoryRef.current.length > 1) {
      const newHistory = [...tabHistoryRef.current];
      newHistory.pop(); // remove current tab
@@ -234,23 +272,29 @@ export default function App(){
      tabHistoryRef.current = newHistory;
      setTabHistory(newHistory);
      setActiveTab(prevTab);
+     lastActionTimeRef.current = now;
      return true;
    }
    if (current.activeTab !== 'dialer') {
      setActiveTab('dialer');
      tabHistoryRef.current = ['dialer'];
      setTabHistory(['dialer']);
+     lastActionTimeRef.current = now;
      return true;
    }
 
-   const now = Date.now();
-   if (now - lastBackPressTimeRef.current < 2000) {
-     return false;
+   // 4. On root dialer screen: Requires intentional double back press (between 400ms and 2500ms)
+   const elapsed = now - lastBackPressTimeRef.current;
+   if (elapsed >= 400 && elapsed < 2500) {
+     lastBackPressTimeRef.current = 0;
+     return false; // Exit to Android home screen
    }
    lastBackPressTimeRef.current = now;
    showToast('Press back again to exit CallShield', 'info');
    if (typeof window !== 'undefined' && window.history) {
-     window.history.pushState({ app: 'callshield', root: true }, '', window.location.href);
+     try {
+       window.history.pushState({ app: 'callshield', root: true }, '', window.location.href);
+     } catch {}
    }
    return true;
  };

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Bot, Mic, Phone, PhoneOff, Ban, Send, Sparkles, Volume2, VolumeX, MessageSquare, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { IncomingCallState, ScreeningTranscriptEntry } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
+import { resolveFromPublicDirectory, isGenericOrPhoneNumber } from '../utils/publicDirectory';
 
 interface CallScreeningOverlayProps {
   call: IncomingCallState;

@@ -23,6 +23,7 @@ import { CallLogItem, CallDirection, BlockRule, WhitelistEntry, ShieldSettings, 
 import { useI18n } from '../i18n/LanguageContext';
 import { formatTimeAmPm } from '../utils/timeFormat';
 import { formatPhoneNumber } from '../utils/spamEngine';
+import { isGenericOrPhoneNumber } from '../utils/publicDirectory';
 import { callRecordingService } from '../services/callRecordingService';
 import { callNotesService } from '../services/callNotesService';
 import ModernFilterBar, { FilterTabOption } from './ModernFilterBar';
@@ -176,12 +177,16 @@ function RecentsTab({
       if (filter === 'RECORDED' && !isRecordedCall(c)) return false;
       if (filter === 'BLOCKED' && !isBlockedCall(c)) return false;
       if (!q) return true;
+      const prof = lookupProfile(c.number);
+      const displayName = !isGenericOrPhoneNumber(c.callerName, c.number)
+        ? c.callerName!
+        : prof?.name || '';
       return (
-        String(c.callerName ?? '').toLowerCase().includes(q) ||
+        displayName.toLowerCase().includes(q) ||
         (d.length > 0 && c.number.replace(/\D/g, '').includes(d))
       );
     });
-  }, [calls, query, filter, simFilter]);
+  }, [calls, query, filter, simFilter, lookupProfile]);
 
   // Authoritative Chronological Sort: ONE CALL = ONE COMPLETE HISTORY RECORD (Requirement 1, 4, 5)
   const sortedCalls = useMemo(() => {
@@ -214,21 +219,25 @@ function RecentsTab({
   const autocompleteItems: AutocompleteItem[] = useMemo(() => {
     const map = new Map<string, AutocompleteItem>();
     calls.forEach((c) => {
-      const key = `${c.callerName || ''}_${c.number}`;
+      const prof = lookupProfile(c.number);
+      const displayName = !isGenericOrPhoneNumber(c.callerName, c.number)
+        ? c.callerName!
+        : prof?.name || c.number;
+      const key = `${displayName}_${c.number}`;
       if (!map.has(key)) {
         map.set(key, {
           id: c.id,
-          name: c.callerName || c.number,
+          name: displayName,
           number: c.number,
           type: 'recent',
-          isSpam: c.isSpam,
+          isSpam: c.isSpam || prof?.isSpam,
           category: c.isSpam ? (c.spamCategory || 'SPAM') : c.type,
           timestamp: c.timestamp,
         });
       }
     });
     return Array.from(map.values());
-  }, [calls]);
+  }, [calls, lookupProfile]);
 
   const handleToggleSelect = useCallback((id: string) => {
     setSelectedCallIds((prev) => {
@@ -288,7 +297,11 @@ function RecentsTab({
       selectedCalls.forEach((c) => {
         if (!uniqueNumbers.has(c.number)) {
           uniqueNumbers.add(c.number);
-          onWhitelistNumber(c.number, c.callerName || 'Trusted Caller');
+          const prof = lookupProfile(c.number);
+          const safeName = !isGenericOrPhoneNumber(c.callerName, c.number)
+            ? c.callerName!
+            : prof?.name || 'Trusted Caller';
+          onWhitelistNumber(c.number, safeName);
         }
       });
       if (showToast) {
@@ -311,8 +324,12 @@ function RecentsTab({
       const digits = c.number.replace(/\D/g, '');
       if (digits && !seenDigits.has(digits)) {
         seenDigits.add(digits);
+        const prof = lookupProfile(c.number);
+        const contactName = !isGenericOrPhoneNumber(c.callerName, c.number)
+          ? c.callerName!
+          : prof?.name || formatPhoneNumber(c.number);
         itemsToAdd.push({
-          name: c.callerName || formatPhoneNumber(c.number),
+          name: contactName,
           number: c.number,
         });
       }

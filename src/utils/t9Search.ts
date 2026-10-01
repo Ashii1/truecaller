@@ -1,4 +1,5 @@
 import { ContactItem, CallLogItem, CallShieldDirectoryProfile } from '../types';
+import { isGenericOrPhoneNumber } from './publicDirectory';
 
 const CHAR_TO_T9: Record<string, string> = {
   a: '2', b: '2', c: '2',
@@ -100,17 +101,14 @@ export function smartDialerSearch(
     }
   }
 
-  // 3. Possible Caller Lookup (only if it's a verified directory profile or known spam, not random unlisted numbers)
+  // 3. Possible Caller Lookup from public directories
   let possibleCaller: CallShieldDirectoryProfile | null = null;
   if (digitsOnly.length >= 4) {
     const profile = lookupProfileFn(cleanInput);
     if (
       profile &&
       profile.name &&
-      profile.name !== 'Unknown Caller' &&
-      profile.name !== cleanInput &&
-      profile.name !== digitsOnly &&
-      (profile.isSpam || profile.isVerified)
+      !isGenericOrPhoneNumber(profile.name, cleanInput)
     ) {
       possibleCaller = profile;
     }

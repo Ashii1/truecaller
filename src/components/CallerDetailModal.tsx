@@ -43,6 +43,7 @@ import {
   ContactItem,
 } from '../types';
 import { callRecordingService, normalizePhoneNumber } from '../services/callRecordingService';
+import { isGenericOrPhoneNumber } from '../utils/publicDirectory';
 import { callNotesService } from '../services/callNotesService';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 import CallAudioPlayer from './CallAudioPlayer';
@@ -274,14 +275,14 @@ export default function CallerDetailModal({
 
   // Directory intelligence name (if available)
   const directoryName = useMemo(() => {
-    if (profile?.name && profile.name !== number && !profile.name.includes('+91') && profile.name !== cleanDigits) {
+    if (!isGenericOrPhoneNumber(profile?.name, number)) {
       return profile.name;
     }
-    if (call?.callerName && call.callerName !== number && !call.isContact) {
+    if (!isGenericOrPhoneNumber(call?.callerName, number) && !call?.isContact) {
       return call.callerName;
     }
     return null;
-  }, [profile, call, number, cleanDigits]);
+  }, [profile, call, number]);
 
   // Name hierarchy
   const primaryDisplayName = savedName || directoryName || number;

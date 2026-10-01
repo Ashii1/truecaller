@@ -271,7 +271,7 @@ class AndroidTelephonyBridge(private val activity: Activity, private val webView
     @JavascriptInterface fun finishAppSurface(): Boolean {
         activity.runOnUiThread {
             if (!activity.isFinishing) {
-                activity.finishAndRemoveTask()
+                activity.moveTaskToBack(true)
             }
         }
         return true

@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { ActiveCallSession, CallShieldDirectoryProfile, CallRecordingItem } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
+import { isGenericOrPhoneNumber } from '../utils/publicDirectory';
 import { playDtmfTone, triggerHapticFeedback, playNotificationChime, triggerCallConnectedHaptic } from '../utils/audioAlerts';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 import { useI18n } from '../i18n/LanguageContext';
@@ -377,7 +378,11 @@ export default function ActiveCallModal({
   if (!session) return null;
 
   const callerProfile = lookupProfile(session.number);
-  const callerDisplayName = session.name || callerProfile?.name || t('unknown_caller');
+  const callerDisplayName = !isGenericOrPhoneNumber(session.name, session.number)
+    ? session.name!
+    : !isGenericOrPhoneNumber(callerProfile?.name, session.number)
+    ? callerProfile.name
+    : formatPhoneNumber(session.number);
   const formattedNumber = formatPhoneNumber(session.number);
   const initials = callerDisplayName
     ? callerDisplayName

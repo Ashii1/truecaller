@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { IncomingCallState, ScreeningTranscriptEntry, ShieldSettings, ContactItem } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
+import { resolveFromPublicDirectory, isGenericOrPhoneNumber } from '../utils/publicDirectory';
 import { useI18n } from '../i18n/LanguageContext';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 import { startIncomingCallAlerts, IncomingCallAlertController } from '../utils/audioAlerts';
@@ -406,13 +407,19 @@ export default function IncomingCallOverlay({
     return telecomBridge.lookupContactName(rawNumStr);
   }, [rawNumStr]);
 
-  const callerNameStr = typeof call.callerName === 'string' ? call.callerName.trim() : call.callerName != null ? String(call.callerName).trim() : '';
-  const isNameDigitsOnly = Boolean(callerNameStr && callerNameStr.replace(/\D/g, '') === rawDigits);
-  const isGeneric = !callerNameStr || isNameDigitsOnly || callerNameStr.toLowerCase() === 'unknown caller' || callerNameStr.toLowerCase() === 'unknown';
+  // Public directory lookup for unknown numbers
+  const publicDirRecord = useMemo(() => {
+    if (!rawNumStr) return null;
+    return resolveFromPublicDirectory(rawNumStr);
+  }, [rawNumStr]);
 
-  // Saved contact name strictly takes highest precedence over generic, simulated or carrier string
-  const effectiveCallerName = matchedContact?.name || nativeContactName || (!isGeneric ? callerNameStr : '') || callerNameStr || '';
-  const hasSpecificName = Boolean(effectiveCallerName && effectiveCallerName.replace(/\D/g, '') !== rawDigits);
+  const callerNameStr = typeof call.callerName === 'string' ? call.callerName.trim() : call.callerName != null ? String(call.callerName).trim() : '';
+  const isGeneric = isGenericOrPhoneNumber(callerNameStr, rawNumStr);
+
+  // Saved contact name strictly takes highest precedence, then public directory verified name, then caller string
+  const directoryName = publicDirRecord && !isGenericOrPhoneNumber(publicDirRecord.name, rawNumStr) ? publicDirRecord.name : '';
+  const effectiveCallerName = matchedContact?.name || nativeContactName || (!isGeneric ? callerNameStr : '') || directoryName || callerNameStr || '';
+  const hasSpecificName = Boolean(effectiveCallerName && !isGenericOrPhoneNumber(effectiveCallerName, rawNumStr));
   const callerDisplayName = hasSpecificName ? effectiveCallerName : formattedNumber;
   const isSavedContact = Boolean(matchedContact || nativeContactName);
   const avatarInitial = (callerDisplayName?.trim()?.[0] || '📞').toUpperCase();

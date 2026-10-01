@@ -28,6 +28,7 @@ import {
 } from '../types';
 import { CallGroup } from '../utils/callHistory';
 import { formatPhoneNumber } from '../utils/spamEngine';
+import { isGenericOrPhoneNumber } from '../utils/publicDirectory';
 import { playSpamAlertChime, playCallCancelledTone } from '../utils/audioAlerts';
 import { callRecordingService } from '../services/callRecordingService';
 import { callNotesService } from '../services/callNotesService';
@@ -111,12 +112,17 @@ function SwipeableCallItem({
   const deleteScale = useTransform(x, [-120, -SWIPE_THRESHOLD, 0], [1.15, 1, 0.75]);
 
   const p = profile;
-  const name =
-    item.callerName && item.callerName !== targetNumber && !/^unknown caller$/i.test(item.callerName)
-      ? item.callerName
-      : group?.name && group.name !== targetNumber && !/^unknown caller$/i.test(group.name)
-      ? group.name
-      : p.name || targetNumber || t('unknown_caller');
+  const hasValidItemName = !isGenericOrPhoneNumber(item.callerName, targetNumber);
+  const hasValidGroupName = !isGenericOrPhoneNumber(group?.name, targetNumber);
+  const hasValidProfileName = !isGenericOrPhoneNumber(p?.name, targetNumber);
+
+  const name = hasValidItemName
+    ? item.callerName!
+    : hasValidGroupName
+    ? group!.name!
+    : hasValidProfileName
+    ? p.name
+    : targetNumber || t('unknown_caller');
   const isSpam = item.isSpam || (group ? group.calls.some((c) => c.isSpam) : false) || p.isSpam;
 
   const [isFinalizingRecording, setIsFinalizingRecording] = useState(() =>

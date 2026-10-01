@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { CallLogItem, ContactItem, CallShieldDirectoryProfile, BlockRule } from '../types';
 import { formatPhoneNumber } from '../utils/spamEngine';
+import { isGenericOrPhoneNumber } from '../utils/publicDirectory';
 import { useI18n } from '../i18n/LanguageContext';
 
 interface AssistantTabProps {
@@ -119,13 +120,19 @@ function AssistantTab({
   const reminders = calls
     .filter((c) => c.type === 'MISSED' && !dismissedReminders.includes(c.id))
     .slice(0, 3)
-    .map((c) => ({
-      id: c.id,
-      name: c.callerName || c.number,
-      number: c.number,
-      text: `Missed call from ${c.callerName || c.number} — tap to return call`,
-      time: new Date(c.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    }));
+    .map((c) => {
+      const prof = lookupProfile(c.number);
+      const displayName = !isGenericOrPhoneNumber(c.callerName, c.number)
+        ? c.callerName!
+        : prof?.name || formatPhoneNumber(c.number);
+      return {
+        id: c.id,
+        name: displayName,
+        number: c.number,
+        text: `Missed call from ${displayName} — tap to return call`,
+        time: new Date(c.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+    });
 
   // Smart Recommendations
   const smartRecommendations = [
