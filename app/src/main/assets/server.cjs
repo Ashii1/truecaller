@@ -37,7 +37,8 @@ var import_path = __toESM(require("path"), 1);
 var import_genai = require("@google/genai");
 var import_libphonenumber_js = require("libphonenumber-js");
 var app = (0, import_express.default)();
-var PORT = 3e3;
+var isDev = process.env.NODE_ENV === "development" || Boolean(process.env.K_SERVICE?.startsWith("ais-dev-"));
+var PORT = isDev ? 3e3 : Number(process.env.PORT) || 3e3;
 app.use(import_express.default.json({ limit: "256kb" }));
 app.disable("x-powered-by");
 app.use((_req, res, next) => {
@@ -808,7 +809,7 @@ app.get("/vigilshield_app.zip", (req, res) => {
   res.download(zipFile, "vigilshield_app.zip");
 });
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
+  if (isDev) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -823,7 +824,7 @@ async function startServer() {
     });
   }
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`CallShield Production Call Security Server running on http://0.0.0.0:${PORT}`);
+    console.log(`CallShield ${isDev ? "Development" : "Production"} Server running on http://0.0.0.0:${PORT}`);
   });
 }
 startServer();

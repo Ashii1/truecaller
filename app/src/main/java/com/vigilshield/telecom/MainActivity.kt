@@ -28,6 +28,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -123,8 +124,58 @@ class MainActivity : AppCompatActivity() {
             }
         }
         webView.loadUrl(APP_ASSET_URL)
+        // Handle mobile default back button & gesture inside web UI
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                handleSystemBackNavigation()
+            }
+        })
         // Default Phone role is requested only from an explicit user action in the UI.
         // Do not interrupt widget/phone-surface launches with a system role dialog.
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            handleSystemBackNavigation()
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    private var isDispatchingBack = false
+
+    private fun handleSystemBackNavigation() {
+        if (!uiReportedReady || loadingView.visibility == View.VISIBLE) {
+            finish()
+            return
+        }
+        if (isDispatchingBack) return
+        isDispatchingBack = true
+        mainHandler.postDelayed({ isDispatchingBack = false }, 350)
+
+        val js = """
+            (function() {
+                try {
+                    if (typeof window.__onAndroidBackPressed === 'function') {
+                        return window.__onAndroidBackPressed() === true;
+                    }
+                    var evt = new Event('android_back_pressed', { cancelable: true });
+                    window.dispatchEvent(evt);
+                    return evt.defaultPrevented;
+                } catch(e) {
+                    return false;
+                }
+            })()
+        """.trimIndent()
+
+        webView.evaluateJavascript(js) { result ->
+            isDispatchingBack = false
+            val handled = result == "true"
+            if (!handled) {
+                // If not handled by JS (user double-pressed back on root dialer screen to exit):
+                finish()
+            }
+        }
     }
 
     private fun handleExternalUrl(url: String): Boolean {

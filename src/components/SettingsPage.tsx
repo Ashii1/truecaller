@@ -133,6 +133,17 @@ export default function SettingsPage({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('ALL');
 
+  useEffect(() => {
+    const handleBack = (e: any) => {
+      if (subView !== 'main') {
+        setSubView('main');
+        e.detail?.handled?.();
+      }
+    };
+    window.addEventListener('callshield_back_request', handleBack);
+    return () => window.removeEventListener('callshield_back_request', handleBack);
+  }, [subView]);
+
   const [privacy, setPrivacy] = useState<PrivacySettings>(() => {
     try {
       const raw = localStorage.getItem('callshield_privacy_settings');

@@ -365,22 +365,22 @@ npx cap open android # Opens Android Studio to click "Build APK"`;
                 <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2">
                   <div className="font-bold text-white flex items-center space-x-2">
                     <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-300 flex items-center justify-center text-[10px]">2</span>
-                    <span>Higher versionCode (403+)</span>
+                    <span>Higher versionCode (3000+)</span>
                   </div>
                   <p className="text-slate-400 leading-relaxed">
                     Android rejects installing an APK if its <code className="text-amber-400 font-mono">versionCode</code> is equal to or lower than the installed version.
                   </p>
                   <div className="text-[11px] text-emerald-400 bg-emerald-950/30 p-2 rounded-xl border border-emerald-500/20 font-medium">
-                    ✓ Fixed: VersionCode is now bumped to <code className="font-mono">403+</code> (above Build 402) so Android treats it as an in-place upgrade!
+                    ✓ Fixed: VersionCode is bumped to <code className="font-mono">3000+</code> (strictly above all earlier builds) so Android performs an in-place upgrade!
                   </div>
                 </div>
               </div>
 
               <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2.5">
-                <h5 className="text-xs font-bold text-slate-200">How to update your current 402 build:</h5>
+                <h5 className="text-xs font-bold text-slate-200">How to update your current build:</h5>
                 <ol className="text-xs text-slate-400 space-y-1.5 list-decimal list-inside leading-relaxed">
-                  <li><strong>Keep your existing app installed:</strong> Do not uninstall Build 402. All your contacts and call recordings will be preserved.</li>
-                  <li><strong>Install the new update APK:</strong> Tap the new APK build (v1.5.3, versionCode 403+).</li>
+                  <li><strong>Keep your existing app installed:</strong> Do not uninstall. All your contacts and call recordings will be preserved.</li>
+                  <li><strong>Install the new update APK:</strong> Tap the new APK build (v1.5.7, versionCode 3000+).</li>
                   <li><strong>Android Package Installer prompt:</strong> Android will recognize it as an update and display <em>"Do you want to update this app? Your existing data won't be lost."</em> Tap <strong>Update</strong> to complete!</li>
                 </ol>
               </div>
@@ -392,7 +392,7 @@ npx cap open android # Opens Android Studio to click "Build APK"`;
         <div className="px-6 py-3.5 bg-slate-850 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 rounded-b-2xl">
           <div className="flex items-center space-x-1.5">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>CallShield Native Android & PWA v1.5.3 (Build 403+)</span>
+            <span>CallShield Native Android & PWA v1.5.7 (Build 3000+)</span>
           </div>
           <button
             onClick={onClose}

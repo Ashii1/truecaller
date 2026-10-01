@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useCallback } from 'react';
+import { memo, useMemo, useState, useCallback, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   Check,
@@ -91,6 +91,18 @@ function RecentsTab({
   const [showSimMenu, setShowSimMenu] = useState(false);
   const [selectedCallIds, setSelectedCallIds] = useState<Set<string>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+
+  useEffect(() => {
+    const handleBack = (e: any) => {
+      if (isSelectionMode) {
+        setIsSelectionMode(false);
+        setSelectedCallIds(new Set());
+        e.detail?.handled?.();
+      }
+    };
+    window.addEventListener('callshield_back_request', handleBack);
+    return () => window.removeEventListener('callshield_back_request', handleBack);
+  }, [isSelectionMode]);
 
   const handleDeleteCalls = useCallback((ids: string[]) => {
     if (onDeleteCalls) {
