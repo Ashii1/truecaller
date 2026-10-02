@@ -1,301 +1,245 @@
-import { useState, useEffect } from 'react';
-import { 
+import { memo } from 'react';
+import {
   ArrowLeft,
-  ShieldCheck, 
-  Database, 
-  Lock, 
-  Globe, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Download, 
-  Trash2, 
-  Radio, 
-  Cpu, 
-  FileText,
-  ExternalLink
+  Building2,
+  CheckCircle2,
+  Database,
+  ExternalLink,
+  Globe2,
+  Lock,
+  Radio,
+  ShieldCheck,
+  Sparkles,
 } from 'lucide-react';
 
 interface DataSourcesModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onClearAllData: () => void;
+  onClearAllData?: () => void;
   inline?: boolean;
 }
 
-export default function DataSourcesModal({
+interface DataSourceItem {
+  id: string;
+  name: string;
+  category: string;
+  authority: string;
+  confidence: string;
+  description: string;
+  attribution: string;
+  license: string;
+  badgeColor: string;
+  icon: typeof Database;
+}
+
+const DATA_SOURCES: DataSourceItem[] = [
+  {
+    id: 'trai',
+    name: 'TRAI Commercial Telemarketer Registry',
+    category: 'Official Regulatory',
+    authority: 'Telecom Regulatory Authority of India',
+    confidence: '100% Deterministic',
+    description: 'Statutory 140-series allocations mandated for all registered telemarketers, banks, and enterprise outbound sales agents across Indian telecom operators.',
+    attribution: 'TRAI Statutory DND (Do Not Disturb) and UCC Telemarketing Regulations',
+    license: 'Public Telecom Regulatory Open Data',
+    badgeColor: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+    icon: ShieldCheck,
+  },
+  {
+    id: 'opencorporates',
+    name: 'OpenCorporates Global Corporate Database',
+    category: 'Public Company Registry',
+    authority: 'OpenCorporates Open Legal Entities Database',
+    confidence: '98% Verified',
+    description: 'Audited enterprise registrations, official registered office telephone listings, and legal entity identifiers for corporate callers.',
+    attribution: 'Data sourced under Open Database License (ODbL) from OpenCorporates Ltd.',
+    license: 'Open Database License (ODbL) 1.0',
+    badgeColor: 'border-blue-500/30 bg-blue-500/10 text-blue-300',
+    icon: Building2,
+  },
+  {
+    id: 'stir_shaken',
+    name: 'STIR/SHAKEN Cryptographic Caller ID',
+    category: 'Telecom Cryptography',
+    authority: 'ATIS-1000074 / FCC Part 64 Standards',
+    confidence: '99% Carrier Verified',
+    description: 'Cryptographic digital certificates embedded directly in SIP invite headers to mathematically prove the originating caller identity and eliminate neighbor spoofing.',
+    attribution: 'ATIS / SIP Forum NANC Call Authentication Standard',
+    license: 'Public International Telephony Standard',
+    badgeColor: 'border-purple-500/30 bg-purple-500/10 text-purple-300',
+    icon: Radio,
+  },
+  {
+    id: 'itu',
+    name: 'ITU-T E.164 National Numbering Plans',
+    category: 'International Standard',
+    authority: 'International Telecommunication Union (Geneva)',
+    confidence: '100% Deterministic',
+    description: 'Official global routing tables, international country calling codes, domestic numbering plans, and statutory toll-free series (1800, 800, 888).',
+    attribution: 'ITU-T Recommendation E.164 & libphonenumber project',
+    license: 'Apache License 2.0',
+    badgeColor: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300',
+    icon: Globe2,
+  },
+  {
+    id: 'community',
+    name: 'CallShield Distributed Anti-Abuse Network',
+    category: 'Time-Decayed Heuristics',
+    authority: 'CallShield Autonomous Anti-Fraud Engine',
+    confidence: 'Multi-Corroborated',
+    description: 'Aggregated community abuse reports with exponential 30-day time decay. Single reports are never actionable; automated algorithmic consensus prevents harassment.',
+    attribution: 'CallShield Decentralized Telephony Threat Intelligence',
+    license: 'CallShield Strict Zero-Telemetry Protocol',
+    badgeColor: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+    icon: Sparkles,
+  },
+];
+
+const DataSourcesModal = memo(function DataSourcesModal({
   isOpen,
   onClose,
-  onClearAllData,
   inline = false,
 }: DataSourcesModalProps) {
-  const [sources, setSources] = useState<any[]>([]);
-  const [activeSubTab, setActiveSubTab] = useState<'SOURCES' | 'PRIVACY' | 'PLATFORM'>('SOURCES');
-
-  useEffect(() => {
-    if (isOpen) {
-      fetch('/v1/data-sources')
-        .then(res => res.json())
-        .then(data => {
-          if (data.dataSources) setSources(data.dataSources);
-        })
-        .catch(() => {
-          // Fallback static specification if offline
-          setSources([
-            {
-              id: 'stir_shaken',
-              name: 'STIR/SHAKEN Cryptographic Caller ID',
-              authority: 'ATIS-1000074 / FCC Part 64',
-              confidence: '99%',
-              caching: 'Ephemeral (Per call)',
-              license: 'Public Telecom Standard',
-            },
-            {
-              id: 'trai_ucc',
-              name: 'TRAI Commercial Telemarketer Registry',
-              authority: 'Telecom Regulatory Authority of India',
-              confidence: '98%',
-              caching: '30 days local SQLite',
-              license: 'Indian Telecom Regulatory Open Data',
-            },
-            {
-              id: 'itu_e164',
-              name: 'ITU-T E.164 National Numbering Plans',
-              authority: 'International Telecommunication Union',
-              confidence: '99%',
-              caching: '60 days',
-              license: 'Apache 2.0 (libphonenumber)',
-            },
-            {
-              id: 'community_reputation',
-              name: 'CallShield Distributed Anti-Abuse Network',
-              authority: 'Time-Decayed Community Telemetry',
-              confidence: 'Weighted (40% - 95%)',
-              caching: '1 hour',
-              license: 'CallShield Privacy First Policy',
-            }
-          ]);
-        });
-    }
-  }, [isOpen]);
-
   if (!isOpen) return null;
 
-  const handleExportData = () => {
-    const backup = {
-      timestamp: new Date().toISOString(),
-      settings: localStorage.getItem('vigilshield_settings'),
-      rules: localStorage.getItem('vigilshield_rules'),
-      whitelist: localStorage.getItem('vigilshield_whitelist'),
-      contactsCount: (JSON.parse(localStorage.getItem('vigilshield_contacts') || '[]')).length,
-      callsCount: (JSON.parse(localStorage.getItem('vigilshield_calls') || '[]')).length,
-    };
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `vigilshield-data-export-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const header = (
-    <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/90 rounded-2xl">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-          <Database className="w-5 h-5" />
-        </div>
-        <div>
-          <h2 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
-            Data Sources & Privacy Architecture
-          </h2>
-          <p className="text-xs text-slate-400">
-            Transparent data origins, cryptographic proofs & zero address-book leakage
-          </p>
-        </div>
-      </div>
-      <button
-        onClick={onClose}
-        className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white transition active:scale-95"
-        aria-label="Back"
-        title="Back"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        <span>Settings</span>
-      </button>
-    </div>
-  );
-
-  const innerContent = (
+  const content = (
     <div className="space-y-4">
-      {/* Tab Navigation */}
-      <div className="flex border-b border-slate-800 bg-slate-950/50 px-5 pt-3 gap-4 rounded-xl">
-        <button
-          onClick={() => setActiveSubTab('SOURCES')}
-          className={`pb-3 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 ${
-            activeSubTab === 'SOURCES'
-              ? 'border-indigo-500 text-indigo-400'
-              : 'border-transparent text-slate-400 hover:text-slate-300'
-          }`}
-        >
-          Authorized Data Sources
-        </button>
-        <button
-          onClick={() => setActiveSubTab('PRIVACY')}
-          className={`pb-3 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 ${
-            activeSubTab === 'PRIVACY'
-              ? 'border-indigo-500 text-indigo-400'
-              : 'border-transparent text-slate-400 hover:text-slate-300'
-          }`}
-        >
-          Zero-Knowledge Guarantees
-        </button>
-        <button
-          onClick={() => setActiveSubTab('PLATFORM')}
-          className={`pb-3 text-xs font-semibold uppercase tracking-wider transition-colors border-b-2 ${
-            activeSubTab === 'PLATFORM'
-              ? 'border-indigo-500 text-indigo-400'
-              : 'border-transparent text-slate-400 hover:text-slate-300'
-          }`}
-        >
-          Platform-Specific Limits
-        </button>
-      {/* Content */}
-      <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
-          {activeSubTab === 'SOURCES' && (
-            <div className="space-y-3">
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-300 flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-semibold">Zero-Scraping Guarantee:</span> CallShield never scrapes social media, websites, or proprietary caller-ID services. Every data point is sourced from official regulatory datasets, cryptographic telecom headers, or audited enterprise filings.
-                </div>
-              </div>
+      {/* Top Back Navigation & Header */}
+      <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="grid h-9 w-9 place-items-center rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 shrink-0">
+            <Database className="h-4.5 w-4.5" />
+          </div>
+          <div className="min-w-0 truncate">
+            <h1 className="text-base font-bold text-white tracking-tight">
+              Data Sources & Attribution
+            </h1>
+            <p className="text-[11px] text-slate-400 truncate">
+              Public registries, regulatory data & open licensing
+            </p>
+          </div>
+        </div>
 
-              <div className="grid gap-3">
-                {sources.map(src => (
-                  <div key={src.id} className="p-4 bg-slate-950/60 border border-slate-800/80 rounded-xl space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-slate-200 text-sm">{src.name}</span>
-                      <span className="px-2 py-0.5 bg-indigo-500/15 text-indigo-300 text-[11px] rounded-full border border-indigo-500/25">
-                        {src.confidence} Confidence
-                      </span>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white transition active:scale-95 shrink-0 cursor-pointer"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span>Settings</span>
+        </button>
+      </div>
+
+      {/* Zero Address-Book Scraping Hero Guarantee */}
+      <div className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/40 via-slate-900/60 to-slate-950 p-4 space-y-1.5 shadow-sm">
+        <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
+          <Lock className="h-4 w-4 shrink-0" />
+          <span>Strict Zero-Telemetry & Zero-Scraping Commitment</span>
+        </div>
+        <p className="text-[11px] text-slate-300 leading-relaxed">
+          Unlike traditional caller-ID applications that harvest your address book and upload your friends' phone numbers to commercial cloud databases, CallShield <strong>never uploads your private contacts</strong>. All caller identification is resolved from audited public registries, regulatory statutory series, or performed entirely on-device.
+        </p>
+      </div>
+
+      {/* Data Sources Inset List */}
+      <div className="space-y-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 px-1">
+          Authorized Public Data Sources
+        </h2>
+
+        <div className="space-y-2.5">
+          {DATA_SOURCES.map((src) => {
+            const Icon = src.icon;
+            return (
+              <div
+                key={src.id}
+                className="rounded-2xl border border-white/[0.07] bg-white/[0.025] hover:bg-white/[0.04] p-3.5 space-y-2 transition"
+              >
+                {/* Source Header */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="grid h-7 w-7 place-items-center rounded-lg bg-white/[0.06] text-slate-300 shrink-0">
+                      <Icon className="h-3.5 w-3.5" />
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs text-slate-400 pt-1">
-                      <div>
-                        <span className="text-slate-500">Authority:</span> {src.authority}
-                      </div>
-                      <div>
-                        <span className="text-slate-500">Cache Policy:</span> {src.caching}
-                      </div>
-                      <div className="col-span-2">
-                        <span className="text-slate-500">License / Policy:</span> {src.license}
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-bold text-white truncate">
+                        {src.name}
+                      </h3>
+                      <div className="text-[10px] text-slate-400 truncate">
+                        {src.authority}
                       </div>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
 
-          {activeSubTab === 'PRIVACY' && (
-            <div className="space-y-4 text-xs text-slate-300">
-              <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-2">
-                <h4 className="font-semibold text-slate-100 flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-emerald-400" />
-                  Your Address Book Never Leaves Your Phone
-                </h4>
-                <p className="text-slate-400 leading-relaxed">
-                  Unlike traditional caller-ID apps that upload your entire contact book to build searchable phone directories, CallShield performs all contact matching entirely in client-side device memory. Your friends, family, and private contacts are 100% private to you.
+                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold shrink-0 ${src.badgeColor}`}>
+                    {src.category}
+                  </span>
+                </div>
+
+                {/* Description */}
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  {src.description}
                 </p>
-              </div>
 
-              <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-2">
-                <h4 className="font-semibold text-slate-100 flex items-center gap-2">
-                  <Radio className="w-4 h-4 text-indigo-400" />
-                  Anti-Abuse & Multi-Report Protection
-                </h4>
-                <p className="text-slate-400 leading-relaxed">
-                  A single user report never marks a number as spam. Reports require multi-source corroboration, accumulate trust scores, and undergo exponential time-decay so that transient or disputed reports naturally expire after 30 days.
-                </p>
+                {/* Metadata & Attribution Pill */}
+                <div className="pt-1 border-t border-white/[0.04] flex items-center justify-between text-[10px] text-slate-400 flex-wrap gap-1">
+                  <span className="truncate max-w-[220px]">
+                    {src.attribution}
+                  </span>
+                  <span className="font-mono text-emerald-400/90 font-medium">
+                    {src.confidence}
+                  </span>
+                </div>
               </div>
-
-              <div className="pt-2 flex flex-wrap gap-3">
-                <button
-                  onClick={handleExportData}
-                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl flex items-center gap-2 font-medium transition-colors"
-                >
-                  <Download className="w-4 h-4" />
-                  Export All My Data (JSON)
-                </button>
-                <button
-                  onClick={() => {
-                    if (window.confirm('Are you sure you want to wipe all local cache, rules, and history?')) {
-                      onClearAllData();
-                      onClose();
-                    }
-                  }}
-                  className="px-4 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 rounded-xl flex items-center gap-2 font-medium transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Wipe All Local Data
-                </button>
-              </div>
-            </div>
-          )}
-
-          {activeSubTab === 'PLATFORM' && (
-            <div className="space-y-4 text-xs text-slate-300">
-              <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-2">
-                <h4 className="font-semibold text-slate-100 flex items-center gap-2">
-                  <Cpu className="w-4 h-4 text-emerald-400" />
-                  Android Implementation (CallScreeningService)
-                </h4>
-                <p className="text-slate-400 leading-relaxed">
-                  On Android 10+ (API 29+), CallShield binds directly to the OS Telecom subsystem via <code className="text-indigo-300">android.telecom.CallScreeningService</code>. Incoming calls are intercepted in real-time before your phone rings, matching against local SQLite rules and STIR/SHAKEN verification tokens.
-                </p>
-              </div>
-
-              <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-2">
-                <h4 className="font-semibold text-slate-100 flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-sky-400" />
-                  iOS Implementation (CallKit CXCallDirectoryProvider)
-                </h4>
-                <p className="text-slate-400 leading-relaxed">
-                  On iOS 14+, Apple does not permit third-party apps to execute real-time code during incoming calls. Instead, CallShield compiles a pre-sorted database of blocked and identified numbers into the OS CallKit extension, respecting iOS's strict &lt; 5MB memory limit.
-                </p>
-              </div>
-            </div>
-          )}
+            );
+          })}
         </div>
+      </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between text-xs text-slate-500 rounded-b-2xl">
-          <span>Documentation reference: <code className="text-slate-400">docs/DATA_SOURCES.md</code></span>
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors font-medium"
-          >
-            Back to Settings
-          </button>
-        </div>
+      {/* Licensing & Legal Attribution Section */}
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3.5 space-y-2 text-xs text-slate-400">
+        <h3 className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
+          <CheckCircle2 className="h-3.5 w-3.5 text-blue-400" />
+          <span>Open Data Licensing Transparency</span>
+        </h3>
+        <p className="text-[11px] text-slate-400 leading-relaxed">
+          OpenCorporates company data is licensed under the <strong>Open Database License (ODbL)</strong>. Any telecommunication prefix information from the International Telecommunication Union conforms to Recommendation ITU-T E.164. All commercial telemarketer data is statutory public regulatory data released by TRAI.
+        </p>
+      </div>
+
+      {/* Footer Return Button */}
+      <div className="pt-1 flex justify-center">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 px-4 py-2 text-xs font-semibold text-slate-200 transition active:scale-95 cursor-pointer"
+        >
+          Return to Settings
+        </button>
       </div>
     </div>
   );
 
   if (inline) {
     return (
-      <div className="w-full space-y-5 animate-in fade-in duration-200">
-        {header}
-        {innerContent}
+      <div className="w-full space-y-4 animate-in fade-in duration-150">
+        {content}
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        {header}
-        {innerContent}
+    <div
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 p-3 sm:p-5 backdrop-blur-sm animate-in fade-in duration-150"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Data Sources & Public Attribution"
+    >
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-white/10 bg-[#0d131f] p-4 sm:p-5 shadow-2xl">
+        {content}
       </div>
     </div>
   );
-}
+});
+
+export default DataSourcesModal;

@@ -94,8 +94,11 @@ const DialerTab = memo(function DialerTab({
 
   const inputRef = useRef<HTMLInputElement>(null);
   const longPressTimerRef = useRef<number | null>(null);
+  const didTriggerLongPressRef = useRef<boolean>(false);
+  const lastKeyPressTimeRef = useRef<number>(0);
 
-  // Dedicated backspace timers to prevent accidental double-deletion on single click
+  // Dedicated backspace timers and cooldown guard to prevent accidental multiple deletions
+  const lastDeleteTimeRef = useRef<number>(0);
   const deleteHoldTimeoutRef = useRef<number | null>(null);
   const deleteRepeatIntervalRef = useRef<number | null>(null);
 
@@ -223,28 +226,44 @@ const DialerTab = memo(function DialerTab({
     }
   };
 
-  const handleKeyPress = (digit: string) => {
+  // Robust String Concatenation & Keypad Digit Appending
+  const appendDigit = (char: string) => {
+    const now = Date.now();
+    // Cooldown window (70ms) to reject any synthetic duplicate events
+    if (now - lastKeyPressTimeRef.current < 70) {
+      return;
+    }
+    lastKeyPressTimeRef.current = now;
+
+    setValue((prev) => {
+      // Limit to 25 chars to prevent unbounded overflow
+      if (prev.length >= 25) return prev;
+      return prev + char;
+    });
+
     if (settings?.keypadDtmfTones !== false) {
-      playDtmfTone(digit);
+      playDtmfTone(char);
     }
     fireKeypadHaptic();
-    setValue((v) => v + digit);
   };
 
-  const handleKeyDown = (digit: string) => {
+  const handleKeyPointerDown = (digit: string) => {
+    didTriggerLongPressRef.current = false;
     setActivePressedKey(digit);
+
     if (digit === '0') {
       longPressTimerRef.current = window.setTimeout(() => {
+        didTriggerLongPressRef.current = true;
         if (settings?.keypadDtmfTones !== false) {
           playDtmfTone('0');
         }
         fireKeypadHaptic(45);
-        setValue((v) => (v.endsWith('0') ? v.slice(0, -1) + '+' : v + '+'));
+        setValue((prev) => (prev.endsWith('0') ? prev.slice(0, -1) + '+' : prev + '+'));
         longPressTimerRef.current = null;
       }, 450);
     } else if (digit === '1' && !value) {
       longPressTimerRef.current = window.setTimeout(() => {
-        // Voicemail shortcut (*86)
+        didTriggerLongPressRef.current = true;
         fireKeypadHaptic(45);
         onInitiateCall('*86', 'Voicemail', selectedSim);
         longPressTimerRef.current = null;
@@ -252,15 +271,29 @@ const DialerTab = memo(function DialerTab({
     }
   };
 
-  const handleKeyUp = () => {
+  const handleKeyPointerUp = (digit: string) => {
     setActivePressedKey(null);
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
+    // Only append if long-press (+ or voicemail) did NOT trigger
+    if (!didTriggerLongPressRef.current) {
+      appendDigit(digit);
+    }
+    didTriggerLongPressRef.current = false;
   };
 
-  // --- PRECISE BACKSPACE ENGINE: Single tap deletes 1 char; hold (>450ms) triggers continuous repeat ---
+  const handleKeyPointerCancel = () => {
+    setActivePressedKey(null);
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    didTriggerLongPressRef.current = false;
+  };
+
+  // --- PRECISE BACKSPACE ENGINE: Single tap deletes strictly 1 char; hold (>500ms) triggers continuous repeat ---
   const clearDeleteTimers = () => {
     if (deleteHoldTimeoutRef.current !== null) {
       clearTimeout(deleteHoldTimeoutRef.current);
@@ -273,19 +306,30 @@ const DialerTab = memo(function DialerTab({
   };
 
   const deleteSingleChar = () => {
+    const now = Date.now();
+    // 140ms cooldown window prevents any accidental synthetic double deletion
+    if (now - lastDeleteTimeRef.current < 140) {
+      return;
+    }
+    lastDeleteTimeRef.current = now;
+
     fireKeypadHaptic(18);
-    setValue((prev) => (prev ? prev.slice(0, -1) : ''));
+    setValue((prev) => {
+      if (!prev || prev.length <= 1) return '';
+      return prev.slice(0, -1);
+    });
   };
 
   const handleDeletePointerDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     e.preventDefault();
+    e.stopPropagation();
     clearDeleteTimers();
 
     // 1. Delete exactly 1 character immediately on touch down
     deleteSingleChar();
 
-    // 2. Schedule repeat mode ONLY if user keeps holding for more than 450ms
+    // 2. Schedule continuous deletion ONLY after holding for 500ms
     deleteHoldTimeoutRef.current = window.setTimeout(() => {
       deleteRepeatIntervalRef.current = window.setInterval(() => {
         setValue((prev) => {
@@ -297,15 +341,12 @@ const DialerTab = memo(function DialerTab({
           return prev.slice(0, -1);
         });
       }, 80);
-    }, 450);
+    }, 500);
   };
 
   const handleDeletePointerUp = (e: ReactPointerEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    clearDeleteTimers();
-  };
-
-  const handleDeletePointerCancel = () => {
+    e.stopPropagation();
     clearDeleteTimers();
   };
 
@@ -481,9 +522,7 @@ const DialerTab = memo(function DialerTab({
                 </div>
               ))
             ) : (
-              <div className="flex h-[78px] items-center justify-center text-center text-xs text-slate-400">
-                <span>{t('dialer_call_number')}</span>
-              </div>
+              <div className="h-[78px]" />
             )}
           </div>
         ) : (
@@ -510,7 +549,7 @@ const DialerTab = memo(function DialerTab({
               ))}
             </div>
 
-            {/* Clipboard Detected Helper (34px) or subtle prompt */}
+            {/* Clipboard Detected Helper (34px) */}
             {clipboardSnippet ? (
               <button
                 type="button"
@@ -530,9 +569,7 @@ const DialerTab = memo(function DialerTab({
                 <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 shrink-0">Paste</span>
               </button>
             ) : (
-              <div className="flex h-[32px] items-center justify-center text-[11px] text-slate-500">
-                <span>{t('dialer_call_number')}</span>
-              </div>
+              <div className="h-[32px]" />
             )}
           </div>
         )}
@@ -623,9 +660,7 @@ const DialerTab = memo(function DialerTab({
               <span>{t('add_to_contacts')}</span>
             </button>
           ) : (
-            <div className="text-[11px] text-slate-500">
-              {t('dialer_call_number')}
-            </div>
+            <div className="h-[24px]" />
           )}
         </div>
       </div>
@@ -641,11 +676,15 @@ const DialerTab = memo(function DialerTab({
                 <button
                   type="button"
                   key={k.digit}
-                  onClick={() => handleKeyPress(k.digit)}
-                  onMouseDown={() => handleKeyDown(k.digit)}
-                  onMouseUp={handleKeyUp}
-                  onTouchStart={() => handleKeyDown(k.digit)}
-                  onTouchEnd={handleKeyUp}
+                  onPointerDown={() => handleKeyPointerDown(k.digit)}
+                  onPointerUp={() => handleKeyPointerUp(k.digit)}
+                  onPointerLeave={handleKeyPointerCancel}
+                  onPointerCancel={handleKeyPointerCancel}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  style={{ touchAction: 'none' }}
                   className={`group relative flex h-16 w-16 sm:h-[66px] sm:w-[66px] flex-col items-center justify-center rounded-full transition-all duration-75 focus:outline-none shrink-0 select-none shadow-[0_2px_8px_rgba(0,0,0,0.28)] border ${
                     isPressed
                       ? 'scale-92 bg-emerald-500/25 border-emerald-500/50 ring-2 ring-emerald-400/30'
@@ -737,10 +776,15 @@ const DialerTab = memo(function DialerTab({
                   type="button"
                   onPointerDown={handleDeletePointerDown}
                   onPointerUp={handleDeletePointerUp}
-                  onPointerLeave={handleDeletePointerCancel}
-                  onPointerCancel={handleDeletePointerCancel}
+                  onPointerLeave={clearDeleteTimers}
+                  onPointerCancel={clearDeleteTimers}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
                   onContextMenu={(e) => {
                     e.preventDefault();
+                    clearDeleteTimers();
                     setValue('');
                   }}
                   style={{ touchAction: 'none' }}

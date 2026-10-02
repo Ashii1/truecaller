@@ -48,6 +48,7 @@ import { telecomBridge } from '../services/telephony/telecomBridge';
 import { useI18n } from '../i18n/LanguageContext';
 import { triggerHapticFeedback } from '../utils/audioAlerts';
 import { playDtmfTone } from '../utils/dtmfTones';
+import { INITIAL_SETTINGS } from '../data/defaultData';
 
 import ThemeCustomizerModal from './ThemeCustomizerModal';
 import PermissionCenterModal from './PermissionCenterModal';
@@ -167,6 +168,80 @@ export default function SettingsPage({
   };
 
   const q = searchQuery.toLowerCase().trim();
+
+  // If a sub-page option is selected, render it in-page (native sub-page navigation)
+  if (activeModal !== null) {
+    const effectiveSettings = settings || INITIAL_SETTINGS;
+    return (
+      <div className="mx-auto w-full max-w-md sm:max-w-lg px-2.5 sm:px-3 py-2 pb-24 sm:pb-28 animate-in fade-in duration-150">
+        {activeModal === 'theme' && (
+          <ThemeCustomizerModal isOpen={true} onClose={() => setActiveModal(null)} inline={true} />
+        )}
+        {activeModal === 'permissions' && (
+          <PermissionCenterModal
+            isOpen={true}
+            onClose={() => setActiveModal(null)}
+            settings={effectiveSettings}
+            onUpdateSettings={(onUpdateSettings || (() => {})) as any}
+            isDefaultDialer={Boolean(isDefaultDialer)}
+            onRequestDefaultDialer={onRequestDefaultDialer || (() => {})}
+            onSyncContacts={onSyncDatabase || (() => {})}
+            inline={true}
+          />
+        )}
+        {activeModal === 'diagnostics' && (
+          <SystemDiagnosticsModal
+            isOpen={true}
+            onClose={() => setActiveModal(null)}
+            contacts={contacts}
+            calls={calls}
+            rules={rules}
+            whitelist={whitelist}
+            settings={effectiveSettings}
+            timelineEvents={timelineEvents}
+            onResetToCleanState={onClearAllData || (() => {})}
+            onImportAllData={onImportAllData || (() => {})}
+            isDefaultDialer={isDefaultDialer}
+            onRequestDefaultDialer={onRequestDefaultDialer}
+            inline={true}
+          />
+        )}
+        {activeModal === 'data-sources' && (
+          <DataSourcesModal
+            isOpen={true}
+            onClose={() => setActiveModal(null)}
+            onClearAllData={onClearAllData || (() => {})}
+            inline={true}
+          />
+        )}
+        {activeModal === 'install' && (
+          <InstallApkModal
+            isOpen={true}
+            onClose={() => setActiveModal(null)}
+            deferredPrompt={deferredPrompt}
+            onTriggerInstall={onTriggerInstall || (() => {})}
+            inline={true}
+          />
+        )}
+        {activeModal === 'about' && (
+          <AboutAppModal
+            isOpen={true}
+            onClose={() => setActiveModal(null)}
+            onOpenPrivacyTerms={(tab) => setActiveModal(tab === 'terms' ? 'terms' : 'privacy')}
+            inline={true}
+          />
+        )}
+        {(activeModal === 'privacy' || activeModal === 'terms') && (
+          <PrivacyTermsModal
+            isOpen={true}
+            onClose={() => setActiveModal(null)}
+            defaultTab={activeModal === 'terms' ? 'terms' : 'privacy'}
+            inline={true}
+          />
+        )}
+      </div>
+    );
+  }
   const matchesSearch = (text: string) => (!q ? true : text.toLowerCase().includes(q));
 
   return (
@@ -688,67 +763,6 @@ export default function SettingsPage({
             </div>
           </div>
         </div>
-      )}
-
-      {/* Sub-modals */}
-      {activeModal === 'theme' && (
-        <ThemeCustomizerModal isOpen={true} onClose={() => setActiveModal(null)} />
-      )}
-      {activeModal === 'permissions' && (
-        <PermissionCenterModal
-          isOpen={true}
-          onClose={() => setActiveModal(null)}
-          settings={settings}
-          onUpdateSettings={onUpdateSettings as any}
-          isDefaultDialer={isDefaultDialer}
-          onRequestDefaultDialer={onRequestDefaultDialer}
-          onSyncContacts={onSyncDatabase}
-        />
-      )}
-      {activeModal === 'diagnostics' && (
-        <SystemDiagnosticsModal
-          isOpen={true}
-          onClose={() => setActiveModal(null)}
-          contacts={contacts}
-          calls={calls}
-          rules={rules}
-          whitelist={whitelist}
-          settings={settings}
-          timelineEvents={timelineEvents}
-          onResetToCleanState={onClearAllData}
-          onImportAllData={onImportAllData}
-          isDefaultDialer={isDefaultDialer}
-          onRequestDefaultDialer={onRequestDefaultDialer}
-        />
-      )}
-      {activeModal === 'data-sources' && (
-        <DataSourcesModal
-          isOpen={true}
-          onClose={() => setActiveModal(null)}
-          onClearAllData={onClearAllData}
-        />
-      )}
-      {activeModal === 'install' && (
-        <InstallApkModal
-          isOpen={true}
-          onClose={() => setActiveModal(null)}
-          deferredPrompt={deferredPrompt}
-          onTriggerInstall={onTriggerInstall}
-        />
-      )}
-      {activeModal === 'about' && (
-        <AboutAppModal
-          isOpen={true}
-          onClose={() => setActiveModal(null)}
-          onOpenPrivacyTerms={(tab) => setActiveModal(tab === 'terms' ? 'terms' : 'privacy')}
-        />
-      )}
-      {(activeModal === 'privacy' || activeModal === 'terms') && (
-        <PrivacyTermsModal
-          isOpen={true}
-          onClose={() => setActiveModal(null)}
-          defaultTab={activeModal === 'terms' ? 'terms' : 'privacy'}
-        />
       )}
     </div>
   );
