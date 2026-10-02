@@ -116,13 +116,14 @@ function SwipeableCallItem({
   const hasValidGroupName = !isGenericOrPhoneNumber(group?.name, targetNumber);
   const hasValidProfileName = !isGenericOrPhoneNumber(p?.name, targetNumber);
 
+  const hasSpecificName = hasValidItemName || hasValidGroupName || hasValidProfileName;
   const name = hasValidItemName
     ? item.callerName!
     : hasValidGroupName
     ? group!.name!
     : hasValidProfileName
     ? p.name
-    : targetNumber || t('unknown_caller');
+    : formatPhoneNumber(targetNumber) || targetNumber || t('unknown_caller');
   const isSpam = item.isSpam || (group ? group.calls.some((c) => c.isSpam) : false) || p.isSpam;
 
   const [isFinalizingRecording, setIsFinalizingRecording] = useState(() =>
@@ -534,8 +535,12 @@ function SwipeableCallItem({
               isCompact ? 'mt-0 text-[10.5px] gap-x-1.5' : 'mt-0.5 text-[11.5px] gap-x-2'
             }`}
           >
-            <span className="font-mono tabular-nums">{formatPhoneNumber(targetNumber)}</span>
-            <span className="text-slate-600">·</span>
+            {hasSpecificName && (
+              <>
+                <span className="font-mono tabular-nums">{formatPhoneNumber(targetNumber)}</span>
+                <span className="text-slate-600">·</span>
+              </>
+            )}
             <span>{p.location || 'India'}</span>
             <span className="text-slate-600">·</span>
             {callType === 'MISSED' ? (

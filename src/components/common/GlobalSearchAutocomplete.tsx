@@ -67,8 +67,8 @@ export default function GlobalSearchAutocomplete({
     const matches: AutocompleteItem[] = [];
 
     for (const item of items) {
-      const name = (item.name || '').toLowerCase();
-      const numDigits = (item.number || '').replace(/\D/g, '');
+      const name = String(item.name || '').toLowerCase();
+      const numDigits = String(item.number || '').replace(/\D/g, '');
       const key = `${name}_${numDigits}`;
 
       if (set.has(key)) continue;

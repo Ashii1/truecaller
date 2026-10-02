@@ -386,7 +386,7 @@ export default function IncomingCallOverlay({
     if (!sourceContacts || !rawDigits) return null;
     return (
       sourceContacts.find((c) => {
-        const cDigits = (c.number || '').replace(/\D/g, '');
+        const cDigits = String(c.number || '').replace(/\D/g, '');
         if (!cDigits) return false;
         if (cDigits === rawDigits) return true;
         if (cDigits.length >= 7 && rawDigits.length >= 7) {

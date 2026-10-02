@@ -336,7 +336,7 @@ function ContactsTab({
   }, [contacts]);
 
   return (
-    <div className={`mx-auto w-full max-w-2xl select-none transition-all ${isCompact ? 'px-2 pb-6 pt-1 sm:px-3' : 'px-3 pb-8 pt-2 sm:px-4'}`}>
+    <div className={`mx-auto w-full max-w-md sm:max-w-lg select-none transition-all ${isCompact ? 'px-2 pb-6 pt-1 sm:px-3' : 'px-2.5 pb-8 pt-1.5 sm:px-3.5'}`}>
       {/* Header */}
       <header className={`flex items-center justify-between gap-2 transition-all ${isCompact ? 'mb-2' : 'mb-3'}`}>
         <div>

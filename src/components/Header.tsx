@@ -266,15 +266,16 @@ function Header({
     setPrivacy((prev) => ({ ...prev, [key]: value } as PrivacySettings));
 
   const activeNotifications = useMemo(() => {
-    const incDigits = (activeIncomingCall?.number || '').replace(/\D/g, '');
-    const onDigits = (activeCallSession?.number || '').replace(/\D/g, '');
+    const incDigits = String(activeIncomingCall?.number || '').replace(/\D/g, '');
+    const onDigits = String(activeCallSession?.number || '').replace(/\D/g, '');
     const incId = activeIncomingCall?.callId;
     const onId = activeCallSession?.id;
 
-    return recentSpamCalls
+    return (recentSpamCalls || [])
       .filter((c) => {
+        if (!c) return false;
         if (dismissedNotificationIds.includes(c.id)) return false;
-        const cDigits = (c.number || '').replace(/\D/g, '');
+        const cDigits = String(c.number || '').replace(/\D/g, '');
         if (incDigits && (cDigits === incDigits || (cDigits.length >= 7 && incDigits.endsWith(cDigits.slice(-10))))) return false;
         if (onDigits && (cDigits === onDigits || (cDigits.length >= 7 && onDigits.endsWith(cDigits.slice(-10))))) return false;
         if (incId && (c.id === incId || (c as any).callId === incId)) return false;
@@ -305,7 +306,7 @@ function Header({
         id="app-top-header"
         className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#080c14]/90 backdrop-blur-2xl safe-top-header transition-all"
       >
-        <div className="mx-auto flex h-14 max-w-4xl items-center justify-between gap-3 px-4 sm:px-6">
+        <div className="mx-auto flex h-13 max-w-md sm:max-w-lg items-center justify-between gap-3 px-3 sm:px-4">
           {/* Zone 1: Single element Brand Wordmark & Subtle Live Indicator */}
           <div className="flex items-center gap-2.5">
             <div

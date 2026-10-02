@@ -85,7 +85,7 @@ class DirectoryLookupService {
    */
   public cleanNumber(raw: string): { digits: string; e164: string; clean10: string } {
     const norm = normalizePhoneNumber(raw);
-    const digits = (raw || '').replace(/\D/g, '');
+    const digits = String(raw || '').replace(/\D/g, '');
     const clean10 = digits.length >= 10 ? digits.slice(-10) : digits;
     const e164 = norm.startsWith('+') ? norm : digits ? `+${digits}` : '';
     return { digits, e164, clean10 };

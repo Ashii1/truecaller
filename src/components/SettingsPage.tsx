@@ -6,16 +6,20 @@ import {
   ChevronRight,
   Database,
   Download,
-  FileText,
   FolderOpen,
   Globe,
   Grid,
   Info,
+  Layers,
   Lock,
   Mic,
   Palette,
+  Phone,
   PhoneCall,
+  PhoneOff,
+  Power,
   Radio,
+  RefreshCw,
   Search,
   Shield,
   ShieldAlert,
@@ -24,8 +28,10 @@ import {
   Smartphone,
   Sparkles,
   Stethoscope,
+  Trash2,
   Vibrate,
   Volume2,
+  VolumeX,
   X,
 } from 'lucide-react';
 import {
@@ -36,10 +42,10 @@ import {
   BlockRule,
   WhitelistEntry,
   SecurityTimelineEvent,
+  SensitivityLevel,
 } from '../types';
 import { telecomBridge } from '../services/telephony/telecomBridge';
 import { useI18n } from '../i18n/LanguageContext';
-import { DEFAULT_RECORDINGS_FOLDER } from '../services/callRecordingService';
 import { triggerHapticFeedback } from '../utils/audioAlerts';
 import { playDtmfTone } from '../utils/dtmfTones';
 
@@ -50,18 +56,6 @@ import DataSourcesModal from './DataSourcesModal';
 import InstallApkModal from './InstallApkModal';
 import AboutAppModal from './AboutAppModal';
 import PrivacyTermsModal from './PrivacyTermsModal';
-
-export type SettingsSubView =
-  | 'main'
-  | 'keypad'
-  | 'theme'
-  | 'permissions'
-  | 'diagnostics'
-  | 'data-sources'
-  | 'install'
-  | 'about'
-  | 'privacy'
-  | 'terms';
 
 export interface SettingsPageProps {
   settings?: ShieldSettings;
@@ -82,7 +76,6 @@ export interface SettingsPageProps {
   onOpenAbout?: () => void;
   onOpenPrivacyTerms?: (tab?: 'privacy' | 'terms') => void;
   onOpenTheme?: () => void;
-  // Inline data bindings for zero-popup experience
   contacts?: ContactItem[];
   calls?: CallLogItem[];
   rules?: BlockRule[];
@@ -92,18 +85,18 @@ export interface SettingsPageProps {
   onImportAllData?: (data: any) => void;
   deferredPrompt?: any;
   onTriggerInstall?: () => void;
-  initialSubView?: SettingsSubView;
 }
 
-type PrivacySettings = {
-  callRecordingEnabled: boolean;
-  showCallerDetailsInNotifications: boolean;
-  privacyMode: boolean;
-  clipboardPasteDetection: boolean;
-  emergencyRepeatEnabled: boolean;
-  emergencyRepeatThreshold: 3 | 4 | 5;
-  emergencyRepeatWindow: 3 | 5 | 10;
-};
+type ActiveModal =
+  | null
+  | 'theme'
+  | 'permissions'
+  | 'diagnostics'
+  | 'data-sources'
+  | 'install'
+  | 'about'
+  | 'privacy'
+  | 'terms';
 
 export default function SettingsPage({
   settings,
@@ -111,8 +104,8 @@ export default function SettingsPage({
   isDefaultDialer,
   onRequestDefaultDialer,
   onSyncDatabase,
-  isSyncing,
-  autoCancelEnabled,
+  isSyncing = false,
+  autoCancelEnabled = true,
   onToggleAutoCancel,
   density = 'comfortable',
   onDensityChange,
@@ -126,66 +119,26 @@ export default function SettingsPage({
   onImportAllData,
   deferredPrompt,
   onTriggerInstall,
-  initialSubView = 'main',
 }: SettingsPageProps) {
   const { t, language, setLanguage } = useI18n();
-  const [subView, setSubView] = useState<SettingsSubView>(initialSubView);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('ALL');
+  const [activeModal, setActiveModal] = useState<ActiveModal>(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
+  // Handle hardware / gesture back navigation
   useEffect(() => {
     const handleBack = (e: any) => {
-      if (subView !== 'main') {
-        setSubView('main');
+      if (activeModal !== null) {
+        setActiveModal(null);
+        e.detail?.handled?.();
+      } else {
+        onBack();
         e.detail?.handled?.();
       }
     };
     window.addEventListener('callshield_back_request', handleBack);
     return () => window.removeEventListener('callshield_back_request', handleBack);
-  }, [subView]);
-
-  const [privacy, setPrivacy] = useState<PrivacySettings>(() => {
-    try {
-      const raw = localStorage.getItem('callshield_privacy_settings');
-      return raw
-        ? JSON.parse(raw)
-        : {
-            callRecordingEnabled: true,
-            showCallerDetailsInNotifications: true,
-            privacyMode: false,
-            clipboardPasteDetection: true,
-            emergencyRepeatEnabled: true,
-            emergencyRepeatThreshold: 3,
-            emergencyRepeatWindow: 5,
-          };
-    } catch {
-      return {
-        callRecordingEnabled: true,
-        showCallerDetailsInNotifications: true,
-        privacyMode: false,
-        clipboardPasteDetection: true,
-        emergencyRepeatEnabled: true,
-        emergencyRepeatThreshold: 3,
-        emergencyRepeatWindow: 5,
-      };
-    }
-  });
-
-  useEffect(() => {
-    localStorage.setItem('callshield_privacy_settings', JSON.stringify(privacy));
-    telecomBridge.setSecuritySetting('call_recording_enabled', privacy.callRecordingEnabled);
-    telecomBridge.setSecuritySetting('notification_caller_details', privacy.showCallerDetailsInNotifications);
-    telecomBridge.setSecuritySetting('privacy_mode', privacy.privacyMode);
-    telecomBridge.setSecuritySetting('clipboard_paste_detection', privacy.clipboardPasteDetection);
-    telecomBridge.setSecuritySetting('emergency_repeat_enabled', privacy.emergencyRepeatEnabled);
-    telecomBridge.setSecuritySetting('emergency_repeat_threshold_4', privacy.emergencyRepeatThreshold === 4);
-    telecomBridge.setSecuritySetting('emergency_repeat_threshold_5', privacy.emergencyRepeatThreshold === 5);
-    telecomBridge.setSecuritySetting('emergency_repeat_window_3', privacy.emergencyRepeatWindow === 3);
-    telecomBridge.setSecuritySetting('emergency_repeat_window_10', privacy.emergencyRepeatWindow === 10);
-  }, [privacy]);
-
-  const updatePrivacy = (key: keyof PrivacySettings, value: boolean | 3 | 4 | 5 | 10) =>
-    setPrivacy((prev) => ({ ...prev, [key]: value } as PrivacySettings));
+  }, [activeModal, onBack]);
 
   const updateShieldSetting = <K extends keyof ShieldSettings>(key: K, value: ShieldSettings[K]) => {
     if (onUpdateSettings) {
@@ -201,10 +154,6 @@ export default function SettingsPage({
     }
   };
 
-  const isTamil = language === 'ta';
-  const isCompact = density === 'compact';
-
-  // Haptic feedback intensity calculation
   const currentKeypadHapticMs = useMemo(() => {
     if (settings?.keypadHapticFeedback === false) return 0;
     if (settings?.keypadHapticIntensity === 'SOFT') return 15;
@@ -217,1053 +166,691 @@ export default function SettingsPage({
     telecomBridge.vibratePhone(ms);
   };
 
-  const testKeypadDigit = (digit: string) => {
-    if (settings?.keypadDtmfTones !== false) {
-      playDtmfTone(digit);
-    }
-    testHapticPulse();
-  };
+  const q = searchQuery.toLowerCase().trim();
+  const matchesSearch = (text: string) => (!q ? true : text.toLowerCase().includes(q));
 
-  // --------------------------------------------------------------------------
-  // SUB-VIEWS (Rendered inline without popup modals)
-  // --------------------------------------------------------------------------
-  if (subView === 'theme') {
-    return (
-      <div className="min-h-screen bg-[#070b12] text-white p-4 sm:p-6 pb-28 animate-in fade-in duration-200">
-        <div className="mx-auto max-w-3xl">
-          <ThemeCustomizerModal
-            isOpen={true}
-            inline={true}
-            onClose={() => setSubView('main')}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  if (subView === 'permissions') {
-    return (
-      <div className="min-h-screen bg-[#070b12] text-white p-4 sm:p-6 pb-28 animate-in fade-in duration-200">
-        <div className="mx-auto max-w-3xl">
-          <PermissionCenterModal
-            isOpen={true}
-            inline={true}
-            settings={settings || ({} as any)}
-            onUpdateSettings={onUpdateSettings as any}
-            isDefaultDialer={Boolean(isDefaultDialer)}
-            onRequestDefaultDialer={onRequestDefaultDialer || (() => {})}
-            onSyncContacts={onSyncDatabase || (() => {})}
-            onClose={() => setSubView('main')}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  if (subView === 'diagnostics') {
-    return (
-      <div className="min-h-screen bg-[#070b12] text-white p-4 sm:p-6 pb-28 animate-in fade-in duration-200">
-        <div className="mx-auto max-w-3xl">
-          <SystemDiagnosticsModal
-            isOpen={true}
-            inline={true}
-            contacts={contacts}
-            calls={calls}
-            rules={rules}
-            whitelist={whitelist}
-            settings={settings || ({} as any)}
-            timelineEvents={timelineEvents}
-            onResetToCleanState={onClearAllData || (() => {})}
-            onImportAllData={onImportAllData || (() => {})}
-            isDefaultDialer={isDefaultDialer}
-            onRequestDefaultDialer={onRequestDefaultDialer}
-            onClose={() => setSubView('main')}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  if (subView === 'data-sources') {
-    return (
-      <div className="min-h-screen bg-[#070b12] text-white p-4 sm:p-6 pb-28 animate-in fade-in duration-200">
-        <div className="mx-auto max-w-3xl">
-          <DataSourcesModal
-            isOpen={true}
-            inline={true}
-            onClearAllData={onClearAllData || (() => {})}
-            onClose={() => setSubView('main')}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  if (subView === 'install') {
-    return (
-      <div className="min-h-screen bg-[#070b12] text-white p-4 sm:p-6 pb-28 animate-in fade-in duration-200">
-        <div className="mx-auto max-w-3xl">
-          <InstallApkModal
-            isOpen={true}
-            inline={true}
-            deferredPrompt={deferredPrompt}
-            onTriggerInstall={onTriggerInstall || (() => {})}
-            onClose={() => setSubView('main')}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  if (subView === 'about') {
-    return (
-      <div className="min-h-screen bg-[#070b12] text-white p-4 sm:p-6 pb-28 animate-in fade-in duration-200">
-        <div className="mx-auto max-w-3xl">
-          <AboutAppModal
-            isOpen={true}
-            inline={true}
-            onClose={() => setSubView('main')}
-            onOpenPrivacyTerms={(t) => setSubView(t || 'privacy')}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  if (subView === 'privacy') {
-    return (
-      <div className="min-h-screen bg-[#070b12] text-white p-4 sm:p-6 pb-28 animate-in fade-in duration-200">
-        <div className="mx-auto max-w-3xl">
-          <PrivacyTermsModal
-            isOpen={true}
-            inline={true}
-            defaultTab="privacy"
-            onClose={() => setSubView('main')}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  if (subView === 'terms') {
-    return (
-      <div className="min-h-screen bg-[#070b12] text-white p-4 sm:p-6 pb-28 animate-in fade-in duration-200">
-        <div className="mx-auto max-w-3xl">
-          <PrivacyTermsModal
-            isOpen={true}
-            inline={true}
-            defaultTab="terms"
-            onClose={() => setSubView('main')}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  // --------------------------------------------------------------------------
-  // DEDICATED INLINE KEYPAD & DIALING SETTINGS SUB-VIEW
-  // --------------------------------------------------------------------------
-  if (subView === 'keypad') {
-    return (
-      <div className="min-h-screen bg-[#070b12] text-white pb-28 animate-in fade-in duration-200">
-        <header
-          className="sticky top-0 z-30 border-b border-white/10 bg-[#070b12]/95 backdrop-blur-xl px-4 py-3.5 sm:px-6 safe-top-header transition-all"
-          style={{ paddingTop: 'max(0.85rem, calc(env(safe-area-inset-top, 0px) + 0.65rem))' }}
-        >
-          <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setSubView('main')}
-                className="grid h-9 w-9 place-items-center rounded-xl bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white transition active:scale-95"
-                aria-label="Back to Settings"
-                title="Return to main settings"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </button>
-              <div>
-                <h1 className="text-lg sm:text-xl font-black text-white tracking-tight">
-                  Keypad & Dialing Experience
-                </h1>
-                <p className="text-[11px] text-slate-400">
-                  Haptic pulses, DTMF audio, speed dial & dialing ergonomics
-                </p>
-              </div>
-            </div>
+  return (
+    <div className="min-h-screen bg-[#070b12] text-white pb-28 animate-in fade-in duration-150">
+      {/* Top App Bar with Search */}
+      <header
+        className="sticky top-0 z-30 border-b border-white/[0.06] bg-[#070b12]/95 backdrop-blur-xl px-3 py-2.5"
+        style={{ paddingTop: 'max(0.6rem, calc(env(safe-area-inset-top, 0px) + 0.4rem))' }}
+      >
+        <div className="mx-auto flex max-w-md items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => testHapticPulse()}
-              className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20 active:scale-95 transition"
+              onClick={onBack}
+              className="grid h-8 w-8 place-items-center rounded-full bg-white/[0.06] text-slate-300 hover:bg-white/10 hover:text-white transition active:scale-95 cursor-pointer"
+              aria-label="Back"
             >
-              <Vibrate className="h-3.5 w-3.5" />
-              <span>Test Pulse</span>
+              <ArrowLeft className="h-4 w-4" />
             </button>
+            <h1 className="text-base font-bold text-white tracking-tight">
+              {t('settings_title')}
+            </h1>
           </div>
-        </header>
 
-        <main className="mx-auto max-w-3xl px-3.5 py-5 sm:px-6 space-y-6">
-          {/* 1. HAPTIC FEEDBACK CARD */}
-          <section className="space-y-3">
-            <div className="flex items-center gap-2 border-b border-slate-800 pb-1.5 text-xs font-bold uppercase tracking-wider text-emerald-400">
-              <Vibrate className="h-4 w-4" />
-              <span>Tactile Haptic Feedback</span>
+          <div className="relative flex-1 max-w-[200px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search..."
+              className="w-full rounded-full border border-white/10 bg-white/[0.05] pl-8 pr-7 py-1 text-xs text-white placeholder-slate-500 outline-none focus:border-emerald-500/50 transition"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-white"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Main Settings Body */}
+      <main className="mx-auto max-w-md px-3 py-3 space-y-4">
+        {/* Status / Default Phone Card */}
+        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3 flex items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+              <ShieldCheck className="h-4.5 w-4.5" />
             </div>
+            <div className="min-w-0 truncate">
+              <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                <span>VigilShield Protection</span>
+                <span className="text-[10px] text-emerald-400 font-mono">v1.5.7</span>
+              </div>
+              <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                {isDefaultDialer ? 'Active Default Phone App' : 'Set as default dialer for call protection'}
+              </p>
+            </div>
+          </div>
 
+          <div className="shrink-0">
+            {isDefaultDialer ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-bold text-emerald-300">
+                <Check className="h-3 w-3" />
+                <span>Active</span>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={onRequestDefaultDialer}
+                className="rounded-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-[11px] px-3 py-1 shadow-sm active:scale-95 transition cursor-pointer"
+              >
+                Set Default
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 1. CALLER ID & SPAM PROTECTION */}
+        {matchesSearch('protection spam shield firewall call block scam telemarketing trai') && (
+          <SettingsGroup title="Spam & Caller ID">
+            {/* Master Shield */}
             <SettingRow
-              icon={<Vibrate className="h-4 w-4 text-emerald-400" />}
-              title="Keypad Digit Haptic Feedback"
-              description="Triggers an explicit physical vibration pulse on each number press for a realistic phone dialer feel."
-              checked={settings?.keypadHapticFeedback !== false}
-              onChange={(v) => updateShieldSetting('keypadHapticFeedback', v)}
+              icon={<ShieldCheck className="h-4 w-4 text-emerald-400" />}
+              iconBg="bg-emerald-500/10"
+              title="Master Shield"
+              subtitle="Real-time call screening & spam filtering"
+              checked={settings?.masterEnabled !== false}
+              onToggle={(v) => updateShieldSetting('masterEnabled', v)}
             />
 
+            {/* Spam Sensitivity Segmented */}
+            <div className="px-3.5 py-2.5 flex flex-col gap-1.5 bg-white/[0.01]">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-300 font-medium">Blocking Sensitivity</span>
+                <span className="text-emerald-400 font-semibold text-[11px]">
+                  {settings?.sensitivity === 'AGGRESSIVE' ? 'Aggressive' : settings?.sensitivity === 'MODERATE' ? 'Moderate' : 'Strict (Recommended)'}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-black/40 border border-white/[0.06]">
+                {[
+                  { id: 'MODERATE', label: 'Moderate' },
+                  { id: 'STRICT', label: 'Strict' },
+                  { id: 'AGGRESSIVE', label: 'Aggressive' },
+                ].map((s) => {
+                  const active = (settings?.sensitivity || 'STRICT') === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => updateShieldSetting('sensitivity', s.id as SensitivityLevel)}
+                      className={`py-1 text-xs font-medium rounded-lg transition active:scale-95 cursor-pointer ${
+                        active
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Auto Drop Spam */}
+            <SettingRow
+              icon={<PhoneOff className="h-4 w-4 text-rose-400" />}
+              iconBg="bg-rose-500/10"
+              title="Auto-Drop Verified Spam"
+              subtitle="Silently reject high-confidence spam calls"
+              checked={settings?.autoCancelSpamCalls !== false}
+              onToggle={(v) => updateShieldSetting('autoCancelSpamCalls', v)}
+            />
+
+            {/* Block Private Numbers */}
+            <SettingRow
+              icon={<Lock className="h-4 w-4 text-indigo-400" />}
+              iconBg="bg-indigo-500/10"
+              title="Block Private / Hidden"
+              subtitle="Filter anonymous & withheld callers"
+              checked={Boolean(settings?.blockPrivateHidden)}
+              onToggle={(v) => updateShieldSetting('blockPrivateHidden', v)}
+            />
+
+            {/* International One-Ring Wangiri */}
+            <SettingRow
+              icon={<Globe className="h-4 w-4 text-cyan-400" />}
+              iconBg="bg-cyan-500/10"
+              title="Wangiri Scam Trap Shield"
+              subtitle="Protect against high-cost international callback traps"
+              checked={settings?.pingBackShieldEnabled !== false}
+              onToggle={(v) => updateShieldSetting('pingBackShieldEnabled', v)}
+            />
+          </SettingsGroup>
+        )}
+
+        {/* 2. REDESIGNED KEYPAD & DIALING */}
+        {matchesSearch('keypad dialing haptic vibrate dtmf tone tactile redial') && (
+          <SettingsGroup title="Keypad & Dialing">
+            {/* Haptic Feedback */}
+            <SettingRow
+              icon={<Vibrate className="h-4 w-4 text-emerald-400" />}
+              iconBg="bg-emerald-500/10"
+              title="Keypad Haptic Pulse"
+              subtitle="Tactile feedback on every digit tap"
+              checked={settings?.keypadHapticFeedback !== false}
+              onToggle={(v) => {
+                updateShieldSetting('keypadHapticFeedback', v);
+                if (v) testHapticPulse();
+              }}
+            />
+
+            {/* Haptic Strength */}
             {settings?.keypadHapticFeedback !== false && (
-              <div className="rounded-2xl border border-emerald-500/20 bg-slate-900 p-4 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold text-white">Vibration Intensity</div>
-                    <div className="text-xs text-slate-400 mt-0.5">
-                      Adjust tactile kick duration for digit keys, matching incoming calls and active calls
-                    </div>
-                  </div>
+              <div className="px-3.5 py-2 flex flex-col gap-1.5 bg-white/[0.01]">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-300 font-medium">Haptic Intensity</span>
                   <button
                     type="button"
                     onClick={() => testHapticPulse()}
-                    className="shrink-0 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold hover:bg-emerald-500/25 active:scale-90 transition"
+                    className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 active:scale-95 cursor-pointer"
                   >
                     Test ({currentKeypadHapticMs}ms)
                   </button>
                 </div>
-
-                <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-800">
+                <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-black/40 border border-white/[0.06]">
                   {[
-                    { id: 'SOFT', label: 'Soft', ms: '15 ms', desc: 'Subtle tick' },
-                    { id: 'STANDARD', label: 'Standard', ms: '25 ms', desc: 'Balanced' },
-                    { id: 'STRONG', label: 'Strong', ms: '40 ms', desc: 'Crisp kick' },
-                  ].map((level) => {
-                    const isSelected = (settings?.keypadHapticIntensity || 'STANDARD') === level.id;
+                    { id: 'SOFT', label: 'Soft (15ms)', ms: 15 },
+                    { id: 'STANDARD', label: 'Crisp (25ms)', ms: 25 },
+                    { id: 'STRONG', label: 'Firm (40ms)', ms: 40 },
+                  ].map((h) => {
+                    const active = (settings?.keypadHapticIntensity || 'STANDARD') === h.id;
                     return (
                       <button
-                        key={level.id}
+                        key={h.id}
                         type="button"
                         onClick={() => {
-                          updateShieldSetting('keypadHapticIntensity', level.id as any);
-                          testHapticPulse(level.id === 'SOFT' ? 15 : level.id === 'STRONG' ? 40 : 25);
+                          updateShieldSetting('keypadHapticIntensity', h.id as any);
+                          testHapticPulse(h.ms);
                         }}
-                        className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition active:scale-95 ${
-                          isSelected
-                            ? 'border-emerald-500 bg-emerald-500/20 text-white shadow-lg shadow-emerald-500/20'
-                            : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white'
+                        className={`py-1 text-xs font-medium rounded-lg transition active:scale-95 cursor-pointer ${
+                          active
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                            : 'text-slate-400 hover:text-white'
                         }`}
                       >
-                        <span className="text-xs font-bold">{level.label}</span>
-                        <span className="text-[10px] text-slate-400 font-mono mt-0.5">{level.ms}</span>
-                        <span className="text-[9px] text-slate-500 mt-0.5">{level.desc}</span>
+                        {h.label}
                       </button>
                     );
                   })}
                 </div>
               </div>
             )}
-          </section>
 
-          {/* 2. AUDIO FEEDBACK CARD */}
-          <section className="space-y-3">
-            <div className="flex items-center gap-2 border-b border-slate-800 pb-1.5 text-xs font-bold uppercase tracking-wider text-blue-400">
-              <Volume2 className="h-4 w-4" />
-              <span>Keypad Audio & DTMF Tones</span>
-            </div>
-
+            {/* DTMF Tones */}
             <SettingRow
               icon={<Volume2 className="h-4 w-4 text-blue-400" />}
-              title="Play DTMF Keypad Tones"
-              description="Synthesize dual-tone multi-frequency audio for each digit (0-9, *, #) with gentle envelope shaping."
+              iconBg="bg-blue-500/10"
+              title="Keypad DTMF Audio Tones"
+              subtitle="Play standard acoustic tones while dialing"
               checked={settings?.keypadDtmfTones !== false}
-              onChange={(v) => updateShieldSetting('keypadDtmfTones', v)}
+              onToggle={(v) => {
+                updateShieldSetting('keypadDtmfTones', v);
+                if (v) playDtmfTone('5');
+              }}
             />
+          </SettingsGroup>
+        )}
 
-            {/* Interactive Keypad Test Strip */}
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-white uppercase tracking-wider">
-                    Interactive Keypad Preview & Tone Test
-                  </div>
-                  <div className="text-[11px] text-slate-400">
-                    Tap any key to test your configured DTMF audio and tactile haptic pulse
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 pt-1 border-t border-slate-800">
-                {['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'].map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => testKeypadDigit(d)}
-                    className="flex flex-col items-center justify-center h-12 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-white/5 active:border-emerald-500/40 active:ring-2 active:ring-emerald-400/30 active:scale-90 transition font-bold text-base text-white"
-                  >
-                    <span>{d}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* 3. DIALING CONVENIENCE & SHORTCUTS */}
-          <section className="space-y-3">
-            <div className="flex items-center gap-2 border-b border-slate-800 pb-1.5 text-xs font-bold uppercase tracking-wider text-amber-400">
-              <Sparkles className="h-4 w-4" />
-              <span>Dialing Convenience & Shortcuts</span>
-            </div>
-
+        {/* 3. CALL HANDLING & BUTTONS */}
+        {matchesSearch('call hardware power button volume flip silence vibrate ringer') && (
+          <SettingsGroup title="Call Handling & Buttons">
+            {/* Power Button Ends Call */}
             <SettingRow
-              icon={<Sparkles className="h-4 w-4 text-amber-400" />}
-              title="Clipboard Paste Detection"
-              description="Automatically sanitizes pasted telephone numbers, removing dashes, brackets and illegal characters."
-              checked={privacy.clipboardPasteDetection}
-              onChange={(v) => updatePrivacy('clipboardPasteDetection', v)}
+              icon={<Power className="h-4 w-4 text-rose-400" />}
+              iconBg="bg-rose-500/10"
+              title="Power Button Ends Call"
+              subtitle="Press device power key to instantly hang up"
+              checked={Boolean(settings?.powerButtonEndsCall)}
+              onToggle={(v) => updateShieldSetting('powerButtonEndsCall', v)}
             />
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-2">
-              <div className="text-sm font-semibold text-white">Speed Dial Shortcuts</div>
-              <p className="text-xs text-slate-400">
-                • <strong>Hold 1:</strong> Direct Voicemail access (*86)
-                <br />• <strong>Hold 0:</strong> Inserts international prefix (+)
-                <br />• <strong>Press Call on empty dialer:</strong> Recalls last dialed number
-              </p>
+            {/* Flip to Silence */}
+            <SettingRow
+              icon={<Smartphone className="h-4 w-4 text-amber-400" />}
+              iconBg="bg-amber-500/10"
+              title="Flip to Silence Ringer"
+              subtitle="Turn phone face down to mute incoming ringer"
+              checked={settings?.flipToSilence !== false}
+              onToggle={(v) => updateShieldSetting('flipToSilence', v)}
+            />
+
+            {/* Volume Key Action */}
+            <div className="px-3.5 py-2.5 flex flex-col gap-1.5 bg-white/[0.01]">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-300 font-medium">Volume Button Behavior</span>
+                <span className="text-slate-400 text-[11px]">
+                  {settings?.volumeButtonAction === 'REJECT_CALL' ? 'Decline Call' : 'Mute Ringer'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-black/40 border border-white/[0.06]">
+                {[
+                  { id: 'MUTE_RINGER', label: 'Silence Ringer' },
+                  { id: 'REJECT_CALL', label: 'Decline Call' },
+                ].map((act) => {
+                  const active = (settings?.volumeButtonAction || 'MUTE_RINGER') === act.id;
+                  return (
+                    <button
+                      key={act.id}
+                      type="button"
+                      onClick={() => updateShieldSetting('volumeButtonAction', act.id as any)}
+                      className={`py-1 text-xs font-medium rounded-lg transition active:scale-95 cursor-pointer ${
+                        active
+                          ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {act.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </section>
-        </main>
-      </div>
-    );
-  }
 
-  // --------------------------------------------------------------------------
-  // MAIN SETTINGS HUB (Categorized Cards, Quick Search, No Popups)
-  // --------------------------------------------------------------------------
-  const q = searchQuery.toLowerCase().trim();
-  const matchesSearch = (text: string) => (!q ? true : text.toLowerCase().includes(q));
+            {/* Vibrate on Connect */}
+            <SettingRow
+              icon={<Vibrate className="h-4 w-4 text-teal-400" />}
+              iconBg="bg-teal-500/10"
+              title="Vibrate on Call Connected"
+              subtitle="Haptic confirmation when remote caller answers"
+              checked={settings?.vibrateOnCallConnected !== false}
+              onToggle={(v) => updateShieldSetting('vibrateOnCallConnected', v)}
+            />
+          </SettingsGroup>
+        )}
 
-  return (
-    <div className="min-h-screen bg-[#070b12] text-white pb-28 animate-in fade-in duration-200">
-      {/* Sticky Top Header with safe area clearance */}
-      <header
-        className="sticky top-0 z-30 border-b border-white/10 bg-[#070b12]/95 backdrop-blur-xl px-4 py-3.5 sm:px-6 safe-top-header transition-all"
-        style={{ paddingTop: 'max(0.85rem, calc(env(safe-area-inset-top, 0px) + 0.65rem))' }}
-      >
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onBack}
-              className="grid h-9 w-9 place-items-center rounded-xl bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white transition active:scale-95"
-              aria-label="Back"
-              title="Return to dialer"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-            <div>
-              <h1 className="text-lg sm:text-xl font-black text-white tracking-tight">{t('settings_title')}</h1>
-              <p className="text-[11px] text-slate-400">Caller ID, Spam Firewall, Audio & Device Roles</p>
+        {/* 4. DATABASE & PUBLIC DIRECTORY */}
+        {matchesSearch('database sync directory whitepages live records source') && (
+          <SettingsGroup title="Public Directory & Database">
+            <div className="px-3.5 py-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="grid h-8 w-8 place-items-center rounded-xl bg-cyan-500/10 text-cyan-400 shrink-0">
+                  <Database className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 truncate">
+                  <div className="text-xs font-semibold text-white">Community & Public Registry</div>
+                  <div className="text-[11px] text-slate-400 truncate">
+                    {isSyncing ? 'Syncing...' : 'Updated telecom records & verified identities'}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={isSyncing}
+                onClick={onSyncDatabase}
+                className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition active:scale-95 cursor-pointer shrink-0 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 text-cyan-400 ${isSyncing ? 'animate-spin' : ''}`} />
+                <span>{isSyncing ? 'Syncing' : 'Sync Now'}</span>
+              </button>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onDensityChange?.(isCompact ? 'comfortable' : 'compact')}
-              className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition active:scale-95 ${
-                isCompact
-                  ? 'border-indigo-500/40 bg-indigo-500/15 text-indigo-300'
-                  : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
-              }`}
-              title="Toggle View Density"
-            >
-              <Sliders className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{isCompact ? 'Compact' : 'Comfortable'}</span>
-            </button>
-          </div>
-        </div>
-      </header>
+            <ActionRow
+              icon={<Info className="h-4 w-4 text-slate-400" />}
+              iconBg="bg-slate-500/10"
+              title="Data Sources & Public Attribution"
+              subtitle="TRAI Registry, OpenCorporates, and Public Telecom"
+              onClick={() => setActiveModal('data-sources')}
+            />
+          </SettingsGroup>
+        )}
 
-      {/* Main Content Sections */}
-      <main className="mx-auto max-w-3xl px-3.5 py-5 sm:px-6 space-y-6">
-        {/* Quick Search in Settings */}
-        <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search all settings (e.g. keypad, haptic, SIM, recording, spam, lockscreen)..."
-            className="w-full rounded-2xl border border-white/10 bg-[#0e141e] pl-10 pr-9 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500/50 transition"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-white"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
+        {/* 5. SYSTEM & APPEARANCE */}
+        {matchesSearch('appearance theme language permissions diagnostics system density') && (
+          <SettingsGroup title="Preferences & Diagnostics">
+            {/* Permissions Center */}
+            <ActionRow
+              icon={<Shield className="h-4 w-4 text-emerald-400" />}
+              iconBg="bg-emerald-500/10"
+              title="Permissions Center"
+              subtitle="Telecom role, Call log & Notifications"
+              onClick={() => setActiveModal('permissions')}
+            />
 
-        {/* Category Navigation Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 text-xs">
-          {[
-            { id: 'ALL', label: 'All Settings' },
-            { id: 'KEYPAD', label: '🔢 Keypad & Dialing' },
-            { id: 'PROTECTION', label: '🛡️ Spam Firewall' },
-            { id: 'AUDIO', label: '📱 Hardware & Audio' },
-            { id: 'RECORDING', label: '🎙️ Call Recording' },
-            { id: 'SYSTEM', label: '⚙️ System & Roles' },
-            { id: 'LEGAL', label: 'ℹ️ About & Legal' },
-          ].map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              onClick={() => setActiveCategoryFilter(cat.id)}
-              className={`shrink-0 rounded-xl px-3 py-1.5 font-semibold transition active:scale-95 ${
-                activeCategoryFilter === cat.id
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
-                  : 'bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10'
-              }`}
-            >
-              {cat.label}
-            </button>
-          ))}
-        </div>
+            {/* System Diagnostics */}
+            <ActionRow
+              icon={<Stethoscope className="h-4 w-4 text-blue-400" />}
+              iconBg="bg-blue-500/10"
+              title="System Diagnostics & Health"
+              subtitle="Hardware checks, database tables, and metrics"
+              onClick={() => setActiveModal('diagnostics')}
+            />
 
-        {/* 1. KEYPAD & DIALING EXPERIENCE (NEW & FEATURED) */}
-        {(activeCategoryFilter === 'ALL' || activeCategoryFilter === 'KEYPAD') &&
-          matchesSearch('keypad haptic dialer vibrate tone dtmf touch speed dial') && (
-            <section className="space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-1.5 text-xs font-bold uppercase tracking-wider text-emerald-400">
-                <div className="flex items-center gap-2">
+            {/* Theme Customizer */}
+            <ActionRow
+              icon={<Palette className="h-4 w-4 text-fuchsia-400" />}
+              iconBg="bg-fuchsia-500/10"
+              title="Theme & Accent Color"
+              subtitle="Dark mode, contrast, and color palette"
+              onClick={() => setActiveModal('theme')}
+            />
+
+            {/* Display Density */}
+            <div className="px-3.5 py-2.5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="grid h-8 w-8 place-items-center rounded-xl bg-purple-500/10 text-purple-400 shrink-0">
                   <Grid className="h-4 w-4" />
-                  <span>Keypad & Dialing Experience</span>
                 </div>
+                <div className="min-w-0 truncate">
+                  <div className="text-xs font-semibold text-white">Layout Density</div>
+                  <div className="text-[11px] text-slate-400 truncate">Card and row height sizing</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 p-0.5 rounded-lg bg-black/40 border border-white/[0.06] shrink-0">
                 <button
                   type="button"
-                  onClick={() => setSubView('keypad')}
-                  className="text-xs font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+                  onClick={() => onDensityChange?.('compact')}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-md transition cursor-pointer ${
+                    density === 'compact'
+                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
                 >
-                  <span>Customize</span>
-                  <ChevronRight className="h-3.5 w-3.5" />
+                  Compact
                 </button>
-              </div>
-
-              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-emerald-500/10 text-emerald-400">
-                      <Vibrate className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-white">Tactile Keypad Haptic Feedback</div>
-                      <div className="mt-0.5 text-xs text-slate-400">
-                        Physical vibration pulse on each digit press, tuned to match incoming calls and ongoing calls.
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={settings?.keypadHapticFeedback !== false}
-                    onClick={() => updateShieldSetting('keypadHapticFeedback', !(settings?.keypadHapticFeedback !== false))}
-                    className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition ${
-                      settings?.keypadHapticFeedback !== false ? 'bg-emerald-600' : 'bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition ${
-                        settings?.keypadHapticFeedback !== false ? 'left-6' : 'left-1'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-emerald-500/20 text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-400">Intensity:</span>
-                    <span className="font-bold text-white uppercase text-[11px] bg-slate-800 px-2 py-0.5 rounded-md">
-                      {settings?.keypadHapticIntensity || 'STANDARD'} ({currentKeypadHapticMs}ms)
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => testHapticPulse()}
-                    className="flex items-center gap-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-1 text-emerald-300 font-bold active:scale-95 transition"
-                  >
-                    <Vibrate className="h-3 w-3" />
-                    <span>Test Pulse</span>
-                  </button>
-                </div>
-              </div>
-
-              <SettingRow
-                icon={<Volume2 className="h-4 w-4 text-blue-400" />}
-                title="Keypad DTMF Audio Tones"
-                description="Play dual-frequency sound on each digit press for authentic telephony audio feedback."
-                checked={settings?.keypadDtmfTones !== false}
-                onChange={(v) => updateShieldSetting('keypadDtmfTones', v)}
-              />
-
-              <button
-                type="button"
-                onClick={() => setSubView('keypad')}
-                className="flex w-full items-center justify-between rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left hover:bg-slate-800/80 transition"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400 shrink-0">
-                    <Grid className="h-5 w-5" />
-                  </span>
-                  <div>
-                    <span className="block text-sm font-bold text-white">Full Keypad & Dialing Settings</span>
-                    <span className="mt-0.5 block text-xs text-slate-400">
-                      Configure speed dial, auto-paste, DTMF audio and test key sounds inline
-                    </span>
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
-              </button>
-            </section>
-          )}
-
-        {/* 2. LANGUAGE & DISPLAY SECTION */}
-        {(activeCategoryFilter === 'ALL' || activeCategoryFilter === 'SYSTEM') &&
-          matchesSearch('language english tamil display appearance theme color') && (
-            <section className="space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-800 pb-1.5 text-xs font-bold uppercase tracking-wider text-blue-400">
-                <Globe className="h-4 w-4" />
-                <span>{t('settings_cat_lang_display')}</span>
-              </div>
-
-              <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 space-y-3">
-                <div className="flex items-start gap-3">
-                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-500/10 text-blue-400">
-                    <Globe className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-bold text-white">{t('language_section_title')}</div>
-                    <div className="mt-0.5 text-xs text-slate-400">{t('language_section_desc')}</div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setLanguage('en')}
-                    className={`flex items-center gap-2.5 rounded-xl border p-3 text-left transition ${
-                      language === 'en'
-                        ? 'border-blue-500 bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                        : 'border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800'
-                    }`}
-                  >
-                    <span className="text-lg">🇬🇧</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold">English</div>
-                      <div className={`text-[10px] ${language === 'en' ? 'text-blue-100' : 'text-slate-500'}`}>Default</div>
-                    </div>
-                    {language === 'en' && <Check className="h-4 w-4 shrink-0" />}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setLanguage('ta')}
-                    className={`flex items-center gap-2.5 rounded-xl border p-3 text-left transition ${
-                      language === 'ta'
-                        ? 'border-blue-500 bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                        : 'border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800'
-                    }`}
-                  >
-                    <span className="text-lg">🇮🇳</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-bold">தமிழ்</div>
-                      <div className={`text-[10px] ${language === 'ta' ? 'text-blue-100' : 'text-slate-500'}`}>Tamil</div>
-                    </div>
-                    {language === 'ta' && <Check className="h-4 w-4 shrink-0" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Appearance & Theme Inline Navigation (No popup!) */}
-              <button
-                type="button"
-                onClick={() => setSubView('theme')}
-                className="flex w-full items-center justify-between rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left hover:bg-slate-800/80 transition"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-500/10 text-blue-400 shrink-0">
-                    <Palette className="h-5 w-5" />
-                  </span>
-                  <div>
-                    <span className="block text-sm font-bold text-white">{t('appearance_title')}</span>
-                    <span className="mt-0.5 block text-xs text-slate-400">{t('appearance_desc')}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs font-bold text-blue-400">
-                  <span>Open Theme</span>
-                  <ChevronRight className="h-4 w-4" />
-                </div>
-              </button>
-            </section>
-          )}
-
-        {/* 3. SPAM SHIELD & PRIVACY SECTION */}
-        {(activeCategoryFilter === 'ALL' || activeCategoryFilter === 'PROTECTION') &&
-          matchesSearch('spam shield privacy autocancel notification emergency') && (
-            <section className="space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-800 pb-1.5 text-xs font-bold uppercase tracking-wider text-emerald-400">
-                <Shield className="h-4 w-4" />
-                <span>{t('settings_cat_protection')}</span>
-              </div>
-
-              <SettingRow
-                icon={<ShieldCheck className="h-4 w-4 text-emerald-400" />}
-                title={t('autocancel_spam_title')}
-                description={t('autocancel_spam_desc')}
-                checked={autoCancelEnabled !== false}
-                onChange={onToggleAutoCancel || (() => {})}
-              />
-
-              <SettingRow
-                icon={<Lock className="h-4 w-4 text-blue-400" />}
-                title={t('private_notification_title')}
-                description={t('private_notification_desc')}
-                checked={privacy.privacyMode}
-                onChange={(v) => updatePrivacy('privacyMode', v)}
-              />
-
-              <SettingRow
-                icon={<Bell className="h-4 w-4 text-amber-400" />}
-                title={t('detailed_notifications_title')}
-                description={t('detailed_notifications_desc')}
-                checked={privacy.showCallerDetailsInNotifications}
-                onChange={(v) => updatePrivacy('showCallerDetailsInNotifications', v)}
-              />
-
-              {/* Repeated-Call Emergency Alert Configuration */}
-              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 gap-3">
-                    <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-800 text-slate-300">
-                      <Radio className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-white">{t('emergency_repeat_title')}</div>
-                      <div className="mt-0.5 text-xs text-slate-400">{t('emergency_repeat_desc')}</div>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={privacy.emergencyRepeatEnabled}
-                    onClick={() => updatePrivacy('emergencyRepeatEnabled', !privacy.emergencyRepeatEnabled)}
-                    className={`relative h-6 w-11 shrink-0 rounded-full transition ${
-                      privacy.emergencyRepeatEnabled ? 'bg-blue-600' : 'bg-slate-700'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition ${
-                        privacy.emergencyRepeatEnabled ? 'left-6' : 'left-1'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {privacy.emergencyRepeatEnabled && (
-                  <div className="space-y-3 pt-2 border-t border-slate-800">
-                    <div>
-                      <label className="text-xs font-semibold text-slate-300 block mb-1">{t('calls_needed')}</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {[3, 4, 5].map((count) => (
-                          <button
-                            key={count}
-                            type="button"
-                            onClick={() => updatePrivacy('emergencyRepeatThreshold', count as 3 | 4 | 5)}
-                            className={`rounded-xl p-2 text-xs font-bold transition border ${
-                              privacy.emergencyRepeatThreshold === count
-                                ? 'border-blue-500 bg-blue-500/20 text-blue-300'
-                                : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white'
-                            }`}
-                          >
-                            {count} {isTamil ? 'அழைப்புகள்' : 'calls'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
-          )}
-
-        {/* 4. HARDWARE & AUDIO CONTROLS */}
-        {(activeCategoryFilter === 'ALL' || activeCategoryFilter === 'AUDIO') &&
-          matchesSearch('hardware audio power volume ringer connected silence flash') && (
-            <section className="space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-800 pb-1.5 text-xs font-bold uppercase tracking-wider text-amber-400">
-                <Smartphone className="h-4 w-4" />
-                <span>{t('settings_cat_hardware')}</span>
-              </div>
-
-              <SettingRow
-                icon={<PhoneCall className="h-4 w-4 text-rose-400" />}
-                title={t('power_ends_call')}
-                description={t('power_ends_call_desc')}
-                checked={Boolean(settings?.powerButtonEndsCall)}
-                onChange={(v) => updateShieldSetting('powerButtonEndsCall', v)}
-              />
-
-              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-800 text-slate-300">
-                    <Sliders className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold text-white">{t('volume_button_action')}</div>
-                    <div className="mt-0.5 text-xs text-slate-400">{t('volume_button_action_desc')}</div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => updateShieldSetting('volumeButtonAction', 'MUTE_RINGER')}
-                    className={`rounded-xl p-2.5 text-xs font-bold transition border text-center ${
-                      settings?.volumeButtonAction !== 'REJECT_CALL'
-                        ? 'border-blue-500 bg-blue-500/20 text-blue-300'
-                        : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {t('volume_action_mute')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateShieldSetting('volumeButtonAction', 'REJECT_CALL')}
-                    className={`rounded-xl p-2.5 text-xs font-bold transition border text-center ${
-                      settings?.volumeButtonAction === 'REJECT_CALL'
-                        ? 'border-rose-500 bg-rose-500/20 text-rose-300'
-                        : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {t('volume_action_reject')}
-                  </button>
-                </div>
-              </div>
-
-              <SettingRow
-                icon={<Vibrate className="h-4 w-4 text-emerald-400" />}
-                title={t('vibrate_on_connected')}
-                description={t('vibrate_on_connected_desc')}
-                checked={settings?.vibrateOnCallConnected !== false}
-                onChange={(v) => updateShieldSetting('vibrateOnCallConnected', v)}
-              />
-
-              <SettingRow
-                icon={<Smartphone className="h-4 w-4 text-cyan-400" />}
-                title={t('flip_to_silence')}
-                description={t('flip_to_silence_desc')}
-                checked={settings?.flipToSilence !== false}
-                onChange={(v) => updateShieldSetting('flipToSilence', v)}
-              />
-
-              <SettingRow
-                icon={<Sparkles className="h-4 w-4 text-amber-400" />}
-                title={t('flash_alert')}
-                description={t('flash_alert_desc')}
-                checked={Boolean(settings?.flashAlertOnIncomingCall)}
-                onChange={(v) => updateShieldSetting('flashAlertOnIncomingCall', v)}
-              />
-            </section>
-          )}
-
-        {/* 5. CALL RECORDING & AUDIO */}
-        {(activeCategoryFilter === 'ALL' || activeCategoryFilter === 'RECORDING') &&
-          matchesSearch('recording mic audio folder wav storage') && (
-            <section className="space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-800 pb-1.5 text-xs font-bold uppercase tracking-wider text-rose-400">
-                <Mic className="h-4 w-4" />
-                <span>{t('settings_cat_recording')}</span>
-              </div>
-
-              <SettingRow
-                icon={<Mic className="h-4 w-4 text-rose-400" />}
-                title={t('call_recording_title')}
-                description={t('call_recording_desc')}
-                checked={privacy.callRecordingEnabled}
-                onChange={(v) => updatePrivacy('callRecordingEnabled', v)}
-              />
-
-              <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                  <span className="text-sm font-bold text-white">{t('recording_clear_title')}</span>
-                </div>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  {t('recording_hardware_note')}
-                </p>
-                <div className="flex items-center gap-2 pt-1 text-[11px] font-semibold text-emerald-400">
-                  <Check className="h-3.5 w-3.5" />
-                  <span>{t('noise_cancellation_active')}</span>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-1.5">
-                <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
-                  <FolderOpen className="h-4 w-4 text-blue-400" />
-                  <span>{t('recording_storage_folder')}</span>
-                </div>
-                <div className="font-mono text-xs text-slate-400 break-all bg-slate-950 p-2.5 rounded-xl border border-slate-800">
-                  {DEFAULT_RECORDINGS_FOLDER}
-                </div>
-              </div>
-            </section>
-          )}
-
-        {/* 6. SYSTEM, TELECOM & INTEGRATION (No Popups!) */}
-        {(activeCategoryFilter === 'ALL' || activeCategoryFilter === 'SYSTEM') &&
-          matchesSearch('system telecom default role permissions sync diagnostics database sources apk install') && (
-            <section className="space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-800 pb-1.5 text-xs font-bold uppercase tracking-wider text-indigo-400">
-                <Sliders className="h-4 w-4" />
-                <span>{t('settings_cat_system')}</span>
-              </div>
-
-              {/* Default Phone Role Card */}
-              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 space-y-3">
-                <div className="flex items-start gap-3">
-                  <div
-                    className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
-                      isDefaultDialer ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'
-                    }`}
-                  >
-                    <PhoneCall className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-bold text-white">
-                      {isDefaultDialer ? t('default_phone_status_active') : t('default_phone_title')}
-                    </div>
-                    <div className="mt-0.5 text-xs text-slate-400">
-                      {isDefaultDialer ? t('default_phone_role_desc') : t('default_phone_desc')}
-                    </div>
-                  </div>
-                </div>
-                {!isDefaultDialer && onRequestDefaultDialer && (
-                  <button
-                    type="button"
-                    onClick={onRequestDefaultDialer}
-                    className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-500 transition active:scale-95"
-                  >
-                    {t('set_as_default_phone_button')}
-                  </button>
-                )}
-              </div>
-
-              {/* Permission Center & Safety (Inline Sub-page) */}
-              <button
-                type="button"
-                onClick={() => setSubView('permissions')}
-                className="flex w-full items-center justify-between rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left hover:bg-slate-800/80 transition"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-indigo-500/10 text-indigo-400 shrink-0">
-                    <Sliders className="h-5 w-5" />
-                  </span>
-                  <div>
-                    <span className="block text-sm font-bold text-white">{t('permission_center')}</span>
-                    <span className="mt-0.5 block text-xs text-slate-400">{t('permission_center_desc')}</span>
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
-              </button>
-
-              {/* Sync Database Action */}
-              {onSyncDatabase && (
                 <button
                   type="button"
-                  onClick={onSyncDatabase}
-                  disabled={isSyncing}
-                  className="flex w-full items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left hover:bg-slate-800/80 transition disabled:opacity-60"
+                  onClick={() => onDensityChange?.('comfortable')}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-md transition cursor-pointer ${
+                    density === 'comfortable'
+                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
                 >
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400 shrink-0">
-                    <Database className="h-5 w-5" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <span className="block text-sm font-bold text-white">
-                      {isSyncing ? t('synchronizing') : t('sync_device_data')}
-                    </span>
-                    <span className="mt-0.5 block text-xs text-slate-400">{t('sync_device_desc')}</span>
-                  </div>
+                  Comfortable
                 </button>
-              )}
+              </div>
+            </div>
 
-              {/* System Diagnostics (Inline Sub-page) */}
-              <button
-                type="button"
-                onClick={() => setSubView('diagnostics')}
-                className="flex w-full items-center justify-between rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left hover:bg-slate-800/80 transition"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-slate-800 text-slate-300 shrink-0">
-                    <Stethoscope className="h-5 w-5" />
-                  </span>
-                  <div>
-                    <span className="block text-sm font-bold text-white">{t('system_diagnostics')}</span>
-                    <span className="mt-0.5 block text-xs text-slate-400">{t('system_diagnostics_desc')}</span>
-                  </div>
+            {/* Language Switcher */}
+            <div className="px-3.5 py-2.5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="grid h-8 w-8 place-items-center rounded-xl bg-blue-500/10 text-blue-400 shrink-0">
+                  <Globe className="h-4 w-4" />
                 </div>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
-              </button>
-
-              {/* Data Sources & Privacy Registry (Inline Sub-page) */}
-              <button
-                type="button"
-                onClick={() => setSubView('data-sources')}
-                className="flex w-full items-center justify-between rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left hover:bg-slate-800/80 transition"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-slate-800 text-slate-300 shrink-0">
-                    <Database className="h-5 w-5" />
-                  </span>
-                  <div>
-                    <span className="block text-sm font-bold text-white">{t('data_sources_privacy')}</span>
-                    <span className="mt-0.5 block text-xs text-slate-400">{t('data_sources_desc')}</span>
-                  </div>
+                <div className="min-w-0 truncate">
+                  <div className="text-xs font-semibold text-white">Language</div>
+                  <div className="text-[11px] text-slate-400 truncate">Application UI language</div>
                 </div>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
-              </button>
-
-              {/* Packaging & Offline APK (Inline Sub-page) */}
-              <button
-                type="button"
-                onClick={() => setSubView('install')}
-                className="flex w-full items-center justify-between rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left hover:bg-slate-800/80 transition"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-slate-800 text-slate-300 shrink-0">
-                    <Download className="h-5 w-5" />
-                  </span>
-                  <div>
-                    <span className="block text-sm font-bold text-white">{t('install_packaging')}</span>
-                    <span className="mt-0.5 block text-xs text-slate-400">{t('install_packaging_desc')}</span>
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
-              </button>
-            </section>
-          )}
-
-        {/* 7. ABOUT & LEGAL (No Popups!) */}
-        {(activeCategoryFilter === 'ALL' || activeCategoryFilter === 'LEGAL') &&
-          matchesSearch('about legal privacy policy terms version') && (
-            <section className="space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-800 pb-1.5 text-xs font-bold uppercase tracking-wider text-emerald-400">
-                <ShieldCheck className="h-4 w-4" />
-                <span>About & Legal</span>
               </div>
 
-              {/* About Us (Inline Sub-page) */}
-              <button
-                type="button"
-                onClick={() => setSubView('about')}
-                className="flex w-full items-center justify-between rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left hover:bg-slate-800/80 transition"
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as any)}
+                className="rounded-xl border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white outline-none cursor-pointer"
               >
-                <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-500/10 text-blue-400 shrink-0">
-                    <Info className="h-5 w-5" />
-                  </span>
-                  <div>
-                    <span className="block text-sm font-bold text-white">{t('about_us')}</span>
-                    <span className="mt-0.5 block text-xs text-slate-400">
-                      CallShield v2.4.0 Production • Zero-telemetry protection
-                    </span>
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
-              </button>
+                <option value="en" className="bg-slate-900 text-white">English</option>
+                <option value="ta" className="bg-slate-900 text-white">தமிழ் (Tamil)</option>
+                <option value="hi" className="bg-slate-900 text-white">हिंदी (Hindi)</option>
+              </select>
+            </div>
+          </SettingsGroup>
+        )}
 
-              {/* Privacy Policy (Inline Sub-page) */}
-              <button
-                type="button"
-                onClick={() => setSubView('privacy')}
-                className="flex w-full items-center justify-between rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left hover:bg-slate-800/80 transition"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400 shrink-0">
-                    <Lock className="h-5 w-5" />
-                  </span>
-                  <div>
-                    <span className="block text-sm font-bold text-white">{t('privacy_policy')}</span>
-                    <span className="mt-0.5 block text-xs text-slate-400">
-                      Strict on-device processing • No cloud contact uploads
-                    </span>
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
-              </button>
+        {/* 6. PRIVACY, ABOUT & RESET */}
+        {matchesSearch('about terms privacy clear data reset install') && (
+          <SettingsGroup title="Legal & App Info">
+            {/* Install PWA / APK */}
+            {deferredPrompt && (
+              <ActionRow
+                icon={<Download className="h-4 w-4 text-emerald-400" />}
+                iconBg="bg-emerald-500/10"
+                title="Install Application"
+                subtitle="Add to home screen or install native Android package"
+                onClick={() => setActiveModal('install')}
+              />
+            )}
 
-              {/* Terms of Service (Inline Sub-page) */}
+            {/* About */}
+            <ActionRow
+              icon={<Info className="h-4 w-4 text-slate-400" />}
+              iconBg="bg-slate-500/10"
+              title="About VigilShield"
+              subtitle="Version 1.5.7 · License & Telecom Compliance"
+              onClick={() => setActiveModal('about')}
+            />
+
+            {/* Privacy Policy */}
+            <ActionRow
+              icon={<Lock className="h-4 w-4 text-slate-400" />}
+              iconBg="bg-slate-500/10"
+              title="Privacy Policy & Terms"
+              subtitle="Device-local processing, zero data harvesting"
+              onClick={() => setActiveModal('privacy')}
+            />
+
+            {/* Reset All Data */}
+            <div className="px-3.5 py-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="grid h-8 w-8 place-items-center rounded-xl bg-rose-500/10 text-rose-400 shrink-0">
+                  <Trash2 className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 truncate">
+                  <div className="text-xs font-semibold text-white">Clear App Data & Cache</div>
+                  <div className="text-[11px] text-slate-400 truncate">Reset call records and directory cache</div>
+                </div>
+              </div>
+
               <button
                 type="button"
-                onClick={() => setSubView('terms')}
-                className="flex w-full items-center justify-between rounded-2xl border border-slate-800 bg-slate-900 p-4 text-left hover:bg-slate-800/80 transition"
+                onClick={() => setShowClearConfirm(true)}
+                className="rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 px-3 py-1.5 text-xs font-semibold transition active:scale-95 cursor-pointer shrink-0"
               >
-                <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-purple-500/10 text-purple-400 shrink-0">
-                    <FileText className="h-5 w-5" />
-                  </span>
-                  <div>
-                    <span className="block text-sm font-bold text-white">{t('terms_of_service')}</span>
-                    <span className="mt-0.5 block text-xs text-slate-400">
-                      Emergency routing, local recording terms & compliance
-                    </span>
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
+                Clear Data
               </button>
-            </section>
-          )}
+            </div>
+          </SettingsGroup>
+        )}
       </main>
+
+      {/* Clear Confirmation Modal */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm animate-in fade-in duration-100">
+          <div className="w-full max-w-xs rounded-2xl border border-rose-500/30 bg-slate-900 p-4 shadow-xl space-y-3">
+            <div className="flex items-center gap-2.5 text-rose-400">
+              <div className="grid h-8 w-8 place-items-center rounded-xl bg-rose-500/15">
+                <Trash2 className="h-4 w-4" />
+              </div>
+              <h3 className="text-sm font-bold text-white">Reset All Data?</h3>
+            </div>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              This will clear local call logs, custom directory labels, and cache. Contacts will remain safe.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowClearConfirm(false)}
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/10 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onClearAllData?.();
+                  setShowClearConfirm(false);
+                }}
+                className="rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold px-3 py-1.5 text-xs transition active:scale-95"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sub-modals */}
+      {activeModal === 'theme' && (
+        <ThemeCustomizerModal isOpen={true} onClose={() => setActiveModal(null)} />
+      )}
+      {activeModal === 'permissions' && (
+        <PermissionCenterModal
+          isOpen={true}
+          onClose={() => setActiveModal(null)}
+          settings={settings}
+          onUpdateSettings={onUpdateSettings as any}
+          isDefaultDialer={isDefaultDialer}
+          onRequestDefaultDialer={onRequestDefaultDialer}
+          onSyncContacts={onSyncDatabase}
+        />
+      )}
+      {activeModal === 'diagnostics' && (
+        <SystemDiagnosticsModal
+          isOpen={true}
+          onClose={() => setActiveModal(null)}
+          contacts={contacts}
+          calls={calls}
+          rules={rules}
+          whitelist={whitelist}
+          settings={settings}
+          timelineEvents={timelineEvents}
+          onResetToCleanState={onClearAllData}
+          onImportAllData={onImportAllData}
+          isDefaultDialer={isDefaultDialer}
+          onRequestDefaultDialer={onRequestDefaultDialer}
+        />
+      )}
+      {activeModal === 'data-sources' && (
+        <DataSourcesModal
+          isOpen={true}
+          onClose={() => setActiveModal(null)}
+          onClearAllData={onClearAllData}
+        />
+      )}
+      {activeModal === 'install' && (
+        <InstallApkModal
+          isOpen={true}
+          onClose={() => setActiveModal(null)}
+          deferredPrompt={deferredPrompt}
+          onTriggerInstall={onTriggerInstall}
+        />
+      )}
+      {activeModal === 'about' && (
+        <AboutAppModal
+          isOpen={true}
+          onClose={() => setActiveModal(null)}
+          onOpenPrivacyTerms={(tab) => setActiveModal(tab === 'terms' ? 'terms' : 'privacy')}
+        />
+      )}
+      {(activeModal === 'privacy' || activeModal === 'terms') && (
+        <PrivacyTermsModal
+          isOpen={true}
+          onClose={() => setActiveModal(null)}
+          defaultTab={activeModal === 'terms' ? 'terms' : 'privacy'}
+        />
+      )}
     </div>
   );
 }
 
+// Grouped inset card container
+function SettingsGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <h2 className="text-xs font-semibold text-slate-400 px-1 tracking-tight">
+        {title}
+      </h2>
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.025] divide-y divide-white/[0.05] overflow-hidden shadow-sm">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Toggle Row Component
 function SettingRow({
   icon,
+  iconBg = 'bg-white/[0.06]',
   title,
-  description,
+  subtitle,
   checked,
-  onChange,
+  onToggle,
 }: {
   icon: ReactNode;
+  iconBg?: string;
   title: string;
-  description: string;
+  subtitle?: string;
   checked: boolean;
-  onChange: (value: boolean) => void;
+  onToggle: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-      <div className="flex min-w-0 gap-3">
-        <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-800 text-slate-300">
+    <div
+      onClick={() => onToggle(!checked)}
+      className="px-3.5 py-3 flex items-center justify-between gap-3 hover:bg-white/[0.02] transition cursor-pointer select-none"
+    >
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className={`grid h-8 w-8 place-items-center rounded-xl ${iconBg} shrink-0`}>
           {icon}
         </div>
-        <div className="min-w-0">
-          <div className="text-sm font-semibold text-white">{title}</div>
-          <div className="mt-0.5 text-xs text-slate-400">{description}</div>
+        <div className="min-w-0 truncate">
+          <div className="text-xs font-semibold text-white tracking-tight">{title}</div>
+          {subtitle && <div className="text-[11px] text-slate-400 truncate mt-0.5">{subtitle}</div>}
         </div>
       </div>
+
       <button
         type="button"
         role="switch"
         aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition ${checked ? 'bg-blue-600' : 'bg-slate-700'}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle(!checked);
+        }}
+        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+          checked ? 'bg-emerald-500' : 'bg-slate-700'
+        }`}
       >
-        <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition ${checked ? 'left-6' : 'left-1'}`} />
+        <span
+          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+            checked ? 'translate-x-4' : 'translate-x-0'
+          }`}
+        />
       </button>
+    </div>
+  );
+}
+
+// Action Trigger Row (navigates or opens sub-modal)
+function ActionRow({
+  icon,
+  iconBg = 'bg-white/[0.06]',
+  title,
+  subtitle,
+  onClick,
+}: {
+  icon: ReactNode;
+  iconBg?: string;
+  title: string;
+  subtitle?: string;
+  onClick: () => void;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      className="px-3.5 py-3 flex items-center justify-between gap-3 hover:bg-white/[0.02] transition cursor-pointer select-none"
+    >
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className={`grid h-8 w-8 place-items-center rounded-xl ${iconBg} shrink-0`}>
+          {icon}
+        </div>
+        <div className="min-w-0 truncate">
+          <div className="text-xs font-semibold text-white tracking-tight">{title}</div>
+          {subtitle && <div className="text-[11px] text-slate-400 truncate mt-0.5">{subtitle}</div>}
+        </div>
+      </div>
+
+      <ChevronRight className="h-4 w-4 text-slate-500 shrink-0" />
     </div>
   );
 }

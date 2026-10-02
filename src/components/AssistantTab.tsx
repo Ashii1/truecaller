@@ -166,20 +166,20 @@ function AssistantTab({
   ].filter((r) => !appliedRecommendations.includes(r.id));
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-4 space-y-5">
+    <div className="max-w-md sm:max-w-lg mx-auto px-2.5 sm:px-3 py-2 space-y-3">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-extrabold text-white tracking-tight flex items-center space-x-2">
-          <Sparkles className="w-6 h-6 text-indigo-400" />
+        <h1 className="text-xl font-bold text-white tracking-tight flex items-center space-x-2">
+          <Sparkles className="w-5 h-5 text-indigo-400" />
           <span>{t('assistant_hub_title')}</span>
         </h1>
-        <p className="text-xs text-slate-400 mt-0.5">
+        <p className="text-[11px] text-slate-400 mt-0.5">
           {t('assistant_hub_desc')}
         </p>
       </div>
 
       {/* 1. WEEKLY SECURITY DIGEST */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-[#0c121e]/90 border border-white/[0.08] shadow-sm space-y-3.5">
+      <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08] shadow-sm space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <TrendingUp className="w-4 h-4 text-emerald-400" />
@@ -226,12 +226,12 @@ function AssistantTab({
       </div>
 
       {/* 2. INTERACTIVE AI NUMBER INVESTIGATOR */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-[#0c121e]/90 border border-white/[0.08] shadow-sm space-y-3.5">
+      <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08] shadow-sm space-y-3">
         <div className="flex items-center space-x-2">
-          <Brain className="w-5 h-5 text-blue-400" />
-          <h2 className="text-base font-bold text-white tracking-tight">{t('investigator_title')}</h2>
+          <Brain className="w-4 h-4 text-blue-400" />
+          <h2 className="text-sm font-bold text-white tracking-tight">{t('investigator_title')}</h2>
         </div>
-        <p className="text-xs text-slate-400">
+        <p className="text-[11px] text-slate-400">
           Enter any phone number to inspect risk score, community flags, and behavioral patterns.
         </p>
 
@@ -364,33 +364,33 @@ function AssistantTab({
 
       {/* 3. SMART FOLLOW-UPS & REMINDERS */}
       {reminders.length > 0 && (
-        <div className="p-4 sm:p-5 rounded-2xl bg-[#0c121e]/90 border border-white/[0.08] shadow-sm space-y-3">
+        <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08] shadow-sm space-y-2.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <Clock className="w-4 h-4 text-amber-400" />
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+              <h2 className="text-xs font-bold text-white uppercase tracking-wider">
                 {t('smart_reminders_title')}
               </h2>
             </div>
-            <span className="text-xs text-slate-400">{reminders.length}</span>
+            <span className="text-[11px] text-slate-400">{reminders.length}</span>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {reminders.map((rem) => (
               <div
                 key={rem.id}
-                className="p-3 rounded-2xl bg-slate-800/40 border border-slate-800/60 flex items-center justify-between gap-3"
+                className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-between gap-2.5"
               >
                 <div>
                   <div className="text-xs font-bold text-white">{rem.name}</div>
-                  <p className="text-xs text-slate-300 mt-0.5">{rem.text}</p>
+                  <p className="text-[11px] text-slate-300 mt-0.5">{rem.text}</p>
                   <span className="text-[10px] text-slate-500">{rem.time}</span>
                 </div>
 
                 <div className="flex items-center space-x-2 shrink-0">
                   <button
                     onClick={() => onInitiateCall(rem.number, rem.name)}
-                    className="w-8 h-8 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center transition shadow"
+                    className="w-7 h-7 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center transition shadow"
                     title={t('call_action')}
                   >
                     <Phone className="w-3.5 h-3.5" />
@@ -411,30 +411,30 @@ function AssistantTab({
 
       {/* 4. SMART RECOMMENDATIONS */}
       {smartRecommendations.length > 0 && (
-        <div className="p-4 sm:p-5 rounded-3xl bg-slate-900/60 border border-slate-800/60 shadow-xl space-y-3">
+        <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08] shadow-sm space-y-2.5">
           <div className="flex items-center space-x-2">
             <Lightbulb className="w-4 h-4 text-indigo-400" />
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+            <h2 className="text-xs font-bold text-white uppercase tracking-wider">
               {t('smart_recommendations_title')}
             </h2>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {smartRecommendations.map((rec) => (
               <div
                 key={rec.id}
-                className="p-3.5 rounded-2xl bg-slate-800/40 border border-slate-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
               >
                 <div>
                   <div className="text-xs font-bold text-white">{rec.title}</div>
-                  <p className="text-xs text-slate-400 mt-0.5">{rec.desc}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">{rec.desc}</p>
                 </div>
                 <button
                   onClick={() => {
                     rec.apply();
                     setAppliedRecommendations((prev) => [...prev, rec.id]);
                   }}
-                  className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition shrink-0 self-start sm:self-auto shadow"
+                  className="px-3 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition shrink-0 self-start sm:self-auto shadow-sm"
                 >
                   {rec.actionText}
                 </button>

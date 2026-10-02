@@ -1,20 +1,28 @@
-import { memo, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import {
+  ArrowDownLeft,
+  ArrowUpRight,
   Check,
+  ChevronDown,
+  ChevronUp,
   Delete,
+  Grid3x3,
   Layers,
   Phone,
-  ShieldAlert,
+  PhoneMissed,
+  Plus,
   ShieldCheck,
+  Sparkles,
+  Star,
   User,
   UserPlus,
+  Voicemail,
   X,
-  Sparkles,
 } from 'lucide-react';
 import { ContactItem, CallLogItem, CallShieldDirectoryProfile, ShieldSettings, DisplayDensity } from '../types';
 import { smartDialerSearch } from '../utils/t9Search';
 import { formatPhoneNumber } from '../utils/spamEngine';
-import { isGenericOrPhoneNumber } from '../utils/publicDirectory';
+import { isGenericOrPhoneNumber, PUBLIC_DIRECTORY_DATABASE } from '../utils/publicDirectory';
 import { useI18n } from '../i18n/LanguageContext';
 import { playDtmfTone } from '../utils/dtmfTones';
 import { triggerHapticFeedback } from '../utils/audioAlerts';
@@ -34,8 +42,14 @@ interface DialerTabProps {
   density?: DisplayDensity;
 }
 
-const KEYPAD_KEYS = [
-  { digit: '1', sub: '⚲' },
+interface KeypadKeyConfig {
+  digit: string;
+  sub: string;
+  isSpecial?: boolean;
+}
+
+const KEYPAD_KEYS: KeypadKeyConfig[] = [
+  { digit: '1', sub: 'VOICEMAIL' },
   { digit: '2', sub: 'ABC' },
   { digit: '3', sub: 'DEF' },
   { digit: '4', sub: 'GHI' },
@@ -44,9 +58,9 @@ const KEYPAD_KEYS = [
   { digit: '7', sub: 'PQRS' },
   { digit: '8', sub: 'TUV' },
   { digit: '9', sub: 'WXYZ' },
-  { digit: '*', sub: ',' },
+  { digit: '*', sub: '', isSpecial: true },
   { digit: '0', sub: '+' },
-  { digit: '#', sub: ';' },
+  { digit: '#', sub: '', isSpecial: true },
 ];
 
 function sanitizePastedText(raw: string): string {
@@ -74,18 +88,53 @@ const DialerTab = memo(function DialerTab({
   const { t } = useI18n();
   const [value, setValue] = useState(initialNumber || '');
   const [showSimPicker, setShowSimPicker] = useState(false);
+  const [isKeypadCollapsed, setIsKeypadCollapsed] = useState(false);
+  const [activePressedKey, setActivePressedKey] = useState<string | null>(null);
+  const [clipboardSnippet, setClipboardSnippet] = useState<string | null>(null);
+
   const inputRef = useRef<HTMLInputElement>(null);
   const longPressTimerRef = useRef<number | null>(null);
-  const deleteIntervalRef = useRef<number | null>(null);
+
+  // Dedicated backspace timers to prevent accidental double-deletion on single click
+  const deleteHoldTimeoutRef = useRef<number | null>(null);
+  const deleteRepeatIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (initialNumber) setValue(initialNumber);
+    if (initialNumber) {
+      setValue(initialNumber);
+      setIsKeypadCollapsed(false);
+    }
   }, [initialNumber]);
+
+  // Read clipboard on focus to detect if user has copied a phone number
+  useEffect(() => {
+    const checkClipboard = async () => {
+      try {
+        if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
+          const text = await navigator.clipboard.readText();
+          const clean = sanitizePastedText(text);
+          if (clean && clean.length >= 7 && clean.length <= 15 && clean !== value) {
+            setClipboardSnippet(clean);
+          } else {
+            setClipboardSnippet(null);
+          }
+        }
+      } catch {
+        // Clipboard read permission might not be granted
+      }
+    };
+    checkClipboard();
+    window.addEventListener('focus', checkClipboard);
+    return () => window.removeEventListener('focus', checkClipboard);
+  }, [value]);
 
   useEffect(() => {
     const handleBack = (e: any) => {
       if (showSimPicker) {
         setShowSimPicker(false);
+        e.detail?.handled?.();
+      } else if (isKeypadCollapsed) {
+        setIsKeypadCollapsed(false);
         e.detail?.handled?.();
       } else if (value.trim().length > 0) {
         setValue('');
@@ -94,7 +143,7 @@ const DialerTab = memo(function DialerTab({
     };
     window.addEventListener('callshield_back_request', handleBack);
     return () => window.removeEventListener('callshield_back_request', handleBack);
-  }, [showSimPicker, value]);
+  }, [showSimPicker, isKeypadCollapsed, value]);
 
   const handlePaste = (e: ReactClipboardEvent) => {
     const text = e.clipboardData?.getData('text');
@@ -140,18 +189,31 @@ const DialerTab = memo(function DialerTab({
     return (
       contacts.find((c) => {
         const n = c.number.replace(/\D/g, '');
-        return n === digits || (digits.length >= 7 && n.length >= 7 && digits.endsWith(n));
+        return n === digits || (digits.length >= 10 && n.length >= 10 && digits.endsWith(n.slice(-10)));
       }) || null
     );
   }, [digits, contacts]);
 
-  const profile = useMemo(() => (digits.length >= 4 ? lookupProfile(value) : null), [digits, value, lookupProfile]);
+  const isEmergencyOrShortCode = useMemo(() => {
+    const trimmed = value.trim();
+    return Boolean(PUBLIC_DIRECTORY_DATABASE[trimmed] || (digits && PUBLIC_DIRECTORY_DATABASE[digits]));
+  }, [value, digits]);
+
+  // Strictly require at least 10 digits before looking up public directory profiles,
+  // preventing premature names from flashing or displaying while user is still dialing
+  const profile = useMemo(() => {
+    if (!digits) return null;
+    if (digits.length >= 10 || isEmergencyOrShortCode) {
+      return lookupProfile(value);
+    }
+    return null;
+  }, [digits, isEmergencyOrShortCode, value, lookupProfile]);
 
   const hapticIntensityMs = useMemo(() => {
     if (settings?.keypadHapticFeedback === false) return 0;
     if (settings?.keypadHapticIntensity === 'SOFT') return 15;
     if (settings?.keypadHapticIntensity === 'STRONG') return 40;
-    return 25; // STANDARD (consistent across incoming call and manual dialer)
+    return 25; // STANDARD
   }, [settings?.keypadHapticFeedback, settings?.keypadHapticIntensity]);
 
   const fireKeypadHaptic = (ms = hapticIntensityMs) => {
@@ -170,6 +232,7 @@ const DialerTab = memo(function DialerTab({
   };
 
   const handleKeyDown = (digit: string) => {
+    setActivePressedKey(digit);
     if (digit === '0') {
       longPressTimerRef.current = window.setTimeout(() => {
         if (settings?.keypadDtmfTones !== false) {
@@ -181,7 +244,7 @@ const DialerTab = memo(function DialerTab({
       }, 450);
     } else if (digit === '1' && !value) {
       longPressTimerRef.current = window.setTimeout(() => {
-        // Voicemail shortcut
+        // Voicemail shortcut (*86)
         fireKeypadHaptic(45);
         onInitiateCall('*86', 'Voicemail', selectedSim);
         longPressTimerRef.current = null;
@@ -190,40 +253,79 @@ const DialerTab = memo(function DialerTab({
   };
 
   const handleKeyUp = () => {
+    setActivePressedKey(null);
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
   };
 
-  const startContinuousDelete = () => {
-    fireKeypadHaptic(20);
-    setValue((v) => v.slice(0, -1));
-    deleteIntervalRef.current = window.setInterval(() => {
-      setValue((v) => {
-        if (!v) {
-          if (deleteIntervalRef.current) clearInterval(deleteIntervalRef.current);
-          return '';
-        }
-        fireKeypadHaptic(12);
-        return v.slice(0, -1);
-      });
-    }, 110);
-  };
-
-  const stopContinuousDelete = () => {
-    if (deleteIntervalRef.current) {
-      clearInterval(deleteIntervalRef.current);
-      deleteIntervalRef.current = null;
+  // --- PRECISE BACKSPACE ENGINE: Single tap deletes 1 char; hold (>450ms) triggers continuous repeat ---
+  const clearDeleteTimers = () => {
+    if (deleteHoldTimeoutRef.current !== null) {
+      clearTimeout(deleteHoldTimeoutRef.current);
+      deleteHoldTimeoutRef.current = null;
+    }
+    if (deleteRepeatIntervalRef.current !== null) {
+      clearInterval(deleteRepeatIntervalRef.current);
+      deleteRepeatIntervalRef.current = null;
     }
   };
 
-  const call = () => {
-    if (value.trim()) {
+  const deleteSingleChar = () => {
+    fireKeypadHaptic(18);
+    setValue((prev) => (prev ? prev.slice(0, -1) : ''));
+  };
+
+  const handleDeletePointerDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    e.preventDefault();
+    clearDeleteTimers();
+
+    // 1. Delete exactly 1 character immediately on touch down
+    deleteSingleChar();
+
+    // 2. Schedule repeat mode ONLY if user keeps holding for more than 450ms
+    deleteHoldTimeoutRef.current = window.setTimeout(() => {
+      deleteRepeatIntervalRef.current = window.setInterval(() => {
+        setValue((prev) => {
+          if (!prev || prev.length <= 1) {
+            clearDeleteTimers();
+            return '';
+          }
+          fireKeypadHaptic(14);
+          return prev.slice(0, -1);
+        });
+      }, 80);
+    }, 450);
+  };
+
+  const handleDeletePointerUp = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    clearDeleteTimers();
+  };
+
+  const handleDeletePointerCancel = () => {
+    clearDeleteTimers();
+  };
+
+  useEffect(() => {
+    return () => {
+      clearDeleteTimers();
+    };
+  }, []);
+
+  const call = (customNumber?: string, customName?: string) => {
+    const targetNumber = (customNumber || value).trim();
+    if (targetNumber) {
       fireKeypadHaptic(35);
-      onInitiateCall(value.trim(), matchedContact?.name || profile?.name || undefined, selectedSim);
+      onInitiateCall(
+        targetNumber,
+        customName || matchedContact?.name || profile?.name || undefined,
+        selectedSim
+      );
     } else if (recentCalls && recentCalls.length > 0) {
-      // Native phone dialer feature: recall last dialed/received number when dialer is blank
+      // Native phone feature: recall last dialed/received number when dialer is blank
       const lastCall = recentCalls[0];
       if (lastCall?.number) {
         fireKeypadHaptic(25);
@@ -233,147 +335,218 @@ const DialerTab = memo(function DialerTab({
   };
 
   const isSim1 = selectedSim.includes('SIM 1');
-  const isCompact = density === 'compact';
 
-  const defaultSuggestions = useMemo(() => {
-    const favs = contacts.filter((c) => c.isFavorite).slice(0, 3);
-    if (favs.length > 0) return favs;
-    return contacts.slice(0, 3);
+  // Favorites & Frequent Contacts for quick one-tap dial when empty
+  const favoriteContacts = useMemo(() => {
+    const favs = contacts.filter((c) => c.isFavorite);
+    if (favs.length > 0) return favs.slice(0, 5);
+    return contacts.slice(0, 5);
   }, [contacts]);
 
-  // Dynamic font sizing based on length of dialed number
+  // Scaled dynamic font size for dialed digits, with strict line-height to maintain fixed height
   const numberFontSizeClass = useMemo(() => {
     const len = value.length;
-    if (isCompact) {
-      if (len > 16) return 'text-base sm:text-lg';
-      if (len > 12) return 'text-lg sm:text-xl';
-      return 'text-xl sm:text-2xl';
-    }
-    if (len > 16) return 'text-lg sm:text-xl';
-    if (len > 12) return 'text-xl sm:text-2xl';
-    return 'text-2xl sm:text-[30px]';
-  }, [value.length, isCompact]);
+    if (len > 18) return 'text-xl sm:text-2xl leading-none';
+    if (len > 13) return 'text-2xl sm:text-3xl leading-none';
+    if (len > 9) return 'text-3xl sm:text-4xl leading-none';
+    return 'text-4xl sm:text-[42px] leading-none';
+  }, [value.length]);
 
   return (
-    <div className={`mx-auto flex w-full max-w-md flex-col select-none transition-all ${isCompact ? 'px-2 pb-4 pt-0.5 sm:px-3' : 'px-3.5 pb-6 pt-1 sm:px-4'}`}>
-      {/* Top Header Bar with Dual-SIM pill */}
-      <div className={`flex items-center justify-between transition-all ${isCompact ? 'mb-1.5' : 'mb-2.5'}`}>
-        <div>
-          <h1 className={`font-black tracking-tight text-white transition-all ${isCompact ? 'text-lg' : 'text-xl'}`}>
-            {t('dialer_keypad')}
-          </h1>
+    <div className="mx-auto flex w-full max-w-md flex-col select-none px-3 pb-3 pt-0.5 sm:px-4">
+      {/* 1. Header Bar: strictly fixed height (36px) */}
+      <div className="flex h-9 shrink-0 items-center justify-between mb-1.5">
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <Phone className="h-3.5 w-3.5" />
+          </div>
+          <div>
+            <h1 className="text-base font-bold tracking-tight text-white leading-tight">
+              {t('dialer_keypad')}
+            </h1>
+          </div>
         </div>
 
-        {/* Quick SIM Active Line Badge Pill */}
-        <button
-          type="button"
-          onClick={() => setShowSimPicker(true)}
-          className={`flex items-center gap-1.5 rounded-full border px-3 py-1 font-bold text-xs transition active:scale-95 ${
-            isSim1
-              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-              : 'border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
-          }`}
-          title={t('choose_line')}
-        >
-          <Layers className="h-3.5 w-3.5" />
-          <span className="text-[11px] font-bold">{isSim1 ? 'SIM 1' : 'SIM 2'}</span>
-        </button>
+        {/* Dual-SIM Active Line Badge Pill & Keypad Collapse Toggle */}
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setShowSimPicker(true)}
+            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition active:scale-95 cursor-pointer shadow-sm ${
+              isSim1
+                ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
+                : 'border-blue-500/40 bg-blue-500/15 text-blue-300 hover:bg-blue-500/25'
+            }`}
+            title={t('choose_line')}
+            aria-label={t('choose_line')}
+          >
+            <Layers className="h-3 w-3" />
+            <span className="text-[11px]">{isSim1 ? 'SIM 1' : 'SIM 2'}</span>
+          </button>
+
+          {/* Toggle Keypad Collapse Button */}
+          <button
+            type="button"
+            onClick={() => setIsKeypadCollapsed((prev) => !prev)}
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-slate-300 transition active:scale-95"
+            title={isKeypadCollapsed ? 'Show Keypad' : 'Hide Keypad'}
+            aria-label={isKeypadCollapsed ? 'Show Keypad' : 'Hide Keypad'}
+          >
+            {isKeypadCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+          </button>
+        </div>
       </div>
 
-      {/* T9 Smart Suggestions Horizontal Strip */}
-      <div className={`flex items-center overflow-x-auto no-scrollbar transition-all ${isCompact ? 'mb-1.5 h-8 gap-1.5' : 'mb-2.5 h-9 gap-2'}`}>
-        {results.matchingContacts.length > 0 || results.matchingRecents.length > 0 || results.possibleCaller ? (
-          <>
-            {results.matchingContacts.slice(0, 3).map((c) => (
-              <button
-                type="button"
-                key={c.id}
-                onClick={() => setValue(c.number)}
-                className={`flex shrink-0 items-center rounded-xl bg-white/10 border border-white/15 font-semibold text-white hover:bg-white/20 transition active:scale-95 ${
-                  isCompact ? 'gap-1 px-2.5 py-1 text-[11px]' : 'gap-1.5 px-3 py-1 text-xs'
-                }`}
-              >
-                <div className="grid h-4 w-4 place-items-center rounded-full bg-emerald-500/30 text-emerald-300 text-[9px] font-black">
-                  {c.name.charAt(0).toUpperCase()}
-                </div>
-                <span className="truncate max-w-[110px]">{c.name}</span>
-              </button>
-            ))}
-            {results.matchingRecents.slice(0, 2).map((r) => {
-              const prof = lookupProfile(r.number);
-              const displayName = !isGenericOrPhoneNumber(r.callerName, r.number)
-                ? r.callerName
-                : !isGenericOrPhoneNumber(prof?.name, r.number)
-                ? prof.name
-                : formatPhoneNumber(r.number);
-              return (
-                <button
-                  type="button"
-                  key={r.id}
-                  onClick={() => setValue(r.number)}
-                  className={`shrink-0 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/15 hover:text-white transition active:scale-95 ${
-                    isCompact ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1 text-xs'
-                  }`}
-                >
-                  {displayName}
-                </button>
-              );
-            })}
-            {results.possibleCaller && (
-              <button
-                type="button"
-                onClick={() => onOpenCallerDetail(results.possibleCaller!)}
-                className={`flex shrink-0 items-center rounded-xl border font-semibold transition active:scale-95 ${
-                  results.possibleCaller.isSpam
-                    ? 'bg-rose-500/15 border-rose-500/30 text-rose-300'
-                    : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                } ${isCompact ? 'gap-1 px-2.5 py-1 text-[11px]' : 'gap-1.5 px-3 py-1 text-xs'}`}
-              >
-                {results.possibleCaller.isSpam ? (
-                  <ShieldAlert className="h-3.5 w-3.5 text-rose-400" />
-                ) : (
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-                )}
-                <span className="truncate max-w-[120px]">{results.possibleCaller.name}</span>
-              </button>
-            )}
-          </>
-        ) : defaultSuggestions.length > 0 ? (
-          <>
-            <span className="flex shrink-0 items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 pl-1">
-              <Sparkles className="h-3 w-3 text-emerald-400/80" />
-              <span>{t('cat_favorites')}:</span>
-            </span>
-            {defaultSuggestions.map((c) => (
-              <button
-                type="button"
-                key={c.id}
-                onClick={() => setValue(c.number)}
-                className={`flex shrink-0 items-center gap-1 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/15 hover:text-white transition active:scale-95 ${
-                  isCompact ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1 text-xs'
-                }`}
-              >
-                <span className="grid h-3.5 w-3.5 place-items-center rounded-full bg-slate-700 text-[8px] font-bold">
-                  {c.name.charAt(0).toUpperCase()}
-                </span>
-                <span>{c.name}</span>
-              </button>
-            ))}
-          </>
-        ) : null}
-      </div>
-
-      {/* Sleek Minimalist Number Display Card - Compact Single View without Duplication */}
+      {/* 2. Upper Suggestions Area: STRICTLY FIXED HEIGHT (78px) to prevent vertical layout jumping */}
       <div
-        id="dialer-display-card"
-        onClick={() => inputRef.current?.focus()}
-        onPaste={handlePaste}
-        className={`relative flex flex-col justify-center rounded-2xl border border-white/[0.08] bg-slate-900/70 shadow-lg shadow-black/20 transition-all focus-within:border-emerald-500/40 backdrop-blur-md ${
-          isCompact ? 'mb-2 min-h-[58px] px-3 py-1.5' : 'mb-3 min-h-[66px] px-4 py-2'
+        className={`w-full shrink-0 overflow-hidden mb-1 flex flex-col justify-center transition-all ${
+          isKeypadCollapsed ? 'flex-1 min-h-[360px]' : 'h-[78px]'
         }`}
       >
-        {/* Main Number Row */}
-        <div className="relative flex items-center justify-center">
+        {value.trim().length > 0 ? (
+          /* Live T9 & Number Search Results List inside fixed container */
+          <div className="h-[78px] flex flex-col justify-center space-y-1 overflow-hidden pr-0.5">
+            {results.matchingContacts.length > 0 ? (
+              results.matchingContacts.slice(0, 2).map((c) => (
+                <div
+                  key={c.id}
+                  className="flex h-[36px] items-center justify-between rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] px-2.5 py-1 transition group"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setValue(c.number)}
+                    className="flex flex-1 items-center gap-2 text-left cursor-pointer min-w-0"
+                  >
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-[10px] border border-emerald-500/30">
+                      {c.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1 truncate">
+                      <div className="flex items-center gap-1 truncate">
+                        <span className="truncate text-xs font-semibold text-white group-hover:text-emerald-300">
+                          {c.name}
+                        </span>
+                        {c.isFavorite && <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400 shrink-0" />}
+                      </div>
+                    </div>
+                    <span className="truncate text-[11px] text-slate-400 font-mono pr-2">
+                      {formatPhoneNumber(c.number)}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => call(c.number, c.name)}
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-white transition active:scale-90"
+                    title={`Call ${c.name}`}
+                  >
+                    <Phone className="h-3 w-3 fill-current" />
+                  </button>
+                </div>
+              ))
+            ) : results.matchingRecents.length > 0 ? (
+              results.matchingRecents.slice(0, 2).map((r) => (
+                <div
+                  key={r.id}
+                  className="flex h-[36px] items-center justify-between rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] px-2.5 py-1 transition group"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setValue(r.number)}
+                    className="flex flex-1 items-center gap-2 text-left cursor-pointer min-w-0"
+                  >
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-800 text-slate-300 font-semibold text-[10px] border border-white/10">
+                      {r.type === 'INCOMING' ? (
+                        <ArrowDownLeft className="h-3 w-3 text-blue-400" />
+                      ) : r.type === 'OUTGOING' ? (
+                        <ArrowUpRight className="h-3 w-3 text-emerald-400" />
+                      ) : (
+                        <PhoneMissed className="h-3 w-3 text-rose-400" />
+                      )}
+                    </div>
+                    <span className="truncate text-xs font-semibold text-white flex-1">
+                      {r.callerName || formatPhoneNumber(r.number)}
+                    </span>
+                    <span className="truncate text-[11px] text-slate-400 font-mono pr-2">
+                      {formatPhoneNumber(r.number)}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => call(r.number, r.callerName)}
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-white transition active:scale-90"
+                    title={`Call ${r.callerName || r.number}`}
+                  >
+                    <Phone className="h-3 w-3 fill-current" />
+                  </button>
+                </div>
+              ))
+            ) : (
+              <div className="flex h-[78px] items-center justify-center text-center text-xs text-slate-400">
+                <span>{t('dialer_call_number')}</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Blank State inside the exact same fixed 78px height */
+          <div className="h-[78px] flex flex-col justify-center space-y-1.5">
+            {/* Speed Dial Favorites Row (34px) */}
+            <div className="flex h-[34px] items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pl-1 shrink-0 flex items-center gap-1">
+                <Sparkles className="h-3 w-3 text-amber-400" />
+                <span>{t('cat_favorites')}</span>
+              </span>
+              {favoriteContacts.map((c) => (
+                <button
+                  type="button"
+                  key={c.id}
+                  onClick={() => setValue(c.number)}
+                  className="flex shrink-0 items-center gap-1.5 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] px-2.5 py-1 text-xs text-slate-200 transition active:scale-95 cursor-pointer"
+                >
+                  <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 text-[9px] font-bold">
+                    {c.name.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="truncate max-w-[85px] text-[11px] font-medium">{c.name}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Clipboard Detected Helper (34px) or subtle prompt */}
+            {clipboardSnippet ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setValue(clipboardSnippet);
+                  setClipboardSnippet(null);
+                  fireKeypadHaptic(20);
+                }}
+                className="flex h-[32px] w-full items-center justify-between rounded-xl bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/25 px-3 text-xs text-emerald-300 transition active:scale-98"
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <Plus className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">
+                    Paste from clipboard: <strong className="font-mono text-white">{clipboardSnippet}</strong>
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 shrink-0">Paste</span>
+              </button>
+            ) : (
+              <div className="flex h-[32px] items-center justify-center text-[11px] text-slate-500">
+                <span>{t('dialer_call_number')}</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 3. Pristine Dialed Number & Caller Info: STRICTLY FIXED HEIGHT (76px) */}
+      <div
+        id="dialer-display-area"
+        onClick={() => inputRef.current?.focus()}
+        onPaste={handlePaste}
+        className="h-[76px] shrink-0 flex flex-col items-center justify-center overflow-hidden mb-1 px-2"
+      >
+        {/* Main Number Row: strictly fixed height (48px) */}
+        <div className="relative flex h-[48px] w-full items-center justify-center">
           <input
             ref={inputRef}
             id="dialer-number-input"
@@ -387,8 +560,10 @@ const DialerTab = memo(function DialerTab({
             inputMode="tel"
             autoComplete="off"
             placeholder={t('dialer_name_or_number')}
-            className={`w-full bg-transparent px-8 text-center font-semibold tracking-wide text-white outline-none selection:bg-emerald-500/30 transition-all ${numberFontSizeClass} placeholder:text-slate-500 placeholder:font-normal`}
+            className={`w-full bg-transparent text-center font-semibold text-white outline-none selection:bg-emerald-500/30 transition-all ${numberFontSizeClass} placeholder:text-slate-600 placeholder:font-light`}
           />
+
+          {/* Quick Clear 'X' Button */}
           {value ? (
             <button
               type="button"
@@ -398,7 +573,7 @@ const DialerTab = memo(function DialerTab({
                 setValue('');
                 inputRef.current?.focus();
               }}
-              className="absolute right-0 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-slate-400 hover:bg-white/10 hover:text-white transition"
+              className="absolute right-1 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-slate-400 hover:bg-white/10 hover:text-white transition active:scale-90"
               aria-label={t('clear_input')}
               title={t('clear_input')}
             >
@@ -407,170 +582,202 @@ const DialerTab = memo(function DialerTab({
           ) : null}
         </div>
 
-        {/* Dynamic Caller Identification or Contact Quick Add (Only if relevant; NO duplicate formatted number) */}
-        {(matchedContact || (profile?.name && !isGenericOrPhoneNumber(profile.name, value)) || digits.length >= 3) ? (
-          <div className="flex items-center justify-center overflow-hidden transition-all text-xs mt-0.5">
-            {matchedContact ? (
-              <div className="flex items-center justify-center gap-1 font-bold text-emerald-400 truncate text-[11px]">
-                <User className="h-3 w-3 shrink-0" />
-                <span className="truncate">{matchedContact.name}</span>
+        {/* Dynamic Caller Identification or Contact Quick Add: strictly fixed height (24px) */}
+        <div className="flex h-[24px] w-full items-center justify-center overflow-hidden transition-all text-xs">
+          {matchedContact ? (
+            <div className="flex items-center justify-center gap-1.5 font-semibold text-emerald-400 truncate text-xs">
+              <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[9px] font-bold">
+                <User className="h-2.5 w-2.5" />
               </div>
-            ) : profile?.name && !isGenericOrPhoneNumber(profile.name, value) ? (
-              <div className="flex items-center justify-center gap-1.5 truncate text-[11px]">
-                <span className={`font-bold truncate max-w-[170px] ${profile.isSpam ? 'text-rose-400' : 'text-slate-200'}`}>
-                  {profile.name}
-                </span>
-                {profile.isSpam ? (
-                  <span className="shrink-0 rounded-full bg-rose-500/20 px-1.5 py-0.2 text-[8.5px] font-black uppercase text-rose-300">
-                    {t('spam_badge')}
-                  </span>
-                ) : profile.isVerified ? (
-                  <span className="shrink-0 rounded-full bg-emerald-500/20 px-1.5 py-0.2 text-[8.5px] font-black uppercase text-emerald-300">
-                    {t('safe_badge')}
-                  </span>
-                ) : (
-                  <span className="shrink-0 rounded-full bg-slate-700/60 px-1.5 py-0.2 text-[8.5px] font-semibold text-slate-300">
-                    Directory
-                  </span>
-                )}
-              </div>
-            ) : digits.length >= 3 ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSaveContact(value);
-                }}
-                className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.2 text-[10px] font-bold text-emerald-300 hover:bg-emerald-500/20 transition active:scale-95"
-              >
-                <UserPlus className="h-2.5 w-2.5" />
-                <span>{t('add_to_contacts')}</span>
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-
-      {/* Professional Frameless Keypad Grid - No Boxes, No Alphabets, Sleek & Compact */}
-      <div className={`mx-auto w-full shrink-0 transition-all ${isCompact ? 'max-w-[270px]' : 'max-w-[290px]'}`}>
-        <div className={`grid grid-cols-3 transition-all ${isCompact ? 'gap-x-4 gap-y-2' : 'gap-x-5 gap-y-2.5'}`}>
-          {KEYPAD_KEYS.map((k) => (
-            <button
-              type="button"
-              key={k.digit}
-              onClick={() => handleKeyPress(k.digit)}
-              onMouseDown={() => handleKeyDown(k.digit)}
-              onMouseUp={handleKeyUp}
-              onTouchStart={() => handleKeyDown(k.digit)}
-              onTouchEnd={handleKeyUp}
-              className={`group mx-auto flex flex-col items-center justify-center rounded-full bg-slate-900/80 hover:bg-slate-800/90 active:bg-slate-700/90 border border-white/[0.08] hover:border-white/20 active:border-emerald-500/40 active:ring-2 active:ring-emerald-400/30 transition-all duration-100 active:scale-[0.91] active:shadow-inner focus:outline-none shrink-0 shadow-sm select-none ${
-                isCompact
-                  ? 'h-[50px] w-[50px] sm:h-[52px] sm:w-[52px]'
-                  : 'h-[58px] w-[58px] sm:h-[62px] sm:w-[62px]'
-              }`}
-            >
-              <span className={`font-semibold tracking-tight text-white transition-all ${isCompact ? 'text-[22px]' : 'text-[25px]'}`}>
-                {k.digit}
+              <span className="truncate">{matchedContact.name}</span>
+              <span className="text-[10px] text-emerald-500/80 font-normal">· Contact</span>
+            </div>
+          ) : (digits.length >= 10 || isEmergencyOrShortCode) && profile?.name && !isGenericOrPhoneNumber(profile.name, value) ? (
+            <div className="flex items-center justify-center gap-1.5 truncate text-xs">
+              <span className={`font-semibold truncate max-w-[180px] ${profile.isSpam ? 'text-rose-400' : 'text-slate-200'}`}>
+                {profile.name}
               </span>
-              {k.sub ? (
-                <span className="text-[9.5px] font-bold text-slate-400 -mt-0.5 tracking-wider leading-none group-hover:text-slate-300">
-                  {k.sub}
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </div>
-
-        {/* 5th Row: Action Controls (SIM Switcher, Sleek Call Button, Backspace) */}
-        <div className={`grid grid-cols-3 items-center shrink-0 transition-all ${isCompact ? 'mt-2 gap-x-4' : 'mt-3 gap-x-5'}`}>
-          {/* SIM Selector Button */}
-          <div className="flex justify-center">
+              <span className="text-slate-600">·</span>
+              <span
+                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                  profile.isSpam
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                    : profile.isVerified
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    : 'bg-white/10 text-slate-300'
+                }`}
+              >
+                {profile.isSpam ? t('spam_badge') : profile.isVerified ? t('safe_badge') : 'Verified'}
+              </span>
+            </div>
+          ) : digits.length >= 3 ? (
             <button
               type="button"
-              onClick={() => {
-                fireKeypadHaptic(20);
-                onChangeSim(isSim1 ? 'SIM 2 (Work)' : 'SIM 1 (Personal)');
+              onClick={(e) => {
+                e.stopPropagation();
+                onSaveContact(value);
               }}
-              className={`flex flex-col items-center justify-center rounded-full border transition-all active:scale-90 shrink-0 ${
-                isCompact
-                  ? 'h-[44px] w-[44px]'
-                  : 'h-[48px] w-[48px]'
-              } ${
-                !isSim1
-                  ? 'border-blue-500/40 bg-blue-500/15 text-blue-300 hover:bg-blue-500/25'
-                  : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
-              }`}
-              title={isSim1 ? 'Switch to SIM 2' : 'Switch to SIM 1'}
-              aria-label={isSim1 ? 'Switch to SIM 2' : 'Switch to SIM 1'}
+              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400 transition active:scale-95"
             >
-              <Layers className={isCompact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
-              <span className="mt-0.5 text-[8px] font-extrabold uppercase leading-none">
-                {isSim1 ? 'SIM 1' : 'SIM 2'}
-              </span>
+              <UserPlus className="h-3 w-3" />
+              <span>{t('add_to_contacts')}</span>
             </button>
-          </div>
-
-          {/* Primary Call Button with Accent Glow */}
-          <div className="flex justify-center">
-            <button
-              type="button"
-              onClick={() => call()}
-              className={`group flex items-center justify-center rounded-full text-white shadow-xl transition-all active:scale-95 shrink-0 ${
-                isCompact
-                  ? 'h-[52px] w-[52px]'
-                  : 'h-[58px] w-[58px]'
-              } ${
-                isSim1
-                  ? 'bg-emerald-500 hover:bg-emerald-400 shadow-emerald-500/30 ring-2 ring-emerald-400/20'
-                  : 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/30 ring-2 ring-blue-400/20'
-              }`}
-              aria-label={`${t('call_action')} (${isSim1 ? t('sim_1') : t('sim_2')})`}
-              title={value.trim() ? `${t('call_action')} (${isSim1 ? t('sim_1') : t('sim_2')})` : (recentCalls.length > 0 ? `Redial ${recentCalls[0].callerName || recentCalls[0].number}` : t('call_action'))}
-            >
-              <Phone className={`fill-current transition-transform group-hover:scale-110 ${isCompact ? 'h-5 w-5' : 'h-5.5 w-5.5'}`} />
-            </button>
-          </div>
-
-          {/* Backspace Button with Tap & Hold Continuous Delete */}
-          <div className="flex justify-center">
-            {value ? (
-              <button
-                type="button"
-                onMouseDown={startContinuousDelete}
-                onMouseUp={stopContinuousDelete}
-                onMouseLeave={stopContinuousDelete}
-                onTouchStart={startContinuousDelete}
-                onTouchEnd={stopContinuousDelete}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setValue('');
-                }}
-                className={`grid place-items-center rounded-full text-slate-300 transition-all hover:bg-white/10 hover:text-white active:scale-90 shrink-0 ${
-                  isCompact
-                    ? 'h-[44px] w-[44px]'
-                    : 'h-[48px] w-[48px]'
-                }`}
-                aria-label={t('delete')}
-                title="Backspace (Hold to delete continuously)"
-              >
-                <Delete className={isCompact ? 'h-4 w-4' : 'h-4.5 w-4.5'} />
-              </button>
-            ) : (
-              <div
-                className={`shrink-0 ${
-                  isCompact ? 'h-[44px] w-[44px]' : 'h-[48px] w-[48px]'
-                }`}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Protection Footer Badge */}
-        <div className={`flex items-center justify-center gap-1.5 text-slate-500 transition-all ${isCompact ? 'mt-2 text-[9.5px]' : 'mt-3 text-[10.5px]'}`}>
-          <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-          <span>{t('protected_calls')}</span>
+          ) : (
+            <div className="text-[11px] text-slate-500">
+              {t('dialer_call_number')}
+            </div>
+          )}
         </div>
       </div>
+
+      {/* 4. Flagship Smartphone Keypad Grid & Action Controls: STRICTLY FIXED HEIGHT */}
+      {!isKeypadCollapsed && (
+        <div className="mx-auto w-full max-w-[310px] sm:max-w-[330px] shrink-0 mt-0.5 animate-in fade-in duration-150">
+          {/* Keypad Grid (4 rows * 64px + 3 gaps = strictly 296px) */}
+          <div className="h-[296px] shrink-0 grid grid-cols-3 gap-x-6 sm:gap-x-7 gap-y-2.5 sm:gap-y-3 place-items-center">
+            {KEYPAD_KEYS.map((k) => {
+              const isPressed = activePressedKey === k.digit;
+              return (
+                <button
+                  type="button"
+                  key={k.digit}
+                  onClick={() => handleKeyPress(k.digit)}
+                  onMouseDown={() => handleKeyDown(k.digit)}
+                  onMouseUp={handleKeyUp}
+                  onTouchStart={() => handleKeyDown(k.digit)}
+                  onTouchEnd={handleKeyUp}
+                  className={`group relative flex h-16 w-16 sm:h-[66px] sm:w-[66px] flex-col items-center justify-center rounded-full transition-all duration-75 focus:outline-none shrink-0 select-none shadow-[0_2px_8px_rgba(0,0,0,0.28)] border ${
+                    isPressed
+                      ? 'scale-92 bg-emerald-500/25 border-emerald-500/50 ring-2 ring-emerald-400/30'
+                      : 'bg-white/[0.05] hover:bg-white/[0.1] active:scale-92 active:bg-white/[0.18] border-white/[0.08] hover:border-white/20'
+                  }`}
+                  aria-label={k.digit === '1' ? '1 (Voicemail)' : k.digit === '0' ? '0 (+)' : k.digit}
+                >
+                  <span className="font-semibold text-2xl sm:text-[27px] tracking-tight text-white leading-none">
+                    {k.digit}
+                  </span>
+
+                  {/* Sub-label / Sub-letters */}
+                  {k.digit === '1' ? (
+                    <span className="flex items-center gap-0.5 text-[8px] font-bold text-slate-400 mt-1 tracking-wider uppercase leading-none group-hover:text-slate-300">
+                      <Voicemail className="h-2.5 w-2.5 opacity-80" />
+                    </span>
+                  ) : k.digit === '0' ? (
+                    <span className="text-[10px] font-bold text-slate-400 mt-0.5 tracking-tight leading-none group-hover:text-slate-300">
+                      +
+                    </span>
+                  ) : k.sub ? (
+                    <span className="text-[9px] font-bold text-slate-400 mt-1 tracking-[0.18em] uppercase leading-none group-hover:text-slate-300">
+                      {k.sub}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Action Controls Row (SIM Switcher, Hero Call Button, Precise Backspace): strictly fixed height (72px) */}
+          <div className="h-[72px] shrink-0 grid grid-cols-3 items-center mt-3 gap-x-6 sm:gap-x-7 place-items-center">
+            {/* Left Slot: SIM Switcher Button */}
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => {
+                  fireKeypadHaptic(20);
+                  onChangeSim(isSim1 ? 'SIM 2 (Work)' : 'SIM 1 (Personal)');
+                }}
+                className={`flex flex-col items-center justify-center rounded-full border transition-all active:scale-90 h-12 w-12 shrink-0 shadow-sm ${
+                  !isSim1
+                    ? 'border-blue-500/40 bg-blue-500/15 text-blue-300 hover:bg-blue-500/25'
+                    : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
+                }`}
+                title={isSim1 ? 'Switch to SIM 2' : 'Switch to SIM 1'}
+                aria-label={isSim1 ? 'Switch to SIM 2' : 'Switch to SIM 1'}
+              >
+                <Layers className="h-4 w-4" />
+                <span className="mt-0.5 text-[8px] font-bold uppercase leading-none">
+                  {isSim1 ? 'SIM 1' : 'SIM 2'}
+                </span>
+              </button>
+            </div>
+
+            {/* Center Slot: Flagship Hero Call Button */}
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => call()}
+                className={`group relative flex h-16 w-16 sm:h-[66px] sm:w-[66px] items-center justify-center rounded-full text-white shadow-lg transition-all active:scale-92 shrink-0 ${
+                  isSim1
+                    ? 'bg-gradient-to-tr from-emerald-600 via-emerald-500 to-green-400 hover:brightness-110 shadow-emerald-500/35 ring-4 ring-emerald-500/20'
+                    : 'bg-gradient-to-tr from-blue-600 via-blue-500 to-indigo-400 hover:brightness-110 shadow-blue-500/35 ring-4 ring-blue-500/20'
+                }`}
+                aria-label={`${t('call_action')} (${isSim1 ? t('sim_1') : t('sim_2')})`}
+                title={
+                  value.trim()
+                    ? `${t('call_action')} (${isSim1 ? t('sim_1') : t('sim_2')})`
+                    : recentCalls.length > 0
+                    ? `Redial ${recentCalls[0].callerName || recentCalls[0].number}`
+                    : t('call_action')
+                }
+              >
+                <Phone className="h-6 w-6 fill-current transition-transform duration-100 group-hover:scale-105" />
+                {/* Active line mini-dot */}
+                <span
+                  className={`absolute -top-0.5 -right-0.5 flex h-3 w-3 items-center justify-center rounded-full border-2 border-slate-900 ${
+                    isSim1 ? 'bg-emerald-400' : 'bg-blue-400'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Right Slot: Precise Backspace Engine (1 tap = 1 char; hold = repeat) */}
+            <div className="flex justify-center">
+              {value ? (
+                <button
+                  type="button"
+                  onPointerDown={handleDeletePointerDown}
+                  onPointerUp={handleDeletePointerUp}
+                  onPointerLeave={handleDeletePointerCancel}
+                  onPointerCancel={handleDeletePointerCancel}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setValue('');
+                  }}
+                  style={{ touchAction: 'none' }}
+                  className="grid h-12 w-12 place-items-center rounded-full text-slate-300 hover:text-white hover:bg-white/10 active:scale-90 active:bg-white/20 transition shrink-0 select-none cursor-pointer"
+                  aria-label={t('delete')}
+                  title="Backspace (Tap: delete 1, Hold: delete all)"
+                >
+                  <Delete className="h-5 w-5" />
+                </button>
+              ) : (
+                <div className="h-12 w-12 shrink-0" />
+              )}
+            </div>
+          </div>
+
+          {/* CallShield Security Verification Footer: strictly fixed height (20px) */}
+          <div className="h-5 shrink-0 flex items-center justify-center gap-1.5 text-slate-400 transition-all mt-2 text-[10px]">
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+            <span>{t('protected_calls')}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Re-Open Keypad FAB if user collapsed it */}
+      {isKeypadCollapsed && (
+        <div className="fixed bottom-20 right-6 z-30 sm:right-10">
+          <button
+            type="button"
+            onClick={() => setIsKeypadCollapsed(false)}
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-white shadow-xl shadow-emerald-500/40 hover:bg-emerald-400 transition active:scale-95 cursor-pointer ring-4 ring-emerald-500/20"
+            title="Open Dialpad"
+            aria-label="Open Dialpad"
+          >
+            <Grid3x3 className="h-6 w-6" />
+          </button>
+        </div>
+      )}
 
       {/* Dual-SIM Selection Modal */}
       {showSimPicker && (
@@ -597,19 +804,25 @@ const DialerTab = memo(function DialerTab({
                   onChangeSim(sim);
                   setShowSimPicker(false);
                 }}
-                className={`mb-2.5 flex w-full items-center justify-between rounded-2xl border p-3.5 text-left text-sm font-bold transition ${
+                className={`mb-2.5 flex w-full items-center justify-between rounded-2xl border p-3.5 text-left text-sm font-bold transition cursor-pointer ${
                   selectedSim === sim
                     ? 'border-emerald-500/50 bg-emerald-500/15 text-white'
                     : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <div className={`grid h-8 w-8 place-items-center rounded-xl ${sim.includes('SIM 1') ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                  <div
+                    className={`grid h-8 w-8 place-items-center rounded-xl ${
+                      sim.includes('SIM 1') ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'
+                    }`}
+                  >
                     <Layers className="h-4 w-4" />
                   </div>
                   <div>
                     <span className="block font-bold">{sim.includes('SIM 1') ? t('sim_1') : t('sim_2')}</span>
-                    <span className="text-[10px] text-slate-400 font-normal">{sim.includes('SIM 1') ? 'Primary Line' : 'Business Line'}</span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      {sim.includes('SIM 1') ? 'Primary Line' : 'Business Line'}
+                    </span>
                   </div>
                 </div>
                 {selectedSim === sim && <Check className="h-5 w-5 text-emerald-400" />}

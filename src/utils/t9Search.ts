@@ -1,5 +1,5 @@
 import { ContactItem, CallLogItem, CallShieldDirectoryProfile } from '../types';
-import { isGenericOrPhoneNumber } from './publicDirectory';
+import { isGenericOrPhoneNumber, PUBLIC_DIRECTORY_DATABASE } from './publicDirectory';
 
 const CHAR_TO_T9: Record<string, string> = {
   a: '2', b: '2', c: '2',
@@ -82,28 +82,32 @@ export function smartDialerSearch(
     return false;
   }).slice(0, 5);
 
-  // 2. Matching Recents
+  // 2. Matching Recents (Only if at least 3 digits typed or valid text search, and only calls with valid caller identity)
   const seenNumbers = new Set(matchingContacts.map((c) => c.number.replace(/\D/g, '')));
   const matchingRecents: CallLogItem[] = [];
 
-  for (const call of recentCalls) {
-    const callDigits = call.number.replace(/\D/g, '');
-    if (seenNumbers.has(callDigits)) continue;
+  if (digitsOnly.length >= 3 || (!isNumeric && cleanInput.length >= 2)) {
+    for (const call of recentCalls) {
+      const callDigits = call.number.replace(/\D/g, '');
+      if (!callDigits || seenNumbers.has(callDigits)) continue;
 
-    const matchesDigits = digitsOnly && callDigits.includes(digitsOnly);
-    const matchesName = call.callerName && call.callerName.toLowerCase().includes(cleanInput.toLowerCase());
-    const matchesT9 = isNumeric && digitsOnly.length >= 2 && call.callerName && matchesT9Query(call.callerName, digitsOnly);
+      const hasRealName = call.callerName && !isGenericOrPhoneNumber(call.callerName, call.number);
+      const matchesDigits = digitsOnly.length >= 3 && callDigits.startsWith(digitsOnly);
+      const matchesName = hasRealName && call.callerName!.toLowerCase().includes(cleanInput.toLowerCase());
+      const matchesT9 = isNumeric && digitsOnly.length >= 3 && hasRealName && matchesT9Query(call.callerName!, digitsOnly);
 
-    if (matchesDigits || matchesName || matchesT9) {
-      matchingRecents.push(call);
-      seenNumbers.add(callDigits);
-      if (matchingRecents.length >= 4) break;
+      if (matchesDigits || matchesName || matchesT9) {
+        matchingRecents.push(call);
+        seenNumbers.add(callDigits);
+        if (matchingRecents.length >= 3) break;
+      }
     }
   }
 
-  // 3. Possible Caller Lookup from public directories
+  // 3. Possible Caller Lookup from public directories (strictly only if full 10+ digits or exact curated shortcode)
   let possibleCaller: CallShieldDirectoryProfile | null = null;
-  if (digitsOnly.length >= 4) {
+  const isCuratedShortCode = Boolean(PUBLIC_DIRECTORY_DATABASE[cleanInput] || (digitsOnly && PUBLIC_DIRECTORY_DATABASE[digitsOnly]));
+  if (digitsOnly.length >= 10 || isCuratedShortCode) {
     const profile = lookupProfileFn(cleanInput);
     if (
       profile &&

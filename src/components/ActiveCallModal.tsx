@@ -325,7 +325,7 @@ export default function ActiveCallModal({
   // Automated customer care / unattended voice message handling
   useEffect(() => {
     if (!session || isAttended || telecomBridge.isAndroidEnvironment()) return;
-    const cleanNum = (session.number || '').replace(/\D/g, '');
+    const cleanNum = String(session.number || '').replace(/\D/g, '');
     const isServiceOrShort = cleanNum.startsWith('198') || cleanNum.startsWith('121') || cleanNum.startsWith('199') || cleanNum.startsWith('1800') || (cleanNum.length > 0 && cleanNum.length <= 4);
 
     let timeoutId: any;

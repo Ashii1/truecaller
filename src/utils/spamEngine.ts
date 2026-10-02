@@ -7,7 +7,7 @@ import {
   CallShieldDirectoryProfile,
   RiskLevel
 } from '../types';
-import { resolveFromPublicDirectory } from './publicDirectory';
+import { resolveFromPublicDirectory, PUBLIC_DIRECTORY_DATABASE } from './publicDirectory';
 import { externalDirectoryService } from '../services/externalDirectoryService';
 
 /**
@@ -1241,6 +1241,32 @@ export function lookupCallShieldDirectory(
   // Check if an accurate caller name is already cached in local 'calls' list
   const cachedFromCalls = externalDirectoryService.getCallerNameFromLocalCalls(phoneNumber);
 
+  // Strict check: if number has fewer than 10 digits and is NOT an exact shortcode in public database,
+  // do not evaluate prefix rules or external directories (prevents showing premature names while dialing)
+  const isExactShortCode = Boolean(
+    PUBLIC_DIRECTORY_DATABASE[norm] ||
+    PUBLIC_DIRECTORY_DATABASE[digits] ||
+    PUBLIC_DIRECTORY_DATABASE[phoneNumber]
+  );
+
+  if (digits.length < 10 && !isExactShortCode) {
+    const fallbackName = cachedFromCalls || formatPhoneNumber(phoneNumber) || phoneNumber;
+    return cacheAndReturn({
+      number: phoneNumber,
+      name: fallbackName,
+      spamScore: 0,
+      riskLevel: 'UNKNOWN',
+      isSpam: false,
+      spamReportsCount: 0,
+      topTags: [meta.location, meta.carrier].filter(Boolean) as string[],
+      carrier: meta.carrier,
+      location: meta.location,
+      lineType: 'Mobile',
+      isVerified: false,
+      communityComments: [],
+    });
+  }
+
   // 2. Check User Block Rules
   const rule = rules.find((r) => {
     if (!r.enabled) return false;
@@ -1249,7 +1275,7 @@ export function lookupCallShieldDirectory(
     const digitsNum = norm.replace(/\D/g, '');
 
     if (r.matchType === 'EXACT') return normVal === norm || r.value === phoneNumber;
-    if (r.matchType === 'PREFIX') return norm.startsWith(normVal) || (digitsVal && digitsNum.startsWith(digitsVal));
+    if (r.matchType === 'PREFIX') return digitsNum.length >= 10 && (norm.startsWith(normVal) || (digitsVal && digitsNum.startsWith(digitsVal)));
     return false;
   });
 

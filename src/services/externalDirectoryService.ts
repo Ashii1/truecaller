@@ -269,7 +269,7 @@ class ExternalDirectoryService {
       const digits = phoneNumber.replace(/\D/g, '');
 
       const matched = calls.find((c) => {
-        const cDigits = (c.number || '').replace(/\D/g, '');
+        const cDigits = String(c.number || '').replace(/\D/g, '');
         return cDigits === digits || (clean10 && cDigits.endsWith(clean10));
       });
 
@@ -317,7 +317,7 @@ class ExternalDirectoryService {
 
       let hasModifications = false;
       const updatedCalls = calls.map((c) => {
-        const cDigits = (c.number || '').replace(/\D/g, '');
+        const cDigits = String(c.number || '').replace(/\D/g, '');
         const isMatch = cDigits === digits || (clean10.length >= 7 && cDigits.endsWith(clean10));
 
         if (isMatch) {

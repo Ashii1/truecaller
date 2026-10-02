@@ -182,12 +182,12 @@ function ProtectionTab({
   };
 
   return (
-    <div className="max-w-2xl mx-auto px-3 py-2 space-y-4">
+    <div className="max-w-md sm:max-w-lg mx-auto px-2.5 sm:px-3 py-2 space-y-3">
       {/* 1. SMART CALL FIREWALL STATUS HERO */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-[#0c121e]/90 border border-white/[0.08] shadow-sm relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center space-x-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm ${
+      <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08] shadow-sm relative overflow-hidden">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 ${
               settings.masterEnabled
                 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
                 : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
@@ -199,18 +199,18 @@ function ProtectionTab({
               )}
             </div>
 
-            <div>
-              <div className="flex items-center space-x-2">
-                <h2 className="text-lg font-bold text-white tracking-tight">
+            <div className="min-w-0 truncate">
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-sm font-bold text-white tracking-tight truncate">
                   {t('protection_firewall_title')}
                 </h2>
-                <span className={`text-xs font-semibold ${
+                <span className={`text-[11px] font-semibold ${
                   settings.masterEnabled ? 'text-emerald-400' : 'text-rose-400'
                 }`}>
                   {settings.masterEnabled ? '· ' + t('safe') : '· ' + t('protection_paused')}
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-[11px] text-slate-400 truncate mt-0.5">
                 {t('protection_firewall_desc')}
               </p>
             </div>
@@ -221,10 +221,10 @@ function ProtectionTab({
             id="btn-toggle-firewall"
             type="button"
             onClick={() => onUpdateSettings({ ...settings, masterEnabled: !settings.masterEnabled })}
-            className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-semibold transition active:scale-95 cursor-pointer self-start sm:self-auto ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition active:scale-95 cursor-pointer shrink-0 ${
               settings.masterEnabled
                 ? 'bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 border border-white/[0.08]'
-                : 'bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-md shadow-emerald-950/40'
+                : 'bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-sm'
             }`}
           >
             <span>{settings.masterEnabled ? t('protection_turn_off') : t('protection_turn_on')}</span>
@@ -232,22 +232,22 @@ function ProtectionTab({
         </div>
 
         {/* Protection Level Selector (Low - Balanced - Strict) */}
-        <div className="mt-4 pt-3.5 border-t border-white/[0.06] space-y-2">
+        <div className="mt-3 pt-2.5 border-t border-white/[0.06] space-y-1.5">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-slate-300 flex items-center space-x-1.5">
+            <span className="font-medium text-slate-300 flex items-center gap-1.5">
               <Sliders className="w-3.5 h-3.5 text-blue-400" />
               <span>{t('protection_level')}</span>
             </span>
-            <span className="font-semibold text-blue-400">
+            <span className="font-semibold text-blue-400 text-[11px]">
               {settings.sensitivity === 'AGGRESSIVE' ? t('protection_level_strict') : settings.sensitivity === 'STRICT' ? t('protection_level_balanced') : t('protection_level_low')}
             </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-black/40 border border-white/[0.06]">
             {[
-              { id: 'MODERATE' as SensitivityLevel, title: t('protection_level_low'), desc: 'Scams only' },
-              { id: 'STRICT' as SensitivityLevel, title: t('protection_level_balanced'), desc: 'Spam, TRAI 140' },
-              { id: 'AGGRESSIVE' as SensitivityLevel, title: t('protection_level_strict'), desc: 'Strict mode' },
+              { id: 'MODERATE' as SensitivityLevel, title: t('protection_level_low') },
+              { id: 'STRICT' as SensitivityLevel, title: t('protection_level_balanced') },
+              { id: 'AGGRESSIVE' as SensitivityLevel, title: t('protection_level_strict') },
             ].map((lvl) => {
               const isSelected = settings.sensitivity === lvl.id;
               return (
@@ -255,103 +255,73 @@ function ProtectionTab({
                   key={lvl.id}
                   type="button"
                   onClick={() => handleSetSensitivity(lvl.id)}
-                  className={`p-2.5 rounded-xl border text-left transition cursor-pointer active:scale-95 ${
+                  className={`py-1 text-xs font-medium rounded-lg text-center transition cursor-pointer active:scale-95 ${
                     isSelected
-                      ? 'bg-blue-600/20 border-blue-500/50 text-white shadow-sm ring-1 ring-blue-500/30'
-                      : 'bg-white/[0.03] border-white/[0.06] text-slate-400 hover:bg-white/[0.06] hover:text-slate-200'
+                      ? 'bg-blue-600/25 border border-blue-500/50 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  <div className="text-xs font-semibold">{lvl.title}</div>
-                  <div className="text-[10px] text-slate-500 mt-0.5 truncate">{lvl.desc}</div>
+                  {lvl.title}
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* Firewall Toggle Rules & Allowlist */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 pt-3 border-t border-slate-800">
-          {/* Rules Toggles */}
-          <div className="space-y-2">
-            <div className="text-xs font-bold text-slate-300">Active Firewall Filters:</div>
-            <div className="space-y-1.5">
-              <label className="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.scamShieldEnabled}
-                  onChange={(e) => onUpdateSettings({ ...settings, scamShieldEnabled: e.target.checked })}
-                  className="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-indigo-500"
-                />
-                <span>✓ High-confidence spam & phishing</span>
-              </label>
-              <label className="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.autoCancelSpamCalls}
-                  onChange={(e) => onUpdateSettings({ ...settings, autoCancelSpamCalls: e.target.checked })}
-                  className="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-indigo-500"
-                />
-                <span>✓ Auto-drop without ringing</span>
-              </label>
-              <label className="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.blockPrivateHidden}
-                  onChange={(e) => onUpdateSettings({ ...settings, blockPrivateHidden: e.target.checked })}
-                  className="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-indigo-500"
-                />
-                <span>✓ Private & hidden caller IDs</span>
-              </label>
-              <label className="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.blockInternational}
-                  onChange={(e) => onUpdateSettings({ ...settings, blockInternational: e.target.checked })}
-                  className="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-indigo-500"
-                />
-                <span>International toll fraud (+232, etc.)</span>
-              </label>
-            </div>
-          </div>
-
-          {/* Always Allow */}
-          <div className="space-y-2">
-            <div className="text-xs font-bold text-slate-300">Always Allowed Lines:</div>
-            <div className="space-y-1.5">
-              <div className="flex items-center space-x-2 text-xs text-emerald-400">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Saved Contacts (Always bypass firewall)</span>
-              </div>
-              <div className="flex items-center space-x-2 text-xs text-emerald-400">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>VIP & Starred Favorites</span>
-              </div>
-              <div className="flex items-center space-x-2 text-xs text-emerald-400">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Verified Businesses (Logistics, Banking)</span>
-              </div>
-              <div className="flex items-center space-x-2 text-xs text-emerald-400">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>TRAI 160 Official Transactional Lines</span>
-              </div>
-            </div>
-          </div>
+        {/* Firewall Toggle Rules */}
+        <div className="grid grid-cols-2 gap-2 mt-3 pt-2.5 border-t border-white/[0.06]">
+          <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.scamShieldEnabled}
+              onChange={(e) => onUpdateSettings({ ...settings, scamShieldEnabled: e.target.checked })}
+              className="rounded bg-slate-800 border-slate-700 text-emerald-500 h-3.5 w-3.5"
+            />
+            <span className="truncate">Spam & Phishing</span>
+          </label>
+          <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.autoCancelSpamCalls}
+              onChange={(e) => onUpdateSettings({ ...settings, autoCancelSpamCalls: e.target.checked })}
+              className="rounded bg-slate-800 border-slate-700 text-emerald-500 h-3.5 w-3.5"
+            />
+            <span className="truncate">Auto-Drop Spam</span>
+          </label>
+          <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.blockPrivateHidden}
+              onChange={(e) => onUpdateSettings({ ...settings, blockPrivateHidden: e.target.checked })}
+              className="rounded bg-slate-800 border-slate-700 text-emerald-500 h-3.5 w-3.5"
+            />
+            <span className="truncate">Private / Hidden</span>
+          </label>
+          <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.pingBackShieldEnabled !== false}
+              onChange={(e) => onUpdateSettings({ ...settings, pingBackShieldEnabled: e.target.checked })}
+              className="rounded bg-slate-800 border-slate-700 text-emerald-500 h-3.5 w-3.5"
+            />
+            <span className="truncate">Wangiri Scam Shield</span>
+          </label>
         </div>
       </div>
 
-      {/* NEW: INTELLIGENT CALL SCREENING & SPOOF SHIELD CARD */}
-      <div className="rounded-3xl border border-indigo-500/20 bg-gradient-to-b from-indigo-950/30 to-[#0e141c] p-4 sm:p-5 shadow-xl space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-indigo-500/20">
-          <div className="flex items-center space-x-2.5">
-            <div className="p-2 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 text-indigo-400">
-              <Sparkles className="w-5 h-5" />
+      {/* AI CALL SCREENER & SPOOF SHIELD */}
+      <div className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-3.5 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="grid h-8 w-8 place-items-center rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400">
+              <Sparkles className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white tracking-tight">
-                AI Screener & Advanced Spoof Shields
+              <h3 className="text-xs font-bold text-white tracking-tight">
+                AI Screener & Spoof Shields
               </h3>
-              <p className="text-xs text-indigo-200/80">
-                Automated voice assistant and Wangiri ping-back protection.
+              <p className="text-[10px] text-slate-400">
+                Voice assistant & Wangiri callback protection
               </p>
             </div>
           </div>
@@ -360,82 +330,41 @@ function ProtectionTab({
             <button
               type="button"
               onClick={onTriggerScreeningDemo}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-600/30 px-3.5 py-1.5 text-xs font-bold text-indigo-200 hover:bg-indigo-600 hover:text-white transition active:scale-95 shadow-sm"
+              className="inline-flex items-center gap-1 rounded-xl border border-indigo-500/30 bg-indigo-600/20 px-2.5 py-1 text-[11px] font-semibold text-indigo-300 hover:bg-indigo-600 hover:text-white transition active:scale-95"
             >
               <Bot className="w-3.5 h-3.5" />
-              <span>Test AI Call Screener Demo</span>
+              <span>Test Screener</span>
             </button>
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        <div className="space-y-2 divide-y divide-white/[0.04]">
           {/* Feature 1: AI Call Screener */}
-          <div className="rounded-2xl border border-white/5 bg-[#121822] p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Bot className="w-4 h-4 text-indigo-400" />
-                <span className="text-xs font-bold text-white">AI Call Screener (Screen Before Answering)</span>
-              </div>
-              <input
-                type="checkbox"
-                checked={settings.smartCallScreeningEnabled}
-                onChange={(e) => onUpdateSettings({ ...settings, smartCallScreeningEnabled: e.target.checked })}
-                className="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
-              />
+          <div className="pt-1 flex items-center justify-between gap-2">
+            <div>
+              <div className="text-xs font-medium text-white">Smart Call Screening</div>
+              <p className="text-[10px] text-slate-400">Voice assistant screens unknown callers and transcribes live</p>
             </div>
-            <p className="text-[11px] leading-relaxed text-slate-400">
-              When unknown or suspicious numbers ring, tap "Screen Call" to let the voice assistant answer, ask the caller who is calling and why, and transcribe their response live on-screen.
-            </p>
+            <input
+              type="checkbox"
+              checked={settings.smartCallScreeningEnabled}
+              onChange={(e) => onUpdateSettings({ ...settings, smartCallScreeningEnabled: e.target.checked })}
+              className="rounded bg-slate-800 border-slate-700 text-indigo-600 h-4 w-4 shrink-0 cursor-pointer"
+            />
           </div>
 
           {/* Feature 2: Neighbor Spoof Shield */}
-          <div className="rounded-2xl border border-white/5 bg-[#121822] p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <AlertTriangle className="w-4 h-4 text-amber-400" />
-                <span className="text-xs font-bold text-white">Neighbor Spoof Shield</span>
-              </div>
-              <input
-                type="checkbox"
-                checked={settings.neighborSpoofEnabled !== false}
-                onChange={(e) => onUpdateSettings({ ...settings, neighborSpoofEnabled: e.target.checked })}
-                className="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
-              />
+          <div className="pt-2 flex items-center justify-between gap-2">
+            <div>
+              <div className="text-xs font-medium text-white">Neighbor Prefix Spoof Shield</div>
+              <p className="text-[10px] text-slate-400">Flags numbers mimicking your local area prefix</p>
             </div>
-            <p className="text-[11px] leading-relaxed text-slate-400">
-              Flags incoming numbers that share your local area prefix but are not in your contacts. Scammers spoof local prefixes to trick you into picking up.
-            </p>
-            <div className="pt-1">
-              <label className="text-[10px] font-semibold text-slate-400 block mb-1">
-                Your Mobile Number / Local Prefix (Optional):
-              </label>
-              <input
-                type="text"
-                value={settings.userPhoneNumber || ''}
-                onChange={(e) => onUpdateSettings({ ...settings, userPhoneNumber: e.target.value })}
-                placeholder="e.g. +91 98765 00000"
-                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-white placeholder-slate-600 focus:border-indigo-500 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {/* Feature 3: Ping-Back & Wangiri Scam Shield */}
-          <div className="rounded-2xl border border-white/5 bg-[#121822] p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Radio className="w-4 h-4 text-rose-400" />
-                <span className="text-xs font-bold text-white">Ping-Back & Wangiri Shield</span>
-              </div>
-              <input
-                type="checkbox"
-                checked={settings.pingBackShieldEnabled !== false}
-                onChange={(e) => onUpdateSettings({ ...settings, pingBackShieldEnabled: e.target.checked })}
-                className="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
-              />
-            </div>
-            <p className="text-[11px] leading-relaxed text-slate-400">
-              Detects suspicious 1-ring dropped calls from unknown or high-rate international lines. Automatically mutes ringers and flags calls with "1-Ring Callback Scam" alert.
-            </p>
+            <input
+              type="checkbox"
+              checked={settings.neighborSpoofEnabled !== false}
+              onChange={(e) => onUpdateSettings({ ...settings, neighborSpoofEnabled: e.target.checked })}
+              className="rounded bg-slate-800 border-slate-700 text-indigo-600 h-4 w-4 shrink-0 cursor-pointer"
+            />
           </div>
         </div>
       </div>

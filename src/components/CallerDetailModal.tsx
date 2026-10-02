@@ -263,7 +263,7 @@ export default function CallerDetailModal({
     if (!cleanDigits) return null;
     return (
       contacts.find((c) => {
-        const cClean = (c.number || '').replace(/\D/g, '');
+        const cClean = String(c.number || '').replace(/\D/g, '');
         const c10 = cClean.length >= 10 ? cClean.slice(-10) : cClean;
         return cClean === cleanDigits || (clean10 && c10 === clean10);
       }) || null

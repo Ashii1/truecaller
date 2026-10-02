@@ -31,7 +31,7 @@ export interface PingBackResult {
  * Normalizes digits strictly for prefix comparison
  */
 export function extractDigits(num: string): string {
-  return (num || '').replace(/\D/g, '');
+  return String(num || '').replace(/\D/g, '');
 }
 
 /**

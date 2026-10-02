@@ -791,98 +791,7 @@ export const PUBLIC_DIRECTORY_DATABASE: Record<string, PublicDirectoryRecord> = 
 };
 
 /**
- * Culturally authentic public directories for personal subscribers across India & Tamil Nadu
- */
-const TAMIL_FIRST_NAMES = [
-  'Karthik', 'Saravanan', 'Priya', 'Revathi', 'Aravind', 'Vignesh', 'Suresh', 'Kavitha',
-  'Meenakshi', 'Senthil', 'Anand', 'Lakshmi', 'Balaji', 'Deepa', 'Ramesh', 'Sangeetha',
-  'Mohan', 'Vijay', 'Divya', 'Hariharan', 'Jayashree', 'Murugan', 'Kaviarasan', 'Subashini',
-  'Ganesan', 'Nithya', 'Praveen', 'Santhosh', 'Bhuvaneshwari', 'Dinesh', 'Selvaraj', 'Malathi',
-  'Vasanth', 'Geetha', 'Radhakrishnan', 'Shankar', 'Shalini', 'Manikandan', 'Usha', 'Srinivasan',
-  'Ashiq', 'Mohammed', 'Ibrahim', 'Syed', 'Rajkumar', 'Govindaraj', 'Elango', 'Parvathi',
-  'Chithra', 'Venkatesan', 'Naveen', 'Swaminathan', 'Muthukumar', 'Hemalatha', 'Dhanalakshmi'
-];
-
-const TAMIL_LAST_NAMES = [
-  'Subramanian', 'Ramanathan', 'Swaminathan', 'Natarajan', 'Kumar', 'Sundaram', 'Nathan',
-  'Rajan', 'Narayanan', 'Chandran', 'Murali', 'Pillai', 'Rao', 'Venkatesh', 'Babu',
-  'Iyer', 'Chettiar', 'Thevar', 'Mudaliar', 'Gounder', 'Naidu', 'Sastry', 'Reddy', 'Menon',
-  'Pandian', 'Sethupathi', 'Marimuthu', 'Gopalakrishnan', 'Kalyanasundaram', 'Devanathan'
-];
-
-const TELUGU_FIRST_NAMES = [
-  'Srinivas', 'Lakshmi', 'Venkatesh', 'Kiran', 'Prasad', 'Swapna', 'Ravi', 'Anil',
-  'Harika', 'Naresh', 'Sowmya', 'Suresh', 'Bhavani', 'Mahesh', 'Divya', 'Chaitanya',
-  'Madhuri', 'Satyanarayana', 'Sireesha', 'Pavan', 'Kalyani', 'Nagarjuna', 'Ramana'
-];
-
-const TELUGU_LAST_NAMES = [
-  'Reddy', 'Rao', 'Naidu', 'Chowdary', 'Varma', 'Raju', 'Babu', 'Goud', 'Murthy', 'Sarma', 'Koppula', 'Avula'
-];
-
-const KERALA_FIRST_NAMES = [
-  'Rahul', 'Anjali', 'Suresh', 'Deepa', 'Vishnu', 'Reshma', 'Gopakumar', 'Athira',
-  'Akhil', 'Aparna', 'Mithun', 'Sneha', 'Arun', 'Devika', 'Jithin', 'Surya', 'Pranav'
-];
-
-const KERALA_LAST_NAMES = [
-  'Nair', 'Menon', 'Kurup', 'Pillai', 'Namboothiri', 'Varma', 'Panicker', 'Kaimal', 'Warrier', 'Marar'
-];
-
-const GENERAL_INDIAN_FIRST_NAMES = [
-  'Rajesh', 'Amit', 'Sneha', 'Vikram', 'Ananya', 'Rahul', 'Pooja', 'Deepak', 'Neha',
-  'Rohit', 'Sunita', 'Arjun', 'Sanjay', 'Swati', 'Karan', 'Shweta', 'Nikhil', 'Tanvi',
-  'Aditya', 'Ritu', 'Manish', 'Simran', 'Gaurav', 'Payal', 'Harish', 'Preeti', 'Vivek', 'Rani',
-  'Abhishek', 'Meera', 'Alok', 'Sonam', 'Pankaj', 'Komal', 'Siddharth', 'Bhavna', 'Ashutosh'
-];
-
-const GENERAL_INDIAN_LAST_NAMES = [
-  'Sharma', 'Patel', 'Verma', 'Gupta', 'Mehta', 'Singh', 'Joshi', 'Malhotra', 'Agarwal',
-  'Bansal', 'Singhal', 'Deshmukh', 'Chopra', 'Kapoor', 'Bhatia', 'Saxena', 'Trivedi', 'Shah',
-  'Mishra', 'Pandey', 'Tiwari', 'Yadav', 'Dubey', 'Choudhary', 'Tripathi', 'Goswami'
-];
-
-const LOCAL_BUSINESS_PREFIXES = [
-  'Sri', 'Shree', 'Annai', 'Cauvery', 'Meenakshi', 'Murugan', 'Balaji', 'City',
-  'Vasantham', 'Green', 'Royal', 'Star', 'Supreme', 'Apex', 'Premier', 'Golden'
-];
-
-const LOCAL_BUSINESS_TYPES = [
-  'Medical Stores & Pharmacy', 'Auto Works & Two-Wheeler Care', 'Traders & Groceries',
-  'Bakery & Sweets', 'Hardware & Electricals', 'Textiles & Readymade',
-  'Consultancy Services', 'Travels & Fleet Service', 'Electronics & Mobile Care',
-  'Real Estate & Builders', 'Clinic & Healthcare', 'Engineering Works',
-  'Supermarket & Mart', 'Agro Agency & Feeds', 'Jewellery & Silvers'
-];
-
-// Western / US Directories
-const US_FIRST_NAMES = [
-  'Michael', 'Christopher', 'Matthew', 'Joshua', 'David', 'James', 'Daniel', 'Robert',
-  'John', 'Joseph', 'Jennifer', 'Amanda', 'Jessica', 'Ashley', 'Sarah', 'Stephanie',
-  'Melissa', 'Nicole', 'Elizabeth', 'Heather', 'Andrew', 'Ryan', 'Brian', 'Jason'
-];
-
-const US_LAST_NAMES = [
-  'Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis',
-  'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson',
-  'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin', 'Lee', 'Perez', 'Thompson', 'White'
-];
-
-/**
- * Deterministic hash function for consistent phone number mapping
- */
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
-
-/**
  * Derives regional Indian Telecom Circle from standard mobile prefix allocations
- */
 function getIndianCircleFromPrefix(d10: string): { circle: string; state: string } {
   if (d10.length < 4) return { circle: 'Tamil Nadu', state: 'Tamil Nadu' };
   const pfx = d10.slice(0, 4);
@@ -1048,8 +957,8 @@ export function resolveFromPublicDirectory(
   rawNumber: string,
   circleOverride?: string,
   operatorOverride?: string
-): PublicDirectoryRecord {
-  const digits = (rawNumber || '').replace(/\D/g, '');
+): PublicDirectoryRecord | null {
+  const digits = String(rawNumber || '').replace(/\D/g, '');
   const clean10 = digits.length >= 10 ? digits.slice(-10) : digits;
 
   // 1. Direct match in curated public database (Emergency, Helplines, Utilities, Known Corporate/Spam)
@@ -1059,8 +968,8 @@ export function resolveFromPublicDirectory(
   if (PUBLIC_DIRECTORY_DATABASE[`+91${clean10}`]) return PUBLIC_DIRECTORY_DATABASE[`+91${clean10}`];
   if (PUBLIC_DIRECTORY_DATABASE[`0${clean10}`]) return PUBLIC_DIRECTORY_DATABASE[`0${clean10}`];
 
-  // 2. Pattern Matching: TRAI Registered Telemarketers (140 Series)
-  if (clean10.startsWith('140') || digits.startsWith('140') || rawNumber.includes('140')) {
+  // 2. Pattern Matching: TRAI Registered Telemarketers (140 Series - 10-digit allocations)
+  if (clean10.length === 10 && clean10.startsWith('140')) {
     return {
       number: rawNumber,
       name: 'TRAI Telemarketing Sales Agent',
@@ -1077,8 +986,8 @@ export function resolveFromPublicDirectory(
     };
   }
 
-  // 3. Pattern Matching: TRAI Transactional Service / Bank Alerts (160 Series)
-  if (clean10.startsWith('160') || digits.startsWith('160')) {
+  // 3. Pattern Matching: TRAI Transactional Service / Bank Alerts (160 Series - 10-digit allocations)
+  if (clean10.length === 10 && clean10.startsWith('160')) {
     return {
       number: rawNumber,
       name: 'TRAI Transactional Service Desk',
@@ -1094,8 +1003,8 @@ export function resolveFromPublicDirectory(
     };
   }
 
-  // 4. Pattern Matching: Toll-Free Helplines (1800-xxxx-xxxx)
-  if (clean10.startsWith('1800') || digits.startsWith('1800')) {
+  // 4. Pattern Matching: Toll-Free Helplines (1800-xxxx-xxxx - 10-11 digits)
+  if ((clean10.length === 10 || digits.length >= 10) && (clean10.startsWith('1800') || digits.startsWith('1800'))) {
     return {
       number: rawNumber,
       name: 'National Enterprise Customer Service',
@@ -1111,11 +1020,12 @@ export function resolveFromPublicDirectory(
     };
   }
 
-  // 5. Pattern Matching: High-Risk International One-Ring Scam (Wangiri Traps)
+  // 5. Pattern Matching: High-Risk International One-Ring Scam (Wangiri Traps - requires complete international number)
   const norm = rawNumber.trim();
   if (
-    norm.startsWith('+232') || norm.startsWith('+234') || norm.startsWith('+1900') ||
-    norm.startsWith('+223') || norm.startsWith('+247') || norm.startsWith('+269')
+    digits.length >= 8 &&
+    (norm.startsWith('+232') || norm.startsWith('+234') || norm.startsWith('+1900') ||
+     norm.startsWith('+223') || norm.startsWith('+247') || norm.startsWith('+269'))
   ) {
     return {
       number: rawNumber,
@@ -1133,120 +1043,7 @@ export function resolveFromPublicDirectory(
     };
   }
 
-  // 6. Comprehensive Public White-Pages & Regional Telecom Directory Resolution
-  const hash = hashString(digits);
-  const isIndianNumber =
-    (clean10.length === 10 && ['6', '7', '8', '9'].includes(clean10[0])) ||
-    digits.startsWith('91') ||
-    digits.startsWith('091') ||
-    (digits.startsWith('0') && clean10.length === 10) ||
-    digits.length === 10;
-  const isNorthAmerican =
-    !isIndianNumber &&
-    (clean10.length === 10 && (rawNumber.startsWith('+1') || rawNumber.startsWith('1') || ['2', '3', '4', '5', '6', '7', '8'].includes(clean10[0])));
-
-  // 6a. Indian Cellular & Landline Subscribers Directory
-  if (isIndianNumber) {
-    const d10 = clean10;
-    const { circle, state } = getIndianCircleFromPrefix(d10);
-    const resolvedCircle = circleOverride && circleOverride !== 'Cellular / Landline' && circleOverride !== 'Tamil Nadu' ? circleOverride : circle;
-    const resolvedOperator = operatorOverride || getIndianOperatorFromPrefix(d10);
-
-    // Is it a local trade / enterprise listing? (~18% of numbers in public directories)
-    const isBusiness = (hash % 100) < 18;
-
-    if (isBusiness) {
-      const bPfx = LOCAL_BUSINESS_PREFIXES[hash % LOCAL_BUSINESS_PREFIXES.length];
-      const bType = LOCAL_BUSINESS_TYPES[Math.floor(hash / 7) % LOCAL_BUSINESS_TYPES.length];
-      const bName = `${bPfx} ${bType}`;
-      return {
-        number: rawNumber,
-        name: bName,
-        isSpam: false,
-        isVerified: true,
-        spamScore: 0,
-        spamReportsCount: 0,
-        carrier: resolvedOperator,
-        location: `${resolvedCircle}, India`,
-        lineType: 'Landline',
-        tags: ['Verified Enterprise', 'Commercial Directory', resolvedOperator, resolvedCircle],
-        reputationText: `Verified Commercial Directory Listing: ${bName} (${resolvedCircle}).`,
-      };
-    }
-
-    // Personal white-pages subscriber entry: Select culturally authentic names matching circle
-    let firstName = '';
-    let lastName = '';
-
-    if (state.includes('Tamil Nadu') || resolvedCircle.includes('Tamil Nadu') || resolvedCircle.includes('Chennai')) {
-      firstName = TAMIL_FIRST_NAMES[hash % TAMIL_FIRST_NAMES.length];
-      lastName = TAMIL_LAST_NAMES[Math.floor(hash / 11) % TAMIL_LAST_NAMES.length];
-    } else if (state.includes('Telangana') || state.includes('AP')) {
-      firstName = TELUGU_FIRST_NAMES[hash % TELUGU_FIRST_NAMES.length];
-      lastName = TELUGU_LAST_NAMES[Math.floor(hash / 11) % TELUGU_LAST_NAMES.length];
-    } else if (state.includes('Kerala')) {
-      firstName = KERALA_FIRST_NAMES[hash % KERALA_FIRST_NAMES.length];
-      lastName = KERALA_LAST_NAMES[Math.floor(hash / 11) % KERALA_LAST_NAMES.length];
-    } else {
-      firstName = GENERAL_INDIAN_FIRST_NAMES[hash % GENERAL_INDIAN_FIRST_NAMES.length];
-      lastName = GENERAL_INDIAN_LAST_NAMES[Math.floor(hash / 11) % GENERAL_INDIAN_LAST_NAMES.length];
-    }
-
-    const subscriberName = `${firstName} ${lastName}`;
-    return {
-      number: rawNumber,
-      name: subscriberName,
-      isSpam: false,
-      isVerified: false,
-      spamScore: 0,
-      spamReportsCount: 0,
-      carrier: resolvedOperator,
-      location: `${resolvedCircle}, India`,
-      lineType: 'Mobile',
-      tags: ['Public Telecom Directory', resolvedOperator, resolvedCircle],
-      reputationText: `Public Directory Verified Subscriber: ${subscriberName} · ${resolvedOperator} (${resolvedCircle}).`,
-    };
-  }
-
-  // 6b. North American (US / Canada) Directory
-  if (isNorthAmerican || rawNumber.startsWith('+1')) {
-    const d10 = clean10;
-    const fName = US_FIRST_NAMES[hash % US_FIRST_NAMES.length];
-    const lName = US_LAST_NAMES[Math.floor(hash / 13) % US_LAST_NAMES.length];
-    const subscriberName = `${fName} ${lName}`;
-    const carrier = (hash % 3 === 0) ? 'Verizon Wireless' : (hash % 3 === 1) ? 'AT&T Mobility' : 'T-Mobile USA';
-
-    return {
-      number: rawNumber,
-      name: subscriberName,
-      isSpam: false,
-      isVerified: false,
-      spamScore: 0,
-      spamReportsCount: 0,
-      carrier: carrier,
-      location: 'United States',
-      lineType: 'Mobile',
-      tags: ['US Public White Pages', carrier, 'Verified Line'],
-      reputationText: `Public White-Pages Verified Identity: ${subscriberName} (${carrier}).`,
-    };
-  }
-
-  // 6c. International General White-Pages Directory
-  const intlFirst = GENERAL_INDIAN_FIRST_NAMES[hash % GENERAL_INDIAN_FIRST_NAMES.length];
-  const intlLast = GENERAL_INDIAN_LAST_NAMES[Math.floor(hash / 13) % GENERAL_INDIAN_LAST_NAMES.length];
-  const intlName = `${intlFirst} ${intlLast}`;
-
-  return {
-    number: rawNumber,
-    name: intlName,
-    isSpam: false,
-    isVerified: false,
-    spamScore: 0,
-    spamReportsCount: 0,
-    carrier: operatorOverride || 'International Cellular Transit',
-    location: circleOverride || 'Global Public Directory',
-    lineType: 'Mobile',
-    tags: ['Global Telecom Directory', 'Verified Subscriber'],
-    reputationText: `Public Global Telecom Directory Listing: ${intlName}.`,
-  };
+  // 6. Unknown / Unlisted Numbers:
+  // Strictly return null so that the application never fabricates synthetic or random personal names.
+  return null;
 }

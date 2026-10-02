@@ -425,9 +425,9 @@ export default function App(){
         if (payload?.phoneSurface) setPhoneOnly(true);
 
         if (isIncoming && number) {
-          const inDigits = number.replace(/\D/g, '');
+          const inDigits = String(number || '').replace(/\D/g, '');
           const savedContact = dataRef.current.contacts.find((c) => {
-            const cDigits = (c.number || '').replace(/\D/g, '');
+            const cDigits = String(c.number || '').replace(/\D/g, '');
             if (!cDigits || !inDigits) return false;
             return (
               cDigits === inDigits ||
@@ -515,7 +515,7 @@ export default function App(){
         const p = lookupCallShieldDirectory(number, dataRef.current.rules, dataRef.current.whitelist);
         if (incoming && (state === 'RINGING' || state === 'CONNECTING')) {
           const contactNums = dataRef.current.contacts.map((c) => c.number);
-          const cleanNumber = (num?: string | null) => (num || '').replace(/\D/g, '');
+          const cleanNumber = (num?: string | number | null) => String(num || '').replace(/\D/g, '');
           const inDigits = cleanNumber(number);
 
           // Priority lookup: saved contacts with national 10-digit matching
@@ -892,13 +892,13 @@ export default function App(){
   }, []);
 
   const handleUnblockNumber = useCallback((number: string) => {
-    const cleanNum = number.replace(/\D/g, '');
+    const cleanNum = String(number || '').replace(/\D/g, '');
     setRules(p => p.filter(r => {
-      const ruleVal = (r.value || '').replace(/\D/g, '');
+      const ruleVal = String(r.value || '').replace(/\D/g, '');
       return ruleVal !== cleanNum && r.value !== number;
     }));
     setCalls(p => p.map(c => {
-      const cNum = (c.number || '').replace(/\D/g, '');
+      const cNum = String(c.number || '').replace(/\D/g, '');
       if (cNum === cleanNum || c.number === number) {
         return {
           ...c,
@@ -960,9 +960,9 @@ export default function App(){
     setContacts(p => [c, ...p]);
     telecomBridge.createContact(n, nm);
     // Reflect immediately in recent calls history
-    const nDigits = n.replace(/\D/g, '');
+    const nDigits = String(n || '').replace(/\D/g, '');
     setCalls(prev => prev.map(call => {
-      const callDigits = (call.number || '').replace(/\D/g, '');
+      const callDigits = String(call.number || '').replace(/\D/g, '');
       if (callDigits === nDigits || (callDigits.length >= 7 && nDigits.length >= 7 && callDigits.slice(-10) === nDigits.slice(-10))) {
         return { ...call, callerName: nm, isContact: true };
       }
@@ -999,8 +999,8 @@ export default function App(){
 
       if (newItems.length > 0) {
         setCalls(callPrev => callPrev.map(call => {
-          const cDigits = (call.number || '').replace(/\D/g, '');
-          const match = newItems.find(ni => ni.number.replace(/\D/g, '') === cDigits);
+          const cDigits = String(call.number || '').replace(/\D/g, '');
+          const match = newItems.find(ni => String(ni.number || '').replace(/\D/g, '') === cDigits);
           if (match) {
             return { ...call, callerName: match.name, isContact: true };
           }
@@ -1025,10 +1025,10 @@ export default function App(){
       const updatedName = (updates.name ? updates.name.trim() : target?.name) || '';
       if (updatedNumber && updatedName) {
         telecomBridge.updateContact(id, updatedName, updatedNumber);
-        const nDigits = updatedNumber.replace(/\D/g, '');
-        const oldDigits = target ? target.number.replace(/\D/g, '') : '';
+        const nDigits = String(updatedNumber || '').replace(/\D/g, '');
+        const oldDigits = target ? String(target.number || '').replace(/\D/g, '') : '';
         setCalls(prev => prev.map(call => {
-          const callDigits = (call.number || '').replace(/\D/g, '');
+          const callDigits = String(call.number || '').replace(/\D/g, '');
           if (
             (nDigits && (callDigits === nDigits || (callDigits.length >= 7 && nDigits.length >= 7 && callDigits.slice(-10) === nDigits.slice(-10)))) ||
             (oldDigits && (callDigits === oldDigits || (callDigits.length >= 7 && oldDigits.length >= 7 && callDigits.slice(-10) === oldDigits.slice(-10))))
@@ -1048,9 +1048,9 @@ export default function App(){
       const target = p.find(c => c.id === id);
       if (target) {
         telecomBridge.deleteContact(id, target.number);
-        const nDigits = target.number.replace(/\D/g, '');
+        const nDigits = String(target.number || '').replace(/\D/g, '');
         setCalls(prev => prev.map(call => {
-          const callDigits = (call.number || '').replace(/\D/g, '');
+          const callDigits = String(call.number || '').replace(/\D/g, '');
           if (callDigits === nDigits || (callDigits.length >= 7 && nDigits.length >= 7 && callDigits.slice(-10) === nDigits.slice(-10))) {
             const prof = lookupCallShieldDirectory(call.number, rules, whitelist);
             return { ...call, callerName: prof.name || call.number, isContact: false };
@@ -1210,7 +1210,7 @@ export default function App(){
     setSelectedProfile(prof);
     const existingCall = cleanN.length >= 3
       ? calls.find(c => {
-          const cClean = (c.number || '').replace(/\D/g, '');
+          const cClean = String(c.number || '').replace(/\D/g, '');
           return Boolean(cClean && (cClean === cleanN || (cleanN.length >= 10 && cClean.endsWith(cleanN.slice(-10)))));
         })
       : null;
@@ -1330,9 +1330,9 @@ export default function App(){
       telecomBridge.answerCall(activeIncomingCall.callId);
     }
     if (activeIncomingCall) {
-      const rawDigits = (activeIncomingCall.number || '').replace(/\D/g, '');
+      const rawDigits = String(activeIncomingCall.number || '').replace(/\D/g, '');
       const matched = contacts.find((c) => {
-        const cDigits = (c.number || '').replace(/\D/g, '');
+        const cDigits = String(c.number || '').replace(/\D/g, '');
         if (!cDigits) return false;
         if (cDigits === rawDigits) return true;
         if (cDigits.length >= 7 && rawDigits.length >= 7) {
@@ -1497,7 +1497,7 @@ export default function App(){
          }}
        />} 
        <Navigation activeTab={activeTab} onChangeTab={(tab) => { setNavigationSignal(v => v + 1); navigateToTab(tab); }} spamCallsCount={spamCallsCount} activeRulesCount={activeRulesCount} assistantAlertsCount={3} phoneOnly={phoneOnly}/> 
-       <main className={phoneOnly ? "min-h-screen w-full animate-in fade-in duration-200" : "mx-auto w-full max-w-4xl px-3 py-3 pb-28 sm:pb-32 animate-in fade-in duration-200"}>
+       <main className={phoneOnly ? "min-h-screen w-full animate-in fade-in duration-200" : "mx-auto w-full max-w-md sm:max-w-lg px-2.5 sm:px-3 py-2 pb-24 sm:pb-28 animate-in fade-in duration-200"}>
         {activeTab==='dialer'&&<DialerTab contacts={contacts} recentCalls={calls} settings={settings} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onOpenCallerDetail={handleOpenCallerDetail} onSaveContact={(n,nm)=>handleUpdateCallerName(n,nm)} selectedSim={selectedSim} onChangeSim={setSelectedSim} initialNumber={dialerInitialNumber} density={density}/>} 
         {activeTab==='recents'&&<RecentsTab
           calls={calls}
