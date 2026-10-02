@@ -596,8 +596,8 @@ const DialerTab = memo(function DialerTab({
             }}
             inputMode="tel"
             autoComplete="off"
-            placeholder={t('dialer_name_or_number')}
-            className={`w-full bg-transparent text-center font-semibold text-white outline-none selection:bg-emerald-500/30 transition-all ${numberFontSizeClass} placeholder:text-slate-600 placeholder:font-light`}
+            placeholder=""
+            className={`w-full bg-transparent text-center font-semibold text-white outline-none selection:bg-emerald-500/30 transition-all ${numberFontSizeClass}`}
           />
 
           {/* Quick Clear 'X' Button */}

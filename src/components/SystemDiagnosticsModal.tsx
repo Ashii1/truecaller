@@ -913,8 +913,29 @@ export default function SystemDiagnosticsModal({
 
   if (inline) {
     return (
-      <div className="w-full space-y-5 animate-in fade-in duration-200">
-        {header}
+      <div className="w-full space-y-4 animate-in fade-in duration-150">
+        <div className="sticky top-0 z-20 -mx-2 sm:-mx-3 px-3 py-2.5 bg-[#070b12]/95 backdrop-blur-md border-b border-white/[0.08] flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 hover:text-white transition active:scale-95 cursor-pointer shrink-0 border border-white/[0.08]"
+              aria-label="Back"
+              title="Return to Settings"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-bold text-white tracking-tight truncate flex items-center gap-2">
+                <span>System Diagnostics & Health</span>
+                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                  Real-time
+                </span>
+              </h2>
+              <p className="text-[11px] text-slate-400 truncate">Hardware checks, pipeline tests, and database tables</p>
+            </div>
+          </div>
+        </div>
         {bodyContent}
       </div>
     );

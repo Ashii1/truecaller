@@ -16,7 +16,7 @@ import DataSourcesModal from './components/DataSourcesModal';
 import SystemDiagnosticsModal from './components/SystemDiagnosticsModal';
 import PermissionCenterModal from './components/PermissionCenterModal';
 import LockscreenBarrier from './components/LockscreenBarrier';
-import SettingsPage from './components/SettingsPage';
+import SettingsPage, { type SettingsSubPage } from './components/SettingsPage';
 import ModernInAppNotification, { InAppToastPayload } from './components/ModernInAppNotification';
 import { INITIAL_CONTACTS } from './data/defaultContacts';
 import AboutAppModal from './components/AboutAppModal';
@@ -79,6 +79,7 @@ export default function App(){
  const [tabHistory, setTabHistory] = useState<TabId[]>(['dialer']);
  const tabHistoryRef = useRef<TabId[]>(['dialer']);
  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+ const [settingsSubPage, setSettingsSubPage] = useState<SettingsSubPage>(null);
  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
  const [isThemeOpen, setIsThemeOpen] = useState(false);
  const [minimizedCaller, setMinimizedCaller] = useState<CallLogItem | null>(null);
@@ -1222,6 +1223,7 @@ export default function App(){
 
   const handleOpenSettings = useCallback((open: boolean) => {
     setIsSettingsOpen(open);
+    if (!open) setSettingsSubPage(null);
     if (open) pushNavState('modal', 'settings');
   }, [pushNavState]);
 
@@ -1231,28 +1233,37 @@ export default function App(){
   }, [pushNavState]);
 
   const handleOpenTheme = useCallback((open: boolean) => {
-    setIsThemeOpen(open);
-    if (open) pushNavState('modal', 'theme');
+    if (open) {
+      setSettingsSubPage('theme');
+      setIsSettingsOpen(true);
+      pushNavState('settings_subpage', 'theme');
+    } else {
+      setIsThemeOpen(false);
+    }
   }, [pushNavState]);
 
   const handleOpenPermissionCenter = useCallback(() => {
-    setIsPermissionCenterOpen(true);
-    pushNavState('modal', 'permission_center');
+    setSettingsSubPage('permissions');
+    setIsSettingsOpen(true);
+    pushNavState('settings_subpage', 'permission_center');
   }, [pushNavState]);
 
   const handleOpenInstallModal = useCallback(() => {
-    setIsInstallModalOpen(true);
-    pushNavState('modal', 'install');
+    setSettingsSubPage('install');
+    setIsSettingsOpen(true);
+    pushNavState('settings_subpage', 'install');
   }, [pushNavState]);
 
   const handleOpenDataSources = useCallback(() => {
-    setIsDataSourcesModalOpen(true);
-    pushNavState('modal', 'datasources');
+    setSettingsSubPage('data-sources');
+    setIsSettingsOpen(true);
+    pushNavState('settings_subpage', 'datasources');
   }, [pushNavState]);
 
   const handleOpenDiagnostics = useCallback(() => {
-    setIsDiagnosticsModalOpen(true);
-    pushNavState('modal', 'diagnostics');
+    setSettingsSubPage('diagnostics');
+    setIsSettingsOpen(true);
+    pushNavState('settings_subpage', 'diagnostics');
   }, [pushNavState]);
 
   const handleOpenFastReport = useCallback((n: string) => {
@@ -1440,7 +1451,11 @@ export default function App(){
        onToggleAutoCancel={() => setAutoCancelEnabled(v => !v)}
        density={density}
        onDensityChange={handleDensityChange}
-       onBack={() => setIsSettingsOpen(false)}
+       onBack={() => {
+         setIsSettingsOpen(false);
+         setSettingsSubPage(null);
+       }}
+       initialSubPage={settingsSubPage}
        contacts={contacts}
        calls={calls}
        rules={rules}
@@ -1556,10 +1571,7 @@ export default function App(){
   <ActiveCallModal session={activeCallSession} onEndCall={handleEndCall} lookupProfile={handleLookupProfile} onAddCall={n=>handleInitiateCall(n)} powerButtonEndsCall={Boolean(settings.powerButtonEndsCall)} isMinimized={isOngoingCallMinimized} onToggleMinimize={setIsOngoingCallMinimized}/>
   <FastReportModal isOpen={isFastReportOpen} initialNumber={fastReportNumber} onClose={()=>setIsFastReportOpen(false)} onSubmitReport={handleReportSpam}/>
   <DisputeModal isOpen={isDisputeOpen} initialNumber={disputeNumber} initialName={disputeName} onClose={()=>setIsDisputeOpen(false)} onSubmitDispute={()=>{setIsDisputeOpen(false);showToast('Dispute request saved for review','success')}}/>
-  <DataSourcesModal isOpen={isDataSourcesModalOpen} onClose={()=>setIsDataSourcesModalOpen(false)} onClearAllData={handleClearAllData}/>
-  <SystemDiagnosticsModal isOpen={isDiagnosticsModalOpen} onClose={()=>setIsDiagnosticsModalOpen(false)} contacts={contacts} calls={calls} rules={rules} whitelist={whitelist} settings={settings} timelineEvents={timelineEvents} onResetToCleanState={handleClearAllData} onImportAllData={handleImportAllData} isDefaultDialer={isDefaultDialer} onRequestDefaultDialer={handleRequestDefaultDialer}/>
   <PermissionCenterModal isOpen={isPermissionCenterOpen} onClose={()=>setIsPermissionCenterOpen(false)} settings={settings} onUpdateSettings={setSettings} isDefaultDialer={isDefaultDialer} onRequestDefaultDialer={handleRequestDefaultDialer} onSyncContacts={handleSyncDeviceData}/>
-  <InstallApkModal isOpen={isInstallModalOpen} onClose={()=>setIsInstallModalOpen(false)} deferredPrompt={deferredPrompt} onTriggerInstall={handleTriggerInstall}/>
   {isDeviceLocked && !activeCallSession && (
     <LockscreenBarrier
       onUnlockSuccess={() => setIsDeviceLocked(false)}
@@ -1570,24 +1582,6 @@ export default function App(){
     notification={toastMessage}
     onDismiss={() => setToastMessage(null)}
     onOpenNotificationPanel={() => setIsNotificationsOpen(true)}
-  />
-  <AboutAppModal
-    isOpen={isAboutOpen}
-    onClose={() => setIsAboutOpen(false)}
-    onOpenPrivacyTerms={(tab) => {
-      setIsAboutOpen(false);
-      setPrivacyTermsTab(tab || 'privacy');
-      setIsPrivacyTermsOpen(true);
-    }}
-  />
-  <PrivacyTermsModal
-    isOpen={isPrivacyTermsOpen}
-    onClose={() => setIsPrivacyTermsOpen(false)}
-    defaultTab={privacyTermsTab}
-  />
-  <ThemeCustomizerModal
-    isOpen={isThemeOpen}
-    onClose={() => setIsThemeOpen(false)}
   />
  </div>;
 }

@@ -40,9 +40,6 @@ import {
 } from 'lucide-react';
 import { CallLogItem, DisplayDensity, IncomingCallState, ShieldSettings, ActiveCallSession } from '../types';
 import { telecomBridge } from '../services/telephony/telecomBridge';
-import ThemeCustomizerModal from './ThemeCustomizerModal';
-import AboutAppModal from './AboutAppModal';
-import PrivacyTermsModal from './PrivacyTermsModal';
 import { useI18n } from '../i18n/LanguageContext';
 import { formatPhoneNumber } from '../utils/spamEngine';
 import { resolveFromPublicDirectory, isGenericOrPhoneNumber } from '../utils/publicDirectory';
@@ -188,9 +185,6 @@ function Header({
 
   const [privacy, setPrivacy] = useState<PrivacySettings>(readPrivacySettings);
   const [liveCallDuration, setLiveCallDuration] = useState(0);
-  const [showAbout, setShowAbout] = useState(false);
-  const [showPrivacyTerms, setShowPrivacyTerms] = useState(false);
-  const [privacyTermsTab, setPrivacyTermsTab] = useState<'privacy' | 'terms'>('privacy');
 
   useEffect(() => {
     if (!activeCallSession) {
@@ -815,27 +809,6 @@ function Header({
         </div>,
         document.body
       )}
-
-      {/* Theme Customizer Modal */}
-      <ThemeCustomizerModal isOpen={showTheme} onClose={() => setShowTheme(false)} />
-
-      {/* About App Modal */}
-      <AboutAppModal
-        isOpen={showAbout}
-        onClose={() => setShowAbout(false)}
-        onOpenPrivacyTerms={(tab) => {
-          setShowAbout(false);
-          setPrivacyTermsTab(tab || 'privacy');
-          setShowPrivacyTerms(true);
-        }}
-      />
-
-      {/* Privacy Policy & Terms Modal */}
-      <PrivacyTermsModal
-        isOpen={showPrivacyTerms}
-        onClose={() => setShowPrivacyTerms(false)}
-        defaultTab={privacyTermsTab}
-      />
     </>
   );
 }

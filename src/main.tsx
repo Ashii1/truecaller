@@ -76,7 +76,14 @@ console.warn = (...args: any[]) => {
 
 window.addEventListener('error', (event) => {
   const msg = String(event.error?.message || event.message || '');
-  if (msg.includes('vite') || msg.includes('websocket') || msg.includes('ResizeObserver')) {
+  if (
+    msg.includes('vite') ||
+    msg.includes('websocket') ||
+    msg.includes('ResizeObserver') ||
+    msg.includes('SecurityError') ||
+    msg.includes('cross-origin frame') ||
+    msg.includes('Blocked a frame')
+  ) {
     event.preventDefault();
     return;
   }
@@ -96,7 +103,9 @@ window.addEventListener('unhandledrejection', (event) => {
     reasonStr.includes('AbortError') ||
     reasonStr.includes('Failed to fetch') ||
     reasonStr.includes('AudioContext') ||
-    reasonStr.includes('play()')
+    reasonStr.includes('play()') ||
+    reasonStr.includes('Blocked a frame') ||
+    reasonStr.includes('cross-origin frame')
   ) {
     event.preventDefault();
     return;
@@ -114,7 +123,14 @@ try {
 
 const isAndroidWrapper = typeof window !== 'undefined' &&
   typeof (window as Window & { AndroidTelecomBridge?: unknown }).AndroidTelecomBridge !== 'undefined';
-const isIframe = typeof window !== 'undefined' && window.self !== window.top;
+
+let isIframe = false;
+try {
+  isIframe = typeof window !== 'undefined' && window.self !== window.top;
+} catch {
+  // If accessing window.top throws a SecurityError, the app is running in a cross-origin iframe
+  isIframe = true;
+}
 
 if (!isAndroidWrapper && !isIframe && 'serviceWorker' in navigator) {
   try {

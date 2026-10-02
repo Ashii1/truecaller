@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import {
   ArrowLeft,
   Bell,
@@ -86,9 +86,12 @@ export interface SettingsPageProps {
   onImportAllData?: (data: any) => void;
   deferredPrompt?: any;
   onTriggerInstall?: () => void;
+  initialSubPage?: ActiveModal;
 }
 
-type ActiveModal =
+export type SettingsSubPage = ActiveModal;
+
+export type ActiveModal =
   | null
   | 'theme'
   | 'permissions'
@@ -120,17 +123,51 @@ export default function SettingsPage({
   onImportAllData,
   deferredPrompt,
   onTriggerInstall,
+  initialSubPage,
 }: SettingsPageProps) {
   const { t, language, setLanguage } = useI18n();
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeModal, setActiveModal] = useState<ActiveModal>(null);
+  const [subPageStack, setSubPageStack] = useState<ActiveModal[]>(() => (initialSubPage ? [initialSubPage] : []));
+  const activeModal = subPageStack.length > 0 ? subPageStack[subPageStack.length - 1] : null;
+  const scrollPositionRef = useRef<number>(0);
+
+  // Sync with initialSubPage prop
+  useEffect(() => {
+    if (initialSubPage) {
+      setSubPageStack([initialSubPage]);
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  }, [initialSubPage]);
+
+  const openSubPage = (page: ActiveModal) => {
+    if (subPageStack.length === 0) {
+      scrollPositionRef.current = window.scrollY || document.documentElement.scrollTop || 0;
+    }
+    setSubPageStack((prev) => [...prev, page]);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
+
+  const closeSubPage = () => {
+    setSubPageStack((prev) => {
+      const next = prev.slice(0, -1);
+      if (next.length === 0) {
+        setTimeout(() => {
+          window.scrollTo({ top: scrollPositionRef.current, behavior: 'instant' });
+        }, 15);
+      } else {
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      }
+      return next;
+    });
+  };
+
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   // Handle hardware / gesture back navigation
   useEffect(() => {
     const handleBack = (e: any) => {
-      if (activeModal !== null) {
-        setActiveModal(null);
+      if (subPageStack.length > 0) {
+        closeSubPage();
         e.detail?.handled?.();
       } else {
         onBack();
@@ -139,7 +176,7 @@ export default function SettingsPage({
     };
     window.addEventListener('callshield_back_request', handleBack);
     return () => window.removeEventListener('callshield_back_request', handleBack);
-  }, [activeModal, onBack]);
+  }, [subPageStack, onBack]);
 
   const updateShieldSetting = <K extends keyof ShieldSettings>(key: K, value: ShieldSettings[K]) => {
     if (onUpdateSettings) {
@@ -173,72 +210,74 @@ export default function SettingsPage({
   if (activeModal !== null) {
     const effectiveSettings = settings || INITIAL_SETTINGS;
     return (
-      <div className="mx-auto w-full max-w-md sm:max-w-lg px-2.5 sm:px-3 py-2 pb-24 sm:pb-28 animate-in fade-in duration-150">
-        {activeModal === 'theme' && (
-          <ThemeCustomizerModal isOpen={true} onClose={() => setActiveModal(null)} inline={true} />
-        )}
-        {activeModal === 'permissions' && (
-          <PermissionCenterModal
-            isOpen={true}
-            onClose={() => setActiveModal(null)}
-            settings={effectiveSettings}
-            onUpdateSettings={(onUpdateSettings || (() => {})) as any}
-            isDefaultDialer={Boolean(isDefaultDialer)}
-            onRequestDefaultDialer={onRequestDefaultDialer || (() => {})}
-            onSyncContacts={onSyncDatabase || (() => {})}
-            inline={true}
-          />
-        )}
-        {activeModal === 'diagnostics' && (
-          <SystemDiagnosticsModal
-            isOpen={true}
-            onClose={() => setActiveModal(null)}
-            contacts={contacts}
-            calls={calls}
-            rules={rules}
-            whitelist={whitelist}
-            settings={effectiveSettings}
-            timelineEvents={timelineEvents}
-            onResetToCleanState={onClearAllData || (() => {})}
-            onImportAllData={onImportAllData || (() => {})}
-            isDefaultDialer={isDefaultDialer}
-            onRequestDefaultDialer={onRequestDefaultDialer}
-            inline={true}
-          />
-        )}
-        {activeModal === 'data-sources' && (
-          <DataSourcesModal
-            isOpen={true}
-            onClose={() => setActiveModal(null)}
-            onClearAllData={onClearAllData || (() => {})}
-            inline={true}
-          />
-        )}
-        {activeModal === 'install' && (
-          <InstallApkModal
-            isOpen={true}
-            onClose={() => setActiveModal(null)}
-            deferredPrompt={deferredPrompt}
-            onTriggerInstall={onTriggerInstall || (() => {})}
-            inline={true}
-          />
-        )}
-        {activeModal === 'about' && (
-          <AboutAppModal
-            isOpen={true}
-            onClose={() => setActiveModal(null)}
-            onOpenPrivacyTerms={(tab) => setActiveModal(tab === 'terms' ? 'terms' : 'privacy')}
-            inline={true}
-          />
-        )}
-        {(activeModal === 'privacy' || activeModal === 'terms') && (
-          <PrivacyTermsModal
-            isOpen={true}
-            onClose={() => setActiveModal(null)}
-            defaultTab={activeModal === 'terms' ? 'terms' : 'privacy'}
-            inline={true}
-          />
-        )}
+      <div className="min-h-screen bg-[#070b12] text-white pb-28 animate-in fade-in duration-150">
+        <div className="mx-auto w-full max-w-md sm:max-w-lg px-2.5 sm:px-3 py-2">
+          {activeModal === 'theme' && (
+            <ThemeCustomizerModal isOpen={true} onClose={closeSubPage} inline={true} />
+          )}
+          {activeModal === 'permissions' && (
+            <PermissionCenterModal
+              isOpen={true}
+              onClose={closeSubPage}
+              settings={effectiveSettings}
+              onUpdateSettings={(onUpdateSettings || (() => {})) as any}
+              isDefaultDialer={Boolean(isDefaultDialer)}
+              onRequestDefaultDialer={onRequestDefaultDialer || (() => {})}
+              onSyncContacts={onSyncDatabase || (() => {})}
+              inline={true}
+            />
+          )}
+          {activeModal === 'diagnostics' && (
+            <SystemDiagnosticsModal
+              isOpen={true}
+              onClose={closeSubPage}
+              contacts={contacts}
+              calls={calls}
+              rules={rules}
+              whitelist={whitelist}
+              settings={effectiveSettings}
+              timelineEvents={timelineEvents}
+              onResetToCleanState={onClearAllData || (() => {})}
+              onImportAllData={onImportAllData || (() => {})}
+              isDefaultDialer={isDefaultDialer}
+              onRequestDefaultDialer={onRequestDefaultDialer}
+              inline={true}
+            />
+          )}
+          {activeModal === 'data-sources' && (
+            <DataSourcesModal
+              isOpen={true}
+              onClose={closeSubPage}
+              onClearAllData={onClearAllData || (() => {})}
+              inline={true}
+            />
+          )}
+          {activeModal === 'install' && (
+            <InstallApkModal
+              isOpen={true}
+              onClose={closeSubPage}
+              deferredPrompt={deferredPrompt}
+              onTriggerInstall={onTriggerInstall || (() => {})}
+              inline={true}
+            />
+          )}
+          {activeModal === 'about' && (
+            <AboutAppModal
+              isOpen={true}
+              onClose={closeSubPage}
+              onOpenPrivacyTerms={(tab) => openSubPage(tab === 'terms' ? 'terms' : 'privacy')}
+              inline={true}
+            />
+          )}
+          {(activeModal === 'privacy' || activeModal === 'terms') && (
+            <PrivacyTermsModal
+              isOpen={true}
+              onClose={closeSubPage}
+              defaultTab={activeModal === 'terms' ? 'terms' : 'privacy'}
+              inline={true}
+            />
+          )}
+        </div>
       </div>
     );
   }
@@ -575,7 +614,7 @@ export default function SettingsPage({
               iconBg="bg-slate-500/10"
               title="Data Sources & Public Attribution"
               subtitle="TRAI Registry, OpenCorporates, and Public Telecom"
-              onClick={() => setActiveModal('data-sources')}
+              onClick={() => openSubPage('data-sources')}
             />
           </SettingsGroup>
         )}
@@ -589,7 +628,7 @@ export default function SettingsPage({
               iconBg="bg-emerald-500/10"
               title="Permissions Center"
               subtitle="Telecom role, Call log & Notifications"
-              onClick={() => setActiveModal('permissions')}
+              onClick={() => openSubPage('permissions')}
             />
 
             {/* System Diagnostics */}
@@ -598,7 +637,7 @@ export default function SettingsPage({
               iconBg="bg-blue-500/10"
               title="System Diagnostics & Health"
               subtitle="Hardware checks, database tables, and metrics"
-              onClick={() => setActiveModal('diagnostics')}
+              onClick={() => openSubPage('diagnostics')}
             />
 
             {/* Theme Customizer */}
@@ -607,7 +646,7 @@ export default function SettingsPage({
               iconBg="bg-fuchsia-500/10"
               title="Theme & Accent Color"
               subtitle="Dark mode, contrast, and color palette"
-              onClick={() => setActiveModal('theme')}
+              onClick={() => openSubPage('theme')}
             />
 
             {/* Display Density */}
@@ -683,7 +722,7 @@ export default function SettingsPage({
                 iconBg="bg-emerald-500/10"
                 title="Install Application"
                 subtitle="Add to home screen or install native Android package"
-                onClick={() => setActiveModal('install')}
+                onClick={() => openSubPage('install')}
               />
             )}
 
@@ -693,7 +732,7 @@ export default function SettingsPage({
               iconBg="bg-slate-500/10"
               title="About VigilShield"
               subtitle="Version 1.5.7 · License & Telecom Compliance"
-              onClick={() => setActiveModal('about')}
+              onClick={() => openSubPage('about')}
             />
 
             {/* Privacy Policy */}
@@ -702,7 +741,7 @@ export default function SettingsPage({
               iconBg="bg-slate-500/10"
               title="Privacy Policy & Terms"
               subtitle="Device-local processing, zero data harvesting"
-              onClick={() => setActiveModal('privacy')}
+              onClick={() => openSubPage('privacy')}
             />
 
             {/* Reset All Data */}

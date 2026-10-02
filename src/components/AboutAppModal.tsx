@@ -102,25 +102,23 @@ export default function AboutAppModal({ isOpen, onClose, onOpenPrivacyTerms, inl
 
   if (inline) {
     return (
-      <div className="w-full space-y-5 animate-in fade-in duration-200">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-2xl border border-blue-500/30 bg-blue-500/10 text-blue-400">
-              <Shield className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-lg font-black text-white">{t('about_us')}</h2>
-              <p className="text-xs text-slate-400">CallShield Production Telephony Engine</p>
+      <div className="w-full space-y-4 animate-in fade-in duration-150">
+        <div className="sticky top-0 z-20 -mx-2 sm:-mx-3 px-3 py-2.5 bg-[#070b12]/95 backdrop-blur-md border-b border-white/[0.08] flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 hover:text-white transition active:scale-95 cursor-pointer shrink-0 border border-white/[0.08]"
+              aria-label="Back"
+              title="Return to Settings"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-bold text-white tracking-tight truncate">{t('about_us')}</h2>
+              <p className="text-[11px] text-slate-400 truncate">CallShield Production Telephony Engine</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white transition active:scale-95"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span>Settings</span>
-          </button>
         </div>
         {content}
       </div>
