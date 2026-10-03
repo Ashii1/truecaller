@@ -1267,36 +1267,54 @@ export function lookupCallShieldDirectory(
     });
   }
 
-  // 2. Check User Block Rules
+  // 2. Check User Block Rules & Customized Series
   const rule = rules.find((r) => {
     if (!r.enabled) return false;
     const normVal = normalizePhoneNumber(r.value);
     const digitsVal = r.value.replace(/\D/g, '');
     const digitsNum = norm.replace(/\D/g, '');
+    const rawDigits = phoneNumber.replace(/\D/g, '');
 
-    if (r.matchType === 'EXACT') return normVal === norm || r.value === phoneNumber;
-    if (r.matchType === 'PREFIX') return digitsNum.length >= 10 && (norm.startsWith(normVal) || (digitsVal && digitsNum.startsWith(digitsVal)));
+    if (r.matchType === 'EXACT') return normVal === norm || r.value === phoneNumber || (digitsVal && digitsVal === digitsNum);
+    if (r.matchType === 'PREFIX') {
+      const pureDigits = digitsNum.startsWith('91') && digitsNum.length === 12 ? digitsNum.slice(2) : digitsNum;
+      const cleanPrefix = digitsVal || r.value.replace(/\D/g, '');
+      const matchesPrefix =
+        norm.startsWith(normVal) ||
+        (Boolean(cleanPrefix) && (pureDigits.startsWith(cleanPrefix) || digitsNum.startsWith(cleanPrefix) || rawDigits.startsWith(cleanPrefix)));
+
+      if (!matchesPrefix) return false;
+      if (r.seriesLength && pureDigits.length !== r.seriesLength && digitsNum.length !== r.seriesLength && rawDigits.length !== r.seriesLength) {
+        return false;
+      }
+      return true;
+    }
     return false;
   });
 
   if (rule) {
+    const isSeries = rule.matchType === 'PREFIX' || rule.value.startsWith('140') || rule.value.startsWith('160');
     return cacheAndReturn({
       number: phoneNumber,
       name: rule.label,
       spamScore: 98,
+      riskLevel: 'HIGH_RISK',
       isSpam: true,
       spamReportsCount: 3840 + (rule.hitCount * 12),
       spamCategory: rule.category,
-      topTags: [rule.category, 'Robocall Harassment', 'Do Not Answer'],
-      carrier: meta.carrier,
-      location: meta.location,
-      lineType: 'VoIP',
+      spamReason: rule.notes || `Strictly blocked by active series rule: ${rule.label}`,
+      topTags: [rule.category, isSeries ? 'Series Block' : 'Custom Rule', 'Firewall Auto-Drop'],
+      carrier: isSeries ? 'Commercial Telemarketing Band' : meta.carrier,
+      location: meta.location || 'India (Commercial Band)',
+      lineType: isSeries ? 'Telemarketing Series' : 'VoIP',
       isVerified: false,
+      matchedRule: rule,
+      isStrictBlocked: Boolean(rule.isStrictBlock),
       communityComments: [
         {
-          author: 'CallShield User #9421',
-          text: `Blocked by rule: ${rule.label}. Repeated unwanted calls.`,
-          date: 'Recent',
+          author: 'CallShield Firewall Engine',
+          text: `Matched active rule: ${rule.label} (${rule.value}). Instant ring suppression active.`,
+          date: 'Active Rule',
         },
       ],
     });

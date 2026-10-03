@@ -12,6 +12,8 @@ export interface InAppToastPayload {
   text: string;
   type: 'info' | 'error' | 'success';
   title?: string;
+  actionLabel?: string;
+  onAction?: () => void;
 }
 
 interface ModernInAppNotificationProps {
@@ -82,7 +84,7 @@ export default function ModernInAppNotification({
     <div
       className="fixed left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-md z-[99999] pointer-events-none select-none transition-all duration-300"
       style={{
-        top: 'max(4.5rem, calc(env(safe-area-inset-top, 0px) + 4rem))',
+        bottom: 'max(5.25rem, calc(env(safe-area-inset-bottom, 0px) + 5rem))',
       }}
     >
       <div
@@ -105,7 +107,7 @@ export default function ModernInAppNotification({
           opacity: isSwipingOut ? 0 : Math.max(0.15, 1 - Math.abs(dragX) / 160),
           transition: isDraggingRef.current ? 'none' : 'all 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
-        className={`pointer-events-auto cursor-pointer rounded-2xl border px-3.5 py-2.5 shadow-2xl backdrop-blur-2xl transition-all duration-200 animate-in fade-in slide-in-from-top-3 flex items-center justify-between gap-3 active:scale-[0.99] ${
+        className={`pointer-events-auto cursor-pointer rounded-2xl border px-3.5 py-2.5 shadow-2xl backdrop-blur-2xl transition-all duration-200 animate-in fade-in slide-in-from-bottom-4 flex items-center justify-between gap-3 active:scale-[0.99] ${
           isError
             ? 'border-rose-500/40 bg-[#160b11]/98 text-rose-100 shadow-rose-950/80 ring-1 ring-rose-500/20'
             : isSuccess
@@ -148,8 +150,22 @@ export default function ModernInAppNotification({
           </div>
         </div>
 
-        {/* Right Side: Close Button with >=36px hitbox */}
-        <div className="flex items-center gap-1 shrink-0 text-slate-400">
+        {/* Right Side: Action Button & Close Button */}
+        <div className="flex items-center gap-2 shrink-0">
+          {notification.actionLabel && notification.onAction && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                notification.onAction!();
+                onDismiss();
+              }}
+              className="rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-[11px] px-2.5 py-1.5 shadow-sm transition active:scale-95 cursor-pointer whitespace-nowrap"
+            >
+              {notification.actionLabel}
+            </button>
+          )}
+
           <button
             type="button"
             onClick={(e) => {

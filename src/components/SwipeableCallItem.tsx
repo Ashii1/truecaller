@@ -17,6 +17,8 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
+  BellOff,
+  ShieldBan,
 } from 'lucide-react';
 import {
   CallLogItem,
@@ -58,6 +60,7 @@ interface SwipeableCallItemProps {
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
   onLongPressSelect?: (id: string) => void;
+  onViewBlockedDetails?: (call: CallLogItem) => void;
 }
 
 const SWIPE_THRESHOLD = 70;
@@ -87,6 +90,7 @@ function SwipeableCallItem({
   isSelected = false,
   onToggleSelect,
   onLongPressSelect,
+  onViewBlockedDetails,
 }: SwipeableCallItemProps) {
   const x = useMotionValue(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -322,10 +326,15 @@ function SwipeableCallItem({
       onToggleSelect?.(callId);
       return;
     }
+    if ((item.isStrictBlocked || callType === 'BLOCKED_CANCELLED') && onViewBlockedDetails) {
+      onViewBlockedDetails(item);
+      return;
+    }
     onSelectCall(item);
   };
 
-  const isMissed = callType === 'MISSED';
+  const isSilenced = Boolean(item.isSilenced);
+  const isMissed = callType === 'MISSED' && !isSilenced;
 
   return (
     <div
@@ -436,8 +445,12 @@ function SwipeableCallItem({
           className={`grid shrink-0 place-items-center rounded-full transition-all cursor-pointer ${
             isCompact ? 'h-9 w-9 text-xs' : 'h-10 w-10 text-sm'
           } ${
-            isBlockedFeedback
+            item.isStrictBlocked || callType === 'BLOCKED_CANCELLED'
+              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/35 ring-1 ring-rose-500/20'
+              : isBlockedFeedback
               ? 'bg-amber-400/20 text-amber-300 ring-1 ring-amber-400/30'
+              : isSilenced
+              ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30 ring-1 ring-blue-500/20'
               : isMissed
               ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
               : isSpam
@@ -445,8 +458,12 @@ function SwipeableCallItem({
               : 'bg-white/[0.06] text-slate-300 border border-white/[0.08]'
           }`}
         >
-          {isBlockedFeedback ? (
+          {item.isStrictBlocked || callType === 'BLOCKED_CANCELLED' ? (
+            <ShieldBan className="h-4 w-4 text-rose-400" />
+          ) : isBlockedFeedback ? (
             <Ban className="h-4 w-4 text-amber-300" />
+          ) : isSilenced ? (
+            <BellOff className="h-4 w-4 text-blue-400" />
           ) : (
             iconFor(callType)
           )}
@@ -471,8 +488,12 @@ function SwipeableCallItem({
               className={`truncate font-semibold tracking-tight transition-colors ${
                 isCompact ? 'text-xs' : 'text-sm'
               } ${
-                isBlockedFeedback
+                item.isStrictBlocked || callType === 'BLOCKED_CANCELLED'
+                  ? 'text-rose-300 font-bold'
+                  : isBlockedFeedback
                   ? 'text-amber-300'
+                  : isSilenced
+                  ? 'text-blue-300 font-semibold'
                   : isMissed
                   ? 'text-amber-300 font-bold'
                   : isSpam
@@ -483,8 +504,18 @@ function SwipeableCallItem({
               {name}
             </span>
 
-            {isBlockedFeedback ? (
-              <span className="text-[11px] font-bold text-amber-400">· Blocked</span>
+            {item.isStrictBlocked ? (
+              <span className="flex items-center gap-0.5 text-[10.5px] font-bold text-rose-400 bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.2 rounded-md">
+                <ShieldBan className="h-2.5 w-2.5 shrink-0" />
+                <span>Strictly Blocked</span>
+              </span>
+            ) : callType === 'BLOCKED_CANCELLED' || isBlockedFeedback ? (
+              <span className="text-[11px] font-bold text-rose-400">· Blocked</span>
+            ) : isSilenced ? (
+              <span className="flex items-center gap-1 text-[11px] font-semibold text-blue-400">
+                <BellOff className="h-3 w-3 shrink-0" />
+                <span>Silenced</span>
+              </span>
             ) : isSpam ? (
               <span className="flex items-center gap-0.5 text-[11px] font-semibold text-rose-400">
                 <ShieldAlert className="h-3 w-3 shrink-0" />
@@ -543,7 +574,12 @@ function SwipeableCallItem({
             )}
             <span>{p.location || 'India'}</span>
             <span className="text-slate-600">·</span>
-            {callType === 'MISSED' ? (
+            {isSilenced ? (
+              <span className="font-semibold text-blue-400 flex items-center gap-1">
+                <BellOff className="h-3 w-3 shrink-0" />
+                Silenced
+              </span>
+            ) : callType === 'MISSED' ? (
               <span className="font-semibold text-amber-400">{t('missed') || 'Missed'}</span>
             ) : callType === 'BLOCKED_CANCELLED' ? (
               <span className="font-semibold text-rose-400">{t('blocked') || 'Blocked'}</span>
@@ -589,6 +625,22 @@ function SwipeableCallItem({
             <div className={`grid h-8 w-8 place-items-center rounded-full ${showInlineRecording ? 'bg-emerald-500 text-slate-950 font-bold' : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'}`}>
               <Disc className={`animate-pulse h-4 w-4`} />
             </div>
+          </button>
+        )}
+
+        {/* For blocked calls, show direct "Details" button */}
+        {(item.isStrictBlocked || callType === 'BLOCKED_CANCELLED') && onViewBlockedDetails && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewBlockedDetails(item);
+            }}
+            className="flex min-h-[36px] items-center justify-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold text-rose-300 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 active:scale-95 transition cursor-pointer shrink-0"
+            title="View Blocked Call Details"
+          >
+            <ShieldBan className="h-3.5 w-3.5" />
+            <span>Details</span>
           </button>
         )}
 

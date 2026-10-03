@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import {
   ArrowLeft,
   Bell,
+  BellOff,
   Check,
   ChevronRight,
   Database,
@@ -365,7 +366,7 @@ export default function SettingsPage({
         </div>
 
         {/* 1. CALLER ID & SPAM PROTECTION */}
-        {matchesSearch('protection spam shield firewall call block scam telemarketing trai') && (
+        {matchesSearch('protection spam shield firewall call block scam telemarketing trai silence unknown contacts non-contact') && (
           <SettingsGroup title="Spam & Caller ID">
             {/* Master Shield */}
             <SettingRow
@@ -409,6 +410,16 @@ export default function SettingsPage({
                 })}
               </div>
             </div>
+
+            {/* Silence Calls Not in Contacts */}
+            <SettingRow
+              icon={<BellOff className="h-4 w-4 text-blue-400" />}
+              iconBg="bg-blue-500/10"
+              title="Silence Unknown Callers"
+              subtitle="Automatically silence calls from numbers not in your contacts list"
+              checked={Boolean(settings?.silenceCallsNotInContacts)}
+              onToggle={(v) => updateShieldSetting('silenceCallsNotInContacts', v)}
+            />
 
             {/* Auto Drop Spam */}
             <SettingRow
@@ -536,6 +547,16 @@ export default function SettingsPage({
               subtitle="Turn phone face down to mute incoming ringer"
               checked={settings?.flipToSilence !== false}
               onToggle={(v) => updateShieldSetting('flipToSilence', v)}
+            />
+
+            {/* Silence Calls Not in Contacts */}
+            <SettingRow
+              icon={<BellOff className="h-4 w-4 text-blue-400" />}
+              iconBg="bg-blue-500/10"
+              title="Silence Non-Contacts"
+              subtitle="Automatically silence calls from numbers not in contacts"
+              checked={Boolean(settings?.silenceCallsNotInContacts)}
+              onToggle={(v) => updateShieldSetting('silenceCallsNotInContacts', v)}
             />
 
             {/* Volume Key Action */}

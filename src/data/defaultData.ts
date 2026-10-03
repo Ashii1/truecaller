@@ -41,6 +41,8 @@ export const INITIAL_SETTINGS: ShieldSettings = {
   keypadHapticFeedback: true,
   keypadHapticIntensity: 'STANDARD',
   keypadDtmfTones: true,
+  silenceCallsNotInContacts: false,
+  strictlyBlockSpamSeries: true,
 };
 
 export const INITIAL_PERMISSIONS: PermissionStatus = {
@@ -66,6 +68,10 @@ export const INITIAL_RULES: BlockRule[] = [
     enabled: true,
     hitCount: 0,
     createdAt: Date.now(),
+    isStrictBlock: true,
+    seriesLength: 10,
+    visualPattern: '140•••••••',
+    blockDisposition: 'INSTANT_DROP',
   },
   {
     id: 'rule-trai-160',
@@ -78,6 +84,10 @@ export const INITIAL_RULES: BlockRule[] = [
     enabled: true,
     hitCount: 0,
     createdAt: Date.now(),
+    isStrictBlock: true,
+    seriesLength: 10,
+    visualPattern: '160•••••••',
+    blockDisposition: 'INSTANT_DROP',
   },
 ];
 

@@ -18,6 +18,7 @@ import {
   Trash2,
   UserPlus,
   X,
+  BellOff,
 } from 'lucide-react';
 import { CallLogItem, CallDirection, BlockRule, WhitelistEntry, ShieldSettings, CallShieldDirectoryProfile, DisplayDensity, ContactItem } from '../types';
 import { useI18n } from '../i18n/LanguageContext';
@@ -51,9 +52,10 @@ interface RecentsTabProps {
   onAddContacts?: (contacts: Array<{ name: string; number: string }>) => void;
   onWhitelistNumbers?: (calls: CallLogItem[]) => void;
   showToast?: (text: string, type?: 'info' | 'error' | 'success', title?: string) => void;
+  onViewBlockedDetails?: (call: CallLogItem) => void;
 }
 
-type Filter = 'ALL' | 'MISSED' | 'INCOMING' | 'OUTGOING' | 'RECORDED' | 'BLOCKED';
+type Filter = 'ALL' | 'MISSED' | 'INCOMING' | 'OUTGOING' | 'RECORDED' | 'BLOCKED' | 'SILENCED';
 
 const iconFor = (type: CallDirection) =>
   type === 'BLOCKED_CANCELLED' ? (
@@ -84,6 +86,7 @@ function RecentsTab({
   onAddContacts,
   onWhitelistNumbers,
   showToast,
+  onViewBlockedDetails,
 }: RecentsTabProps) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
@@ -146,7 +149,8 @@ function RecentsTab({
   const counts = useMemo(() => {
     return {
       ALL: calls.length,
-      MISSED: calls.filter((c) => c.type === 'MISSED').length,
+      MISSED: calls.filter((c) => c.type === 'MISSED' && !c.isSilenced).length,
+      SILENCED: calls.filter((c) => c.isSilenced).length,
       INCOMING: calls.filter((c) => c.type === 'INCOMING' || c.type === 'BLOCKED_CANCELLED').length,
       OUTGOING: calls.filter((c) => c.type === 'OUTGOING').length,
       RECORDED: calls.filter(isRecordedCall).length,
@@ -171,12 +175,14 @@ function RecentsTab({
       if (simFilter === 'SIM 2' && !matchSim(c, 'SIM 2')) return false;
 
       // Type Filter
-      if (filter === 'MISSED' && c.type !== 'MISSED') return false;
+      if (filter === 'MISSED' && (c.type !== 'MISSED' || c.isSilenced)) return false;
+      if (filter === 'SILENCED' && !c.isSilenced) return false;
       if (filter === 'INCOMING' && c.type !== 'INCOMING' && c.type !== 'BLOCKED_CANCELLED') return false;
       if (filter === 'OUTGOING' && c.type !== 'OUTGOING') return false;
       if (filter === 'RECORDED' && !isRecordedCall(c)) return false;
       if (filter === 'BLOCKED' && !isBlockedCall(c)) return false;
       if (!q) return true;
+      if ((q === 'silenced' || q === 'silent') && c.isSilenced) return true;
       const prof = lookupProfile(c.number);
       const displayName = !isGenericOrPhoneNumber(c.callerName, c.number)
         ? c.callerName!
@@ -208,6 +214,7 @@ function RecentsTab({
   const filterTabs: FilterTabOption<Filter>[] = [
     { id: 'ALL', label: t('filter_all') || 'All', icon: ListFilter, count: counts.ALL, badgeVariant: 'default' },
     { id: 'MISSED', label: t('filter_missed') || 'Missed', icon: PhoneMissed, count: counts.MISSED, badgeVariant: 'missed' },
+    { id: 'SILENCED', label: 'Silenced', icon: BellOff, count: counts.SILENCED, badgeVariant: 'default' },
     { id: 'INCOMING', label: t('filter_incoming') || 'Incoming', icon: PhoneIncoming, count: counts.INCOMING, badgeVariant: 'default' },
     { id: 'OUTGOING', label: t('filter_outgoing') || 'Outgoing', icon: PhoneOutgoing, count: counts.OUTGOING, badgeVariant: 'default' },
     { id: 'RECORDED', label: t('filter_recorded') || 'Recorded', icon: Disc, count: counts.RECORDED, badgeVariant: 'recorded' },
@@ -551,6 +558,7 @@ function RecentsTab({
                       isSelected={selectedCallIds.has(call.id)}
                       onToggleSelect={handleToggleSelect}
                       onLongPressSelect={handleLongPressSelect}
+                      onViewBlockedDetails={onViewBlockedDetails}
                     />
                   ))}
                 </AnimatePresence>

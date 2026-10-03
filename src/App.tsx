@@ -22,9 +22,10 @@ import { INITIAL_CONTACTS } from './data/defaultContacts';
 import AboutAppModal from './components/AboutAppModal';
 import PrivacyTermsModal from './components/PrivacyTermsModal';
 import ThemeCustomizerModal from './components/ThemeCustomizerModal';
+import BlockedCallDetailsModal from './components/BlockedCallDetailsModal';
 import { BlockRule, WhitelistEntry, ShieldSettings, CallLogItem, IncomingCallState, ActiveCallSession, SecurityTimelineEvent, CallShieldDirectoryProfile, ContactItem, SpamCategory, TabId, CallRecordingItem, DisplayDensity, ScreeningTranscriptEntry } from './types';
 import { INITIAL_SETTINGS } from './data/defaultData';
-import { lookupCallShieldDirectory } from './utils/spamEngine';
+import { lookupCallShieldDirectory, formatPhoneNumber } from './utils/spamEngine';
 import { detectNeighborSpoof, detectPingBackScam } from './utils/spoofEngine';
 import { triggerCallConnectedHaptic } from './utils/audioAlerts';
 import { telecomBridge } from './services/telephony/telecomBridge';
@@ -66,6 +67,8 @@ export default function App(){
  const [autoCancelEnabled,setAutoCancelEnabled]=useState<boolean>(()=>safeParse('callshield_autocancel',true));
  const [activeIncomingCall,setActiveIncomingCall]=useState<IncomingCallState|null>(null); const [activeCallSession,setActiveCallSession]=useState<ActiveCallSession|null>(null); const [isOngoingCallMinimized, setIsOngoingCallMinimized] = useState(false);
  const [selectedProfile,setSelectedProfile]=useState<CallShieldDirectoryProfile|null>(null); const [selectedCall,setSelectedCall]=useState<CallLogItem|null>(null); const [isCallerModalOpen,setIsCallerModalOpen]=useState(false);
+ const [selectedBlockedCall, setSelectedBlockedCall] = useState<CallLogItem | null>(null);
+ const [isBlockedDetailsOpen, setIsBlockedDetailsOpen] = useState(false);
  const [isInstallModalOpen,setIsInstallModalOpen]=useState(false); const [isFastReportOpen,setIsFastReportOpen]=useState(false); const [fastReportNumber,setFastReportNumber]=useState(''); const [isDisputeOpen,setIsDisputeOpen]=useState(false); const [disputeNumber,setDisputeNumber]=useState(''); const [disputeName,setDisputeName]=useState('');
  const [isSyncing,setIsSyncing]=useState(false); const [isDataSourcesModalOpen,setIsDataSourcesModalOpen]=useState(false); const [isDiagnosticsModalOpen,setIsDiagnosticsModalOpen]=useState(false); const [isPermissionCenterOpen,setIsPermissionCenterOpen]=useState(false); const [dialerInitialNumber,setDialerInitialNumber]=useState(''); const [deferredPrompt,setDeferredPrompt]=useState<any>(null); const [isDefaultDialer,setIsDefaultDialer]=useState(()=>telecomBridge.isDefaultDialer());
  const [toastMessage,setToastMessage]=useState<InAppToastPayload|null>(null);
@@ -192,6 +195,12 @@ export default function App(){
 
    // 2. Modals and overlays
    const current = stateRef.current;
+   if (isBlockedDetailsOpen) {
+     setIsBlockedDetailsOpen(false);
+     setSelectedBlockedCall(null);
+     lastActionTimeRef.current = now;
+     return true;
+   }
    if (current.isCallerModalOpen) {
      setIsCallerModalOpen(false);
      setSelectedCall(null);
@@ -435,8 +444,14 @@ export default function App(){
               (cDigits.length >= 7 && inDigits.length >= 7 && (cDigits.endsWith(inDigits) || inDigits.endsWith(cDigits)))
             );
           });
+          const nativeLookup = telecomBridge.lookupContactName(number);
+          const isContactNumber = Boolean(savedContact || nativeLookup);
+          const shouldAutoSilence = Boolean(dataRef.current.settings.silenceCallsNotInContacts && !isContactNumber);
+          if (shouldAutoSilence) {
+            telecomBridge.silenceRinger();
+          }
           const p = lookupCallShieldDirectory(number, dataRef.current.rules, dataRef.current.whitelist);
-          const resolvedCallerName = savedContact?.name || payload?.name || p.name || number;
+          const resolvedCallerName = savedContact?.name || nativeLookup || payload?.name || p.name || number;
           setActiveIncomingCall({
             active: true,
             callId: callId || `call-${Date.now()}`,
@@ -450,6 +465,9 @@ export default function App(){
             spamCategory: p.spamCategory,
             spamReason: p.spamReason,
             isVerifiedBusiness: p.isVerified,
+            isRingerSilenced: shouldAutoSilence,
+            isSilenced: shouldAutoSilence,
+            silenceReason: shouldAutoSilence ? 'Not in contacts list' : undefined,
             status: 'RINGING',
             countdown: 0,
             viewMode: 'fullscreen',
@@ -566,7 +584,105 @@ export default function App(){
             dataRef.current.settings.pingBackShieldEnabled !== false
               ? detectPingBackScam(number, details?.durationSeconds || 0, state === 'MISSED' ? 1 : 0)
               : { isPingBackScam: false, warningMessage: '' };
-          if (pingBackCheck.isPingBackScam) {
+          const isContactNumber = Boolean(savedContact || nativeLookup);
+          const isNotInContacts = !isContactNumber;
+          const shouldAutoSilence = Boolean(dataRef.current.settings.silenceCallsNotInContacts && isNotInContacts);
+
+          // Check if caller matches strict blocking rule or series rule
+          const matchedRule = p.matchedRule || dataRef.current.rules.find((r) => {
+            if (!r.enabled) return false;
+            const rDigits = r.value.replace(/\D/g, '');
+            if (r.matchType === 'EXACT') return inDigits === rDigits || r.value === number;
+            if (r.matchType === 'PREFIX') {
+              return inDigits.startsWith(rDigits) || cleanNumber(number).startsWith(rDigits) || number.startsWith(r.value);
+            }
+            return false;
+          });
+
+          const isStrictSeriesBlocked = Boolean(
+            !isContactNumber &&
+            !whitelistEntry &&
+            (
+              p.isStrictBlocked ||
+              matchedRule?.isStrictBlock ||
+              (dataRef.current.settings.strictlyBlockSpamSeries !== false && (
+                matchedRule ||
+                inDigits.startsWith('140') ||
+                inDigits.startsWith('160') ||
+                inDigits.startsWith('1409') ||
+                (p.isSpam && (p.spamCategory === 'TELEMARKETING' || p.spamCategory === 'SCAM' || p.spamScore >= 80))
+              ))
+            )
+          );
+
+          if (isStrictSeriesBlocked) {
+            telecomBridge.silenceRinger();
+            telecomBridge.rejectCall(callId, 'Strictly Blocked by Series Rule');
+
+            const ruleName = matchedRule?.label || (inDigits.startsWith('140') ? 'TRAI 140 Telemarketing Series' : 'Custom Series Rule');
+            const rulePattern = matchedRule?.value || (inDigits.startsWith('140') ? '140' : inDigits.slice(0, 4));
+            const strictReason = `Firewall Intercept: Matched Series Rule "${ruleName}" (${rulePattern}) • 0s Ring Suppression`;
+
+            const blockedCallItem: CallLogItem = {
+              id: `call-strict-block-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+              number,
+              callerName: candidateName && candidateName !== number ? candidateName : p.name || 'Commercial Telemarketing Band',
+              type: 'BLOCKED_CANCELLED',
+              timestamp: Date.now(),
+              durationSeconds: 0,
+              isSpam: true,
+              isStrictBlocked: true,
+              blockedRuleId: matchedRule?.id,
+              blockedRuleName: ruleName,
+              blockedPattern: rulePattern,
+              strictBlockReason: strictReason,
+              spamCategory: p.spamCategory || matchedRule?.category || 'TELEMARKETING',
+              spamReason: strictReason,
+              riskScore: Math.max(92, p.spamScore || 90),
+              riskLevel: 'HIGH_RISK',
+              carrier: p.carrier || (inDigits.startsWith('140') ? 'TRAI 140 Commercial Series' : 'Commercial Series Carrier'),
+              location: p.location || 'Commercial Series Gateway',
+              classification: 'SPAM',
+              confidence: 0.99,
+              identificationSource: 'TELECOM_REGULATORY_SERIES',
+              userAction: 'NONE',
+              riskSignals: ['Series prefix block rule match', '0s Ring suppression enforced', 'Zero distraction firewall drop'],
+              firewallAction: 'INSTANT_DROP',
+              isSilenced: true,
+              sim: details?.sim || 'SIM 1 (Personal)',
+              reportsCount: p.spamReportsCount || 1,
+            };
+
+            setCalls((prev) => [blockedCallItem, ...prev]);
+
+            setTimelineEvents((prev) => [
+              {
+                id: `evt-${Date.now()}`,
+                timestamp: Date.now(),
+                timeStr: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                title: `Strict Firewall Block: ${formatPhoneNumber(number)}`,
+                description: `Automatically dropped incoming series call matching "${ruleName}" with 0s ring suppression.`,
+                severity: 'BLOCK',
+                matchedNumber: number,
+              },
+              ...prev,
+            ]);
+
+            setToastMessage({
+              title: `🚫 Strict Block: ${formatPhoneNumber(number)}`,
+              text: `Dropped call matching "${ruleName}". Zero ring distraction.`,
+              type: 'error',
+              actionLabel: 'View Details',
+              onAction: () => {
+                setSelectedBlockedCall(blockedCallItem);
+                setIsBlockedDetailsOpen(true);
+              },
+            });
+
+            return;
+          }
+
+          if (pingBackCheck.isPingBackScam || shouldAutoSilence) {
             telecomBridge.silenceRinger();
           }
 
@@ -596,6 +712,9 @@ export default function App(){
             isPingBackScam: pingBackCheck.isPingBackScam,
             spoofWarning: spoofCheck.warningMessage || pingBackCheck.warningMessage,
             isPingBackMuted: pingBackCheck.isPingBackScam,
+            isRingerSilenced: Boolean(pingBackCheck.isPingBackScam || shouldAutoSilence),
+            isSilenced: shouldAutoSilence,
+            silenceReason: shouldAutoSilence ? 'Not in contacts list' : undefined,
             status: 'RINGING',
             countdown: (p.isSpam || pingBackCheck.isPingBackScam) && dataRef.current.autoCancelEnabled ? 3 : 0,
             viewMode: enforceFullscreen ? 'fullscreen' : 'popup',
@@ -636,6 +755,31 @@ export default function App(){
       } else if (eventType === 'CALL_REMOVED' || eventType === 'CALL_DISCONNECTED' || eventType === 'CALL_REJECTED') {
         if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
           try { window.speechSynthesis.cancel(); } catch {}
+        }
+        const pendingIncoming = dataRef.current.activeIncomingCall;
+        if (pendingIncoming && pendingIncoming.active && pendingIncoming.status === 'RINGING') {
+          const isSilencedCall = Boolean(pendingIncoming.isSilenced || pendingIncoming.isRingerSilenced);
+          const missedLog: CallLogItem = {
+            id: pendingIncoming.callId || `missed-${Date.now()}`,
+            number: pendingIncoming.number,
+            callerName: pendingIncoming.callerName || pendingIncoming.number,
+            type: 'MISSED',
+            timestamp: Date.now(),
+            durationSeconds: 0,
+            isSpam: Boolean(pendingIncoming.isSpam),
+            spamCategory: pendingIncoming.spamCategory,
+            riskScore: pendingIncoming.riskScore || 0,
+            riskLevel: pendingIncoming.isSpam ? 'SUSPICIOUS' : 'SAFE',
+            reportsCount: pendingIncoming.reportsCount || 0,
+            isSilenced: isSilencedCall,
+            silencedReason: pendingIncoming.silenceReason || (isSilencedCall ? 'Not in contacts list' : undefined),
+            carrier: pendingIncoming.carrier,
+            location: pendingIncoming.location,
+          };
+          setCalls(prev => {
+            if (prev.some(c => c.id === missedLog.id)) return prev;
+            return [missedLog, ...prev];
+          });
         }
         setActiveIncomingCall(null);
         if (dataRef.current.phoneOnly) {
@@ -864,6 +1008,22 @@ export default function App(){
   const handleTriggerScreeningDemo = useCallback((customNumber?: string, customName?: string) => {
     const demoNumber = customNumber || '+91 98765 01928';
     const demoName = customName || 'Unknown Energy Services (Suspicious)';
+    const inDigits = demoNumber.replace(/\D/g, '');
+    const isContactNumber = contacts.some(c => {
+      const cDigits = String(c.number || '').replace(/\D/g, '');
+      if (!cDigits) return false;
+      if (cDigits === inDigits) return true;
+      if (cDigits.length >= 7 && inDigits.length >= 7) {
+        return cDigits.slice(-7) === inDigits.slice(-7) || cDigits.slice(-10) === inDigits.slice(-10);
+      }
+      return false;
+    }) || Boolean(telecomBridge.lookupContactName(demoNumber));
+
+    const shouldAutoSilence = Boolean(settings.silenceCallsNotInContacts && !isContactNumber);
+    if (shouldAutoSilence) {
+      telecomBridge.silenceRinger();
+    }
+
     setActiveIncomingCall({
       active: true,
       callId: `demo-screen-${Date.now()}`,
@@ -877,12 +1037,19 @@ export default function App(){
       spamCategory: 'TELEMARKETING',
       spamReason: 'Reported commercial robocall / unknown offer',
       isVerifiedBusiness: false,
+      isRingerSilenced: shouldAutoSilence,
+      isSilenced: shouldAutoSilence,
+      silenceReason: shouldAutoSilence ? 'Not in contacts list' : undefined,
       status: 'RINGING',
       countdown: 0,
       viewMode: 'popup',
     });
-    showToast('Incoming call: Tap "Screen Call" to test the AI Voice Assistant!', 'info');
-  }, []);
+    if (shouldAutoSilence) {
+      showToast('Incoming call silenced (not in contacts). Tap "Screen Call" to test the AI Assistant!', 'info');
+    } else {
+      showToast('Incoming call: Tap "Screen Call" to test the AI Voice Assistant!', 'info');
+    }
+  }, [contacts, settings.silenceCallsNotInContacts]);
 
   const handleBlockNumber = useCallback((number: string, label: string) => {
     const rule = { id: `rule-${Date.now()}`, value: number, matchType: 'EXACT' as const, targetType: 'BOTH' as const, category: 'SPAM' as SpamCategory, label: label || `Blocked ${number}`, enabled: true, hitCount: 1, createdAt: Date.now() };
@@ -1200,6 +1367,31 @@ export default function App(){
   const handleToggleRule = useCallback((id: string) => setRules(p => p.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r)), []);
   const handleDeleteRule = useCallback((id: string) => setRules(p => p.filter(r => r.id !== id)), []);
   const handleAddRule = useCallback((d: any) => setRules(p => [{ ...d, id: `rule-${Date.now()}`, hitCount: 0, createdAt: Date.now() }, ...p]), []);
+  const handleUpdateRule = useCallback((id: string, updates: Partial<BlockRule>) => {
+    setRules(p => p.map(r => r.id === id ? { ...r, ...updates } : r));
+    showToast('Rule updated successfully', 'success');
+  }, []);
+  const handleOpenBlockedDetails = useCallback((call: CallLogItem) => {
+    setSelectedBlockedCall(call);
+    setIsBlockedDetailsOpen(true);
+    pushNavState('modal', 'blocked-details');
+  }, [pushNavState]);
+  const handleSimulateStrictBlock = useCallback((simNumber?: string, label?: string) => {
+    const num = simNumber || '+91 140 923 8812';
+    telecomBridge.dispatchCallEvent('CALL_ADDED', {
+      callId: `sim-call-${Date.now()}`,
+      number: num,
+      name: label || 'Commercial Telemarketing Series',
+      state: 'RINGING',
+      incoming: true,
+      details: {
+        number: num,
+        callerDisplayName: label || 'Commercial Telemarketing Series',
+        sim: 'SIM 1 (Personal)',
+        durationSeconds: 0,
+      }
+    });
+  }, []);
   const handleRemoveWhitelist = useCallback((id: string) => setWhitelist(p => p.filter(w => w.id !== id)), []);
   const handleOpenCallerDetail = useCallback((item: any) => {
     const n = ('number' in item ? item.number : '') || '';
@@ -1299,6 +1491,7 @@ export default function App(){
       const dur = Math.max(10, (transcript?.length || 1) * 5);
 
       if (isScreened && transcript && transcript.length > 0) {
+        const isSilencedCall = Boolean(activeIncomingCall.isSilenced || activeIncomingCall.isRingerSilenced);
         const newCallLog: CallLogItem = {
           id: callLogId,
           number: activeIncomingCall.number,
@@ -1315,6 +1508,31 @@ export default function App(){
           screeningTranscript: transcript,
           screeningDetectedIntent: detectedIntent || undefined,
           screenedAt: Date.now(),
+          isSilenced: isSilencedCall,
+          silencedReason: activeIncomingCall.silenceReason || (isSilencedCall ? 'Not in contacts list' : undefined),
+          sim: selectedSim,
+        };
+
+        setCalls(prev => [newCallLog, ...prev]);
+      } else {
+        const isSilencedCall = Boolean(activeIncomingCall.isSilenced || activeIncomingCall.isRingerSilenced);
+        const newCallLog: CallLogItem = {
+          id: callLogId,
+          number: activeIncomingCall.number,
+          callerName: activeIncomingCall.callerName || activeIncomingCall.number,
+          type: block ? 'BLOCKED_CANCELLED' : 'MISSED',
+          timestamp: Date.now(),
+          durationSeconds: 0,
+          isSpam: Boolean(activeIncomingCall.isSpam) || Boolean(block),
+          spamCategory: activeIncomingCall.spamCategory,
+          riskScore: activeIncomingCall.riskScore || (block ? 85 : 0),
+          riskLevel: block ? 'HIGH_RISK' : (activeIncomingCall.riskScore > 60 ? 'SUSPICIOUS' : 'SAFE'),
+          reportsCount: activeIncomingCall.reportsCount || 0,
+          isSilenced: isSilencedCall,
+          silencedReason: activeIncomingCall.silenceReason || (isSilencedCall ? 'Not in contacts list' : undefined),
+          carrier: activeIncomingCall.carrier,
+          location: activeIncomingCall.location,
+          sim: selectedSim,
         };
 
         setCalls(prev => [newCallLog, ...prev]);
@@ -1426,12 +1644,7 @@ export default function App(){
             setActiveIncomingCall(prev => prev ? { ...prev, status: 'SCREENING' } : null);
           }}
           onDismiss={() => {
-            if (activeIncomingCall?.callId) {
-              telecomBridge.rejectCall(activeIncomingCall.callId, 'Dismissed');
-            }
-            telecomBridge.clearStaleCallNotifications();
-            setActiveIncomingCall(null);
-            telecomBridge.finishAppSurface();
+            handleCancelIncomingCall('Dismissed', false);
           }}
         />
       </div>
@@ -1534,15 +1747,47 @@ export default function App(){
           onAddContact={handleAddContact}
           onAddContacts={handleAddContacts}
           showToast={showToast}
+          onViewBlockedDetails={handleOpenBlockedDetails}
         />} 
         {activeTab==='contacts'&&<ContactsTab contacts={contacts} onInitiateCall={handleInitiateCall} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} onDeleteContact={handleDeleteContact} onToggleFavorite={handleToggleFavorite} recentCalls={calls} density={density} onOpenCallerDetail={handleOpenCallerDetail}/>} 
-        {activeTab==='protection'&&<ProtectionTab settings={settings} onUpdateSettings={setSettings} rules={rules} onToggleRule={handleToggleRule} onDeleteRule={handleDeleteRule} onAddRule={handleAddRule} whitelist={whitelist} onRemoveWhitelist={handleRemoveWhitelist} timelineEvents={timelineEvents} onTriggerScreeningDemo={handleTriggerScreeningDemo}/>} 
+        {activeTab==='protection'&&<ProtectionTab settings={settings} onUpdateSettings={setSettings} rules={rules} onToggleRule={handleToggleRule} onDeleteRule={handleDeleteRule} onAddRule={handleAddRule} onUpdateRule={handleUpdateRule} onSimulateStrictBlock={handleSimulateStrictBlock} onViewBlockedDetails={handleOpenBlockedDetails} calls={calls} showToast={showToast} whitelist={whitelist} onRemoveWhitelist={handleRemoveWhitelist} timelineEvents={timelineEvents} onTriggerScreeningDemo={handleTriggerScreeningDemo}/>} 
         {activeTab==='assistant'&&<AssistantTab calls={calls} contacts={contacts} rules={rules} lookupProfile={handleLookupProfile} onInitiateCall={handleInitiateCall} onAddRule={handleAddRule}/>} 
        </main>
      </>
    )}
 
-  <CallerDetailModal call={selectedCall} calls={calls} contacts={contacts} profile={selectedProfile} isOpen={isCallerModalOpen} onClose={() => { setIsCallerModalOpen(false); setSelectedCall(null); setSelectedProfile(null); }} onBlockNumber={handleBlockNumber} onUnblockNumber={handleUnblockNumber} onMarkSafe={handleWhitelistNumber} onInitiateCall={(number, name, sim) => { setIsCallerModalOpen(false); handleInitiateCall(number, name, sim); }} onOpenReportModal={handleOpenFastReport} onOpenDisputeModal={handleOpenDispute} onUpdateCallerName={handleUpdateCallerName} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} onDeleteContact={handleDeleteContact} onSaveNote={handleSaveNote}/>
+  <CallerDetailModal call={selectedCall} calls={calls} contacts={contacts} profile={selectedProfile} isOpen={isCallerModalOpen} onClose={() => { setIsCallerModalOpen(false); setSelectedCall(null); setSelectedProfile(null); }} onBlockNumber={handleBlockNumber} onUnblockNumber={handleUnblockNumber} onMarkSafe={handleWhitelistNumber} onInitiateCall={(number, name, sim) => { setIsCallerModalOpen(false); handleInitiateCall(number, name, sim); }} onOpenReportModal={handleOpenFastReport} onOpenDisputeModal={handleOpenDispute} onUpdateCallerName={handleUpdateCallerName} onAddContact={handleAddContact} onUpdateContact={handleUpdateContact} onDeleteContact={handleDeleteContact} onSaveNote={handleSaveNote} onViewBlockedDetails={handleOpenBlockedDetails}/>
+  <BlockedCallDetailsModal
+    call={selectedBlockedCall}
+    isOpen={isBlockedDetailsOpen}
+    onClose={() => {
+      setIsBlockedDetailsOpen(false);
+      setSelectedBlockedCall(null);
+    }}
+    rules={rules}
+    whitelist={whitelist}
+    onCustomizeRule={(_rule) => {
+      setIsBlockedDetailsOpen(false);
+      navigateToTab('protection');
+    }}
+    onWhitelistNumber={(number, name) => {
+      handleWhitelistNumber(number, name);
+    }}
+    onDeleteCall={(id) => {
+      handleDeleteCall(id);
+      setIsBlockedDetailsOpen(false);
+      setSelectedBlockedCall(null);
+    }}
+    onInitiateCall={(number, name, sim) => {
+      setIsBlockedDetailsOpen(false);
+      handleInitiateCall(number, name, sim);
+    }}
+    onOpenDisputeModal={(number, name) => {
+      setIsBlockedDetailsOpen(false);
+      handleOpenDispute(number, name);
+    }}
+    showToast={showToast}
+  />
   {activeIncomingCall && (
     <IncomingCallOverlay
       call={activeIncomingCall}
@@ -1560,11 +1805,7 @@ export default function App(){
         setActiveIncomingCall(prev => prev ? { ...prev, status: 'SCREENING' } : null);
       }}
       onDismiss={() => {
-        if (activeIncomingCall?.callId) {
-          telecomBridge.rejectCall(activeIncomingCall.callId, 'Dismissed');
-        }
-        telecomBridge.clearStaleCallNotifications();
-        setActiveIncomingCall(null);
+        handleCancelIncomingCall('Dismissed', false);
       }}
     />
   )}

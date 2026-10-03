@@ -18,6 +18,7 @@ import {
   UserPlus,
   Voicemail,
   X,
+  BellOff,
 } from 'lucide-react';
 import { ContactItem, CallLogItem, CallShieldDirectoryProfile, ShieldSettings, DisplayDensity } from '../types';
 import { smartDialerSearch } from '../utils/t9Search';
@@ -496,7 +497,9 @@ const DialerTab = memo(function DialerTab({
                     className="flex flex-1 items-center gap-2 text-left cursor-pointer min-w-0"
                   >
                     <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-800 text-slate-300 font-semibold text-[10px] border border-white/10">
-                      {r.type === 'INCOMING' ? (
+                      {r.isSilenced ? (
+                        <BellOff className="h-3 w-3 text-blue-400" />
+                      ) : r.type === 'INCOMING' ? (
                         <ArrowDownLeft className="h-3 w-3 text-blue-400" />
                       ) : r.type === 'OUTGOING' ? (
                         <ArrowUpRight className="h-3 w-3 text-emerald-400" />

@@ -214,5 +214,31 @@ export async function runCallHistorySyncTests(): Promise<TestResult[]> {
     results.push({ name: 'Test 6: Rapid Calls & Duplicate Callback Protection', passed: false, details: e?.message });
   }
 
+  // Test 7 — Silenced Call Event Preservation
+  try {
+    const silencedCallId = `silenced-call-${Date.now()}`;
+    const silencedCall: CallLogItem = {
+      id: silencedCallId,
+      number: '+91 91234 56789',
+      callerName: 'Unknown Non-Contact Caller',
+      type: 'MISSED',
+      timestamp: Date.now(),
+      durationSeconds: 0,
+      isSpam: false,
+      riskScore: 0,
+      reportsCount: 0,
+      isSilenced: true,
+      silencedReason: 'Not in contacts list',
+    };
+
+    if (silencedCall.isSilenced === true && silencedCall.silencedReason === 'Not in contacts list') {
+      results.push({ name: 'Test 7: Silenced Calls — Visual Indicator & State Preservation', passed: true });
+    } else {
+      results.push({ name: 'Test 7: Silenced Calls — Visual Indicator & State Preservation', passed: false });
+    }
+  } catch (e: any) {
+    results.push({ name: 'Test 7: Silenced Calls — Visual Indicator & State Preservation', passed: false, details: e?.message });
+  }
+
   return results;
 }

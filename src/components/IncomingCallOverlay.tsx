@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import {
   AlertTriangle,
+  BellOff,
   Bot,
   ChevronDown,
   ChevronUp,
@@ -422,7 +423,15 @@ export default function IncomingCallOverlay({
   const hasSpecificName = Boolean(effectiveCallerName && !isGenericOrPhoneNumber(effectiveCallerName, rawNumStr));
   const callerDisplayName = hasSpecificName ? effectiveCallerName : formattedNumber;
   const isSavedContact = Boolean(matchedContact || nativeContactName);
+  const isNonContact = !isSavedContact;
+  const isAutoSilenced = Boolean(settings?.silenceCallsNotInContacts && isNonContact);
   const avatarInitial = (callerDisplayName?.trim()?.[0] || '📞').toUpperCase();
+
+  useEffect(() => {
+    if ((isAutoSilenced || call?.isSilenced) && !silenced) {
+      handleSilence();
+    }
+  }, [isAutoSilenced, call?.isSilenced, silenced, handleSilence]);
 
   // =========================================================================
   // 1. IN-APP POPUP BANNER (Rendered ONLY when device is UNLOCKED & mode === 'popup')
@@ -479,6 +488,10 @@ export default function IncomingCallOverlay({
                 {isSavedContact ? (
                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 bg-emerald-500/25 text-emerald-300 border border-emerald-500/30">
                     Saved
+                  </span>
+                ) : isAutoSilenced || call.isSilenced || silenced ? (
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 bg-blue-500/25 text-blue-300 border border-blue-500/30 flex items-center gap-0.5">
+                    <BellOff className="h-2.5 w-2.5" /> Silenced
                   </span>
                 ) : (
                   <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-full shrink-0 ${
@@ -679,6 +692,12 @@ export default function IncomingCallOverlay({
                   Saved Contact
                 </span>
               )}
+              {(isAutoSilenced || call.isSilenced || silenced) && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/40 shrink-0">
+                  <BellOff className="w-3.5 h-3.5 text-blue-400" />
+                  Silenced {isNonContact ? '(Not in Contacts)' : ''}
+                </span>
+              )}
               {call.isVerifiedBusiness && (
                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 text-[10px] font-bold rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0">
                   <ShieldCheck className="w-3 h-3 text-blue-400" />
@@ -822,12 +841,20 @@ export default function IncomingCallOverlay({
         <h2 className="truncate max-w-full text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
           {callerDisplayName}
         </h2>
-        {isSavedContact && (
-          <div className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            Saved Contact
-          </div>
-        )}
+        <div className="mt-1.5 flex items-center justify-center gap-2 flex-wrap">
+          {isSavedContact && (
+            <div className="inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              Saved Contact
+            </div>
+          )}
+          {(isAutoSilenced || call.isSilenced || silenced) && (
+            <div className="inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-bold rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/40">
+              <BellOff className="w-3.5 h-3.5 text-blue-400" />
+              Silenced {isNonContact ? '(Not in Contacts)' : ''}
+            </div>
+          )}
+        </div>
         <p className="mt-2 font-mono text-lg font-bold text-cyan-300 tracking-wider">
           {formattedNumber}
         </p>
